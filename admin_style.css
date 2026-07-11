@@ -491,18 +491,17 @@ body {
     grid-area: assignment;
 }
 
-/* 기사 목록: 항상 가로 스크롤 칩 형태 */
+/* 기사 목록: 한 줄에 3명씩 격자로 배치 */
 .workers-column .column-body {
-    flex-direction: row;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
 }
 
 .workers-column .worker-card {
-    flex: 0 0 auto;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 @media (max-width: 900px) {
@@ -561,6 +560,7 @@ body {
     border-radius: 20px;
     padding: 20px;
     min-height: 500px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
 }
