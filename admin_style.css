@@ -95,9 +95,15 @@ body {
 /* 상단 헤더: 좁은 화면에서는 로고/내비를 두 줄로 나누고 글자 크기를 줄여 글자 단위 줄바꿈을 방지 */
 @media (max-width: 900px) {
     .admin-header {
-        flex-wrap: wrap;
-        gap: 10px;
-        padding: 12px 16px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+
+    .logo-area {
+        justify-content: center;
+        width: 100%;
     }
 
     .logo-area h1 {
@@ -106,15 +112,32 @@ body {
 
     .header-nav {
         width: 100%;
-        flex-wrap: wrap;
         gap: 8px;
     }
 
     .nav-btn {
-        padding: 10px 14px;
-        font-size: 13.5px;
+        flex: 1 1 0;
+        padding: 10px 6px;
+        font-size: 12.5px;
         white-space: nowrap;
-        flex: 1 1 auto;
+        background: #f1f5f9;
+        color: var(--text-main);
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .nav-btn.active {
+        background: var(--primary-light);
+        color: var(--primary-blue);
+    }
+
+    #newProjectBtn {
+        background: var(--primary-blue);
+        color: white;
+    }
+
+    #newProjectBtn:hover {
+        background: var(--primary-hover);
     }
 }
 
@@ -258,20 +281,6 @@ body {
     gap: 16px;
 }
 
-.back-btn {
-    background: #f1f5f9;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.back-btn:hover {
-    background: #e2e8f0;
-}
-
 #detailProjectTitle {
     font-size: 20px;
     font-weight: 800;
@@ -338,14 +347,8 @@ body {
         order: 1;
     }
 
-    .back-btn {
-        order: 2;
-        font-size: 13.5px;
-        padding: 9px 16px;
-    }
-
     .detail-date {
-        order: 3;
+        order: 2;
         font-size: 13.5px;
     }
 
@@ -403,6 +406,22 @@ body {
     background: var(--primary-blue);
     border-color: var(--primary-blue);
     color: white;
+}
+
+/* 좁은 화면에서도 카테고리 탭 5개가 한 줄에 들어가도록 */
+@media (max-width: 900px) {
+    .item-category-tabs {
+        flex-wrap: nowrap;
+        gap: 6px;
+        overflow-x: auto;
+    }
+
+    .item-category-tab {
+        flex: 1 1 0;
+        padding: 7px 8px;
+        font-size: 12px;
+        text-align: center;
+    }
 }
 
 .item-checkbox-group {

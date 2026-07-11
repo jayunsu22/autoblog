@@ -26,7 +26,7 @@
                 <h1>인테리어 필름 현장 관리자</h1>
             </div>
             <div class="header-nav">
-                <button class="nav-btn active" id="homeTabBtn" onclick="showSection('projectListSection')">현장 목록</button>
+                <button class="nav-btn active" id="homeTabBtn" onclick="goHome()">현장 목록</button>
                 <button class="nav-btn" onclick="openItemConfigModal()">⚙️ 시공품목 설정</button>
                 <button class="nav-btn" id="newProjectBtn" onclick="openNewProjectModal()">➕ 새 현장 개설</button>
             </div>
@@ -49,7 +49,6 @@
             <!-- 현장 정보 요약 바 -->
             <div class="detail-header-card">
                 <div class="detail-title-wrap">
-                    <button class="back-btn" onclick="goHome()">◀ 현장목록</button>
                     <h2 id="detailProjectTitle">현장명 로드 중...</h2>
                     <span class="detail-date" id="detailProjectDate">2026-07-04</span>
                 </div>

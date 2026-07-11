@@ -450,7 +450,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!categoryMap.has(cat)) categoryMap.set(cat, []);
             categoryMap.get(cat).push(item);
         });
-        const categoryNames = [...categoryMap.keys()];
+
+        // 항상 고정된 순서로 노출 (목록에 없는 새 카테고리는 뒤에 붙음)
+        const CATEGORY_ORDER = ['문+틀', '샤시', '가구', '몰딩', '기타'];
+        const categoryNames = [...categoryMap.keys()].sort((a, b) => {
+            const idxA = CATEGORY_ORDER.indexOf(a);
+            const idxB = CATEGORY_ORDER.indexOf(b);
+            return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
 
         if (!activeItemCategory || !categoryMap.has(activeItemCategory)) {
             activeItemCategory = categoryNames[0] || null;
