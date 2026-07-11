@@ -58,8 +58,15 @@
                 </div>
             </div>
 
+            <!-- 현장 공지 및 주의사항 설정 바 -->
+            <div class="item-select-bar" style="display: flex; flex-direction: column; gap: 8px;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 공지설정</h3>
+                <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
+                <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
+            </div>
+
             <!-- 현장 품목 체크 개설 팝업 바 -->
-            <div class="item-select-bar">
+            <div class="item-select-bar" style="margin-top: 15px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>📌 현장 시공품목 설정</h3>
                     <div id="itemBatchToolbar" style="display: none; align-items: center; gap: 8px;">
@@ -74,15 +81,6 @@
                 <div class="item-checkbox-group" id="itemCheckboxGroup">
                     <!-- 활성 카테고리의 품목 칩들만 동적 생성 -->
                 </div>
-            </div>
-
-            <!-- 현장 공지 및 주의사항 설정 바 -->
-            <div class="item-select-bar" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 현장 공지 및 주의사항 설정</h3>
-                    <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 6px 14px; font-size: 12px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
-                </div>
-                <textarea id="detailProjectNotice" rows="3" style="width: 100%; padding: 12px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
             </div>
 
             <!-- ★ 사장님 기획: 드래그 앤 드롭 3분할 업무 배분판 ★ -->
