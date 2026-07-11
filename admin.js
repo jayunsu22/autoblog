@@ -197,7 +197,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 시공품목 마스터 데이터 캐싱
             globalMasterItems = data.masterItems || [];
-            console.log("[DEBUG] masterItems raw:", JSON.stringify(globalMasterItems.slice(0, 5), null, 2));
 
         } catch (error) {
             console.error(error);
@@ -631,7 +630,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             boardWorkerList.appendChild(card);
         });
+
+        renderAssignmentWorkerFilter();
     }
+
+    // 실시간 업무 배정표 제목 옆 기사님 필터 드롭다운 (기사님 카드 클릭과 상태 공유)
+    function renderAssignmentWorkerFilter() {
+        const select = document.getElementById('assignmentWorkerFilter');
+        if (!select) return;
+        const workers = currentDetailData.workers || [];
+
+        select.innerHTML = `<option value="">전체보기</option>` +
+            workers.map(w => `<option value="${w}">${w} 기사님</option>`).join('');
+        select.value = activeWorkerName || "";
+    }
+
+    // 드롭다운에서 기사님을 선택하면 기사님 카드 선택 상태와 동기화하고 배정표를 필터링
+    window.onAssignmentWorkerFilterChange = function() {
+        const select = document.getElementById('assignmentWorkerFilter');
+        activeWorkerName = select.value || null;
+        renderBoardWorkers();
+        renderBoardAssignments();
+    };
 
     // 3열: 미배정 품목 풀 그리기 (밑작업/시공 구분)
     function renderBoardAvailableItems() {
@@ -871,14 +891,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // 1. 헤더 (배정 기사 이름, 작업이름, 아코디언 ▼ 표시, 순서 이동 ▲▼, 배정 취소 x)
+        // 특정 기사님으로 필터링된 상태면 카드마다 이름을 반복 표시할 필요가 없어 배지를 생략함
+        const assigneeBadgeHtml = activeWorkerName ? '' : `<span class="assignee-badge">${assigneeName}</span>`;
         let headerHtml = `
             <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
-                    <span class="assignee-badge">${assigneeName}</span>
+                    ${assigneeBadgeHtml}
                     <span class="assigned-item-name">${fields.시공품목} (${stage})</span>
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 4px;">
                     <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'up')" title="위로 이동">▲</button>
                     <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'down')" title="아래로 이동">▼</button>
                     <button class="btn-unassign" onclick="event.stopPropagation(); unassignWorker('${recordId}', '${stage}')" title="배정 취소">×</button>

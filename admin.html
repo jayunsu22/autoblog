@@ -61,7 +61,7 @@
             <!-- 현장 공지 및 주의사항 설정 바 -->
             <div class="item-select-bar" style="display: flex; flex-direction: column; gap: 8px;">
                 <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 공지설정</h3>
-                <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
+                <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 20.25px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
                 <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
             </div>
 
@@ -120,6 +120,9 @@
                 <div class="board-column assignment-column">
                     <div class="column-header" id="assignmentColumnHeader">
                         <h3>🤝 실시간 업무 배정표</h3>
+                        <select id="assignmentWorkerFilter" onclick="event.stopPropagation()" onchange="event.stopPropagation(); onAssignmentWorkerFilterChange()" style="flex: 1; min-width: 0; margin: 0 8px; padding: 5px 8px; font-size: 12px; font-weight: 700; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main);">
+                            <option value="">전체보기</option>
+                        </select>
                         <span class="count-badge" id="assignedCountBadge">0개</span>
                         <span class="collapse-arrow" id="assignmentCollapseArrow">▲</span>
                     </div>
