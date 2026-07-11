@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_JOURNAL_CREATE_URL = `${n8nBase}/webhook/film-journal-create`;
     const API_JOURNAL_LIST_URL = `${n8nBase}/webhook/film-journal-list`;
     const API_JOURNAL_PHOTO_URL = `${n8nBase}/webhook/film-journal-photo-upload`;
+    const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
 
 
     let activeProjectCode = "";
@@ -310,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="card-address" style="margin-top: 6px; font-size:12.5px;">👷 기사: ${workersText}</div>
                 </div>
                 <div class="card-footer-btns">
-                    <button class="card-btn secondary" onclick="event.stopPropagation(); copyLink('${fields.기사접속링크 || ''}')">🔗 기사 링크 복사</button>
+                    <button class="card-btn secondary" onclick="event.stopPropagation(); copyLink('${WORKER_APP_BASE_URL}?code=${recordId}')">🔗 기사 링크 복사</button>
                     <button class="card-btn primary">업무배정 ▶</button>
                 </div>
             `;
@@ -333,8 +334,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     window.copyWorkerLink = function() {
-        if (currentDetailData && currentDetailData.project) {
-            copyLink(currentDetailData.project.기사접속링크);
+        if (activeProjectCode) {
+            copyLink(`${WORKER_APP_BASE_URL}?code=${activeProjectCode}`);
         }
     };
 
