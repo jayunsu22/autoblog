@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
+    <link rel="stylesheet" href="admin_style.css">
+</head>
+<body>
+    <!-- 로딩 오버레이 -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loader-container">
+            <div class="loader"></div>
+            <p id="loadingText">현장 목록을 불러오는 중...</p>
+        </div>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <div id="toast" class="toast"></div>
+
+    <div class="admin-wrapper">
+        <!-- 상단 헤더 -->
+        <header class="admin-header">
+            <div class="logo-area" onclick="goHome()">
+                <span class="logo-icon">🏢</span>
+                <h1>인테리어 필름 현장 관리자</h1>
+            </div>
+            <div class="header-nav">
+                <button class="nav-btn active" id="homeTabBtn" onclick="showSection('projectListSection')">현장 목록</button>
+                <button class="nav-btn" onclick="openItemConfigModal()">⚙️ 시공품목 설정</button>
+                <button class="nav-btn" id="newProjectBtn" onclick="openNewProjectModal()">➕ 새 현장 개설</button>
+            </div>
+        </header>
+
+        <!-- 섹션 1: 현장 목록 (초기 화면) -->
+        <main class="admin-main active-section" id="projectListSection">
+            <div class="section-header">
+                <h2>📋 현재 진행 중인 시공 현장</h2>
+                <span class="sub-text">최신 시공일자 순서로 노출됩니다.</span>
+            </div>
+            <div class="project-grid" id="projectGrid">
+                <!-- 현장 카드들이 동적으로 렌더링됨 -->
+                <div class="empty-state">진행 중인 현장이 없습니다. 새 현장을 개설해 주세요.</div>
+            </div>
+        </main>
+
+        <!-- 섹션 2: 현장 상세 및 3분할 업무 배분 화면 (선택 시 랜딩) -->
+        <main class="admin-main" id="projectDetailSection" style="display: none;">
+            <!-- 현장 정보 요약 바 -->
+            <div class="detail-header-card">
+                <div class="detail-title-wrap">
+                    <button class="back-btn" onclick="goHome()">◀ 현장목록</button>
+                    <h2 id="detailProjectTitle">현장명 로드 중...</h2>
+                    <span class="detail-date" id="detailProjectDate">2026-07-04</span>
+                </div>
+                <div class="detail-action-wrap">
+                    <button class="action-btn copy" onclick="copyWorkerLink()">🔗 기사접속링크 복사</button>
+                    <button class="action-btn publish" onclick="requestBlogPublish()">✍️ 블로그 원고 발행</button>
+                </div>
+            </div>
+
+            <!-- 현장 품목 체크 개설 팝업 바 -->
+            <div class="item-select-bar">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>📌 현장 시공품목 설정</h3>
+                    <div id="itemBatchToolbar" style="display: none; align-items: center; gap: 8px;">
+                        <span id="itemBatchCount" style="font-size: 12px; font-weight: 700; color: var(--text-muted);"></span>
+                        <button type="button" onclick="applyPendingItemToggles()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">✔ 일괄 적용</button>
+                        <button type="button" onclick="cancelPendingItemToggles()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">취소</button>
+                    </div>
+                </div>
+                <div class="item-category-tabs" id="itemCategoryTabs">
+                    <!-- 카테고리 탭 버튼들이 동적으로 렌더링됨 -->
+                </div>
+                <div class="item-checkbox-group" id="itemCheckboxGroup">
+                    <!-- 활성 카테고리의 품목 칩들만 동적 생성 -->
+                </div>
+            </div>
+
+            <!-- 현장 공지 및 주의사항 설정 바 -->
+            <div class="item-select-bar" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 현장 공지 및 주의사항 설정</h3>
+                    <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 6px 14px; font-size: 12px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
+                </div>
+                <textarea id="detailProjectNotice" rows="3" style="width: 100%; padding: 12px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
+            </div>
+
+            <!-- ★ 사장님 기획: 드래그 앤 드롭 3분할 업무 배분판 ★ -->
+            <div class="drag-board-container">
+                <!-- 1열 (좌측): 시공 기사 목록 -->
+                <div class="board-column workers-column">
+                    <div class="column-header">
+                        <h3>👷 현장 시공기사</h3>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="count-badge" id="workerCountBadge">0명</span>
+                            <button type="button" onclick="addWorkerPrompt()" style="padding: 2px 8px; font-size: 11px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 6px; cursor: pointer; white-space: nowrap;">+ 추가</button>
+                        </div>
+                    </div>
+                    <div class="column-body" id="boardWorkerList">
+                        <!-- 기사 카드들이 세로로 생성됨 -->
+                    </div>
+                </div>
+
+                <!-- 3열 (우측): 미배정 시공 품목 풀 (밑작업/시공 쪼개짐) -->
+                <div class="board-column items-column">
+                    <div class="column-header">
+                        <h3>📦 미배정 작업</h3>
+                        <span class="count-badge" id="availableCountBadge">0개</span>
+                    </div>
+                    <div id="itemAssignBatchToolbar" style="display: none; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <span id="itemAssignBatchCount" style="font-size: 12px; font-weight: 700; color: var(--text-muted);"></span>
+                        <button type="button" onclick="assignSelectedItemsBatch()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">✔ 일괄 배정</button>
+                        <button type="button" onclick="clearSelectedItemsBatch()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">선택 해제</button>
+                    </div>
+                    <p style="font-size: 11.5px; color: var(--text-muted); margin: -6px 0 10px 0;">카드를 클릭해 여러 개를 선택한 뒤, 왼쪽에서 기사님을 선택하고 일괄 배정하세요.</p>
+                    <div class="column-body" id="boardAvailableItems">
+                        <!-- 설정한 품목들의 밑작업/시공 세부 카드 생성됨 -->
+                    </div>
+                </div>
+
+                <!-- 2열 (중간): 실시간 배정 완료 내역 (모바일에서는 접이식) -->
+                <div class="board-column assignment-column">
+                    <div class="column-header" id="assignmentColumnHeader">
+                        <h3>🤝 실시간 업무 배정표</h3>
+                        <span class="count-badge" id="assignedCountBadge">0개</span>
+                        <span class="collapse-arrow" id="assignmentCollapseArrow">▲</span>
+                    </div>
+                    <div class="column-body" id="boardAssignmentList">
+
+                        <!-- 배정 카드들이 턱턱 달라붙음 -->
+                        <div class="drag-placeholder">우측의 품목 카드를 이곳이나 왼쪽 기사 카드 위로 드래그하여 배정하세요.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 모달 1: 새 현장 개설 팝업 -->
+    <div id="newProjectModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal">
+            <div class="modal-header">
+                <h2>🏢 신규 시공 현장 등록</h2>
+                <button class="close-modal-btn" onclick="closeNewProjectModal()">×</button>
+            </div>
+            <form id="newProjectForm" onsubmit="handleNewProjectSubmit(event)">
+                <div class="form-group">
+                    <label for="newProjectName">현장명 (필수)</label>
+                    <input type="text" id="newProjectName" placeholder="예: 마포 자이 101호" required>
+                </div>
+                <div class="form-group">
+                    <label for="newProjectDate">시공일자 (필수)</label>
+                    <input type="date" id="newProjectDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="newProjectAddress">주소</label>
+                    <input type="text" id="newProjectAddress" placeholder="현장 상세 주소를 입력하세요">
+                </div>
+                 <div class="form-group">
+                    <label for="newProjectNotice">공지 및 주의사항 (엔터로 쪼개짐)</label>
+                    <div class="add-notice-template-wrap" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" id="customNoticeTagInput" placeholder="새로운 자주 쓰는 공지사항 추가..." style="flex: 1; padding: 8px 12px; font-size: 13px; border: 1.5px solid var(--border-color); border-radius: 8px; font-weight: 600; outline: none;">
+                        <button type="button" onclick="addNewNoticeTemplateTag()" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
+                    </div>
+                    <div class="notice-quick-tags" id="noticeQuickTags">
+                        <!-- 동적으로 불러온 에어테이블 자주쓰는공지들이 그려짐 -->
+                    </div>
+                    <textarea id="newProjectNotice" rows="4" placeholder="줄바꿈(엔터)으로 한 줄씩 공지사항을 입력하세요. 위의 칩을 누르거나 직접 자유롭게 쓰실 수 있습니다."></textarea>
+                </div>
+
+
+                <div class="form-group">
+                    <label for="newProjectWorkers">현장 투입기사 (쉼표 구분)</label>
+                    <input type="text" id="newProjectWorkers" placeholder="예: 홍길동, 이순신, 임꺽정">
+                </div>
+                <div class="modal-footer-btns">
+                    <button type="button" class="btn-cancel" onclick="closeNewProjectModal()">취소</button>
+                    <button type="submit" class="btn-submit">현장 등록하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 모달 2: 블로그 발행 선택 팝업 (일차별 탭 UI) -->
+    <div id="publishModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 720px;">
+            <div class="modal-header">
+                <h2>✍️ 현장일지 작성 및 발행</h2>
+                <button class="close-modal-btn" onclick="closePublishModal()">×</button>
+            </div>
+            <div class="publish-body">
+                <div id="journalTabs" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 14px;">
+                    <!-- 1일차 ~ N일차 탭 버튼이 동적으로 렌더링됨 -->
+                </div>
+
+                <div class="form-group">
+                    <label for="journalTitleInput">일지제목</label>
+                    <input type="text" id="journalTitleInput" placeholder="예: 미래타운 310동 1일차">
+                </div>
+                <div class="form-group">
+                    <label for="journalWeatherInput">오늘의 날씨 (선택)</label>
+                    <input type="text" id="journalWeatherInput" placeholder="예: 습하고 무척 더움">
+                </div>
+                <div class="form-group">
+                    <label for="journalFeatureInput">현장의 특징 (선택)</label>
+                    <textarea id="journalFeatureInput" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="journalEpisodeInput">오늘의 에피소드 (선택)</label>
+                    <textarea id="journalEpisodeInput" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>현장사진 (무드샷/액션샷, 여러 장 가능)</label>
+                    <div class="journal-photo-grid" id="journalScenePhotoGrid"></div>
+                </div>
+                <div class="form-group">
+                    <label>정리정돈사진 (여러 장 가능)</label>
+                    <div class="journal-photo-grid" id="journalCleanupPhotoGrid"></div>
+                </div>
+
+                <hr style="margin: 16px 0; border: none; border-top: 1.5px solid var(--border-color);">
+
+                <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 8px;">🔧 포함할 시공 내역 선택</h3>
+                <p class="publish-desc">밑작업+시공이 모두 완료된 항목만 표시됩니다. 다른 일차에 이미 배정된 항목은 선택할 수 없습니다.</p>
+                <div class="publish-list" id="publishTaskList">
+                    <!-- 완료된 작업 리스트 체크박스로 노출됨 -->
+                </div>
+            </div>
+            <div class="modal-footer-btns" style="margin-top: 20px;">
+                <button type="button" class="btn-cancel" onclick="closePublishModal()">닫기</button>
+                <button type="button" class="btn-submit" onclick="submitCurrentJournalDay()">이 일차 발행</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달 3: 시공품목 설정 팝업 -->
+    <div id="itemConfigModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 780px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2>⚙️ 시공품목 마스터 설정</h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button type="button" onclick="openNewItemModal()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">품목추가</button>
+                    <button class="close-modal-btn" onclick="closeItemConfigModal()">×</button>
+                </div>
+            </div>
+            <div class="item-config-body" id="itemConfigBody">
+                <!-- 품목 아코디언 카드들이 동적으로 렌더링됨 -->
+                <div class="empty-state">품목 데이터를 불러오는 중...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달 4: 시공품목 개별 편집 팝업 -->
+    <div id="itemEditModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 560px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="itemEditModalTitle">📦 시공품목 편집</h2>
+                <button class="close-modal-btn" onclick="closeItemEditModal()">×</button>
+            </div>
+            <label>제목 (품목명)</label>
+            <input type="text" id="itemEditNameInput" placeholder="예: 거실문짝 시공" style="width: 100%; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; margin-top: 6px;">
+
+            <label style="margin-top: 14px; display: block;">카테고리</label>
+            <select id="itemEditCategoryInput" style="width: 100%; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; margin-top: 6px; background: white;">
+                <option value="문+틀">문+틀</option>
+                <option value="샤시">샤시</option>
+                <option value="가구">가구</option>
+                <option value="몰딩">몰딩</option>
+                <option value="기타">기타</option>
+            </select>
+
+            <label style="margin-top: 14px; display: block;">밑작업 지침 (엔터로 줄 구분)</label>
+            <textarea id="itemEditPrepInput" rows="3" style="width: 100%; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; margin-top: 6px; resize: vertical;"></textarea>
+
+            <label style="margin-top: 14px; display: block;">시공 후 점검 지침 (엔터로 줄 구분)</label>
+            <textarea id="itemEditInspInput" rows="3" style="width: 100%; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; margin-top: 6px; resize: vertical;"></textarea>
+
+            <label style="margin-top: 14px; display: block;">📸 시공 필수 사진 슬롯</label>
+            <div class="photo-slot-tags" id="itemEditSlotTags" style="margin-top: 6px;"></div>
+            <div class="photo-slot-add-row" style="margin-top: 8px;">
+                <input type="text" id="itemEditSlotInput" placeholder="새 사진 슬롯명 (예: 방문 앞 전체사진)">
+                <button onclick="addPhotoSlotModal()">+ 추가</button>
+            </div>
+
+            <div class="modal-footer-btns" style="margin-top: 20px;">
+                <button type="button" class="btn-cancel" onclick="closeItemEditModal()">닫기</button>
+                <button type="button" class="btn-submit" onclick="saveItemEditModal()">💾 이 품목 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
