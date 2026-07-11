@@ -111,8 +111,8 @@ body {
     }
 
     .nav-btn {
-        padding: 8px 12px;
-        font-size: 12.5px;
+        padding: 10px 14px;
+        font-size: 13.5px;
         white-space: nowrap;
         flex: 1 1 auto;
     }
@@ -317,6 +317,48 @@ body {
 
 .action-btn.publish:hover {
     background: #d97706;
+}
+
+/* 현장 상세 헤더 카드: 좁은 화면에서 제목/버튼이 한 줄에 눌려서 어색하게 줄바꿈되는 문제 해결 */
+@media (max-width: 900px) {
+    .detail-header-card {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .detail-title-wrap {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    #detailProjectTitle {
+        font-size: 19px;
+        flex-basis: 100%;
+        order: 1;
+    }
+
+    .back-btn {
+        order: 2;
+        font-size: 13.5px;
+        padding: 9px 16px;
+    }
+
+    .detail-date {
+        order: 3;
+        font-size: 13.5px;
+    }
+
+    .detail-action-wrap {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .action-btn {
+        width: 100%;
+        padding: 14px 16px;
+        font-size: 14.5px;
+    }
 }
 
 /* 시공품목 설정바 */
