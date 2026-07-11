@@ -234,9 +234,9 @@
 
     <!-- 모달 3: 시공품목 설정 팝업 -->
     <div id="itemConfigModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content admin-modal" style="max-width: 780px; max-height: 85vh; overflow-y: auto;">
+        <div class="modal-content admin-modal" style="max-width: 780px; max-height: 85vh; max-height: 85dvh; overflow-y: auto;">
             <div class="modal-header">
-                <h2>⚙️ 시공품목 마스터 설정</h2>
+                <h2>⚙️ 품목설정</h2>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <button type="button" onclick="openNewItemModal()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">품목추가</button>
                     <button class="close-modal-btn" onclick="closeItemConfigModal()">×</button>
@@ -251,7 +251,7 @@
 
     <!-- 모달 4: 시공품목 개별 편집 팝업 -->
     <div id="itemEditModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content admin-modal" style="max-width: 560px; max-height: 85vh; overflow-y: auto;">
+        <div class="modal-content admin-modal" style="max-width: 560px; max-height: 85vh; max-height: 85dvh; overflow-y: auto;">
             <div class="modal-header">
                 <h2 id="itemEditModalTitle">📦 시공품목 편집</h2>
                 <button class="close-modal-btn" onclick="closeItemEditModal()">×</button>
