@@ -144,7 +144,7 @@ body {
 /* 메인 영역 */
 .admin-main {
     padding: 32px;
-    max-width: 1400px;
+    max-width: 1600px;
     width: 100%;
     margin: 0 auto;
     flex: 1;
@@ -1346,4 +1346,37 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* 모바일 화면에서 좌우 빈 공간 최소화 및 꽉 차는 레이아웃 최적화 */
+@media (max-width: 900px) {
+    .admin-main {
+        padding: 12px 8px !important; /* 기존 32px에서 대폭 축소하여 화면을 넓게 사용 */
+    }
+    
+    .board-column {
+        padding: 12px !important; /* 기존 20px에서 12px로 축소 */
+        border-radius: 12px !important;
+    }
+    
+    .item-select-bar {
+        padding: 12px !important; /* 기존 20px 24px에서 축소 */
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+    }
+    
+    .detail-header-card {
+        padding: 12px !important; /* 기존 16px에서 12px로 축소 */
+        border-radius: 12px !important;
+    }
+
+    .project-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    .project-card {
+        padding: 16px !important;
+        border-radius: 12px !important;
+    }
 }

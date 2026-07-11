@@ -601,7 +601,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         workers.forEach(worker => {
             const card = document.createElement('div');
             card.className = `worker-card ${worker === activeWorkerName ? 'active' : ''}`;
-            card.textContent = `${worker} 기사님`;
+            card.textContent = worker;
 
             // HTML5 드롭존(Drop Zone) 이벤트 연결
             card.addEventListener('dragover', (e) => {
@@ -641,7 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const workers = currentDetailData.workers || [];
 
         select.innerHTML = `<option value="">전체보기</option>` +
-            workers.map(w => `<option value="${w}">${w} 기사님</option>`).join('');
+            workers.map(w => `<option value="${w}">${w}</option>`).join('');
         select.value = activeWorkerName || "";
     }
 
