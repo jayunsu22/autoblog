@@ -285,13 +285,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderProjectGrid(projects) {
         projectGrid.innerHTML = "";
-        
+
         if (!projects || projects.length === 0) {
             projectGrid.innerHTML = `<div class="empty-state">진행 중인 현장이 없습니다. 새 현장을 개설해 주세요.</div>`;
             return;
         }
 
-        projects.forEach(project => {
+        // 최신(나중에 등록된) 현장이 위로 오도록 시공일자 내림차순 정렬
+        const sortedProjects = [...projects].sort((a, b) => {
+            const fieldsA = a.fields ? a.fields : a;
+            const fieldsB = b.fields ? b.fields : b;
+            const dateA = fieldsA.시공일자 || "";
+            const dateB = fieldsB.시공일자 || "";
+            return dateB.localeCompare(dateA);
+        });
+
+        sortedProjects.forEach(project => {
             // Airtable 노드 버전에 따라 fields 주머니가 있을 수도, 없을 수도 있으므로 유연하게 자동 감지합니다.
             const fields = project.fields ? project.fields : project;
             const recordId = project.id;
