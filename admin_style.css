@@ -1379,4 +1379,18 @@ body {
         padding: 16px !important;
         border-radius: 12px !important;
     }
+
+    /* 모바일 모달 스크롤 및 키보드 가림 현상 우회 최적화 */
+    .modal-overlay {
+        align-items: flex-start !important; /* 상단부터 채우고 스크롤 가능하게 처리 */
+        overflow-y: auto !important;
+        padding: 12px 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .modal-content.admin-modal {
+        margin: 20px auto !important;
+        padding: 20px 16px !important;
+        max-height: none !important;
+    }
 }
