@@ -445,7 +445,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 품목 설정 칩들 (카테고리 탭 + 활성 탭의 품목만 표시)
     function renderItemConfigChips() {
-        const allItems = currentDetailData.masterItems || [];
+        const allItems = [...(currentDetailData.masterItems || [])];
+        allItems.sort((a, b) => {
+            const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
+            const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
+            if (pA !== pB) return pA - pB;
+            return (a.품목명 || "").localeCompare(b.품목명 || "");
+        });
         const activeItems = currentDetailData.activeItems || []; // 이미 현장에 개설 완료된 품목들
 
         const categoryMap = new Map();
@@ -488,17 +494,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const pendingState = pendingItemToggles.has(item.품목명) ? pendingItemToggles.get(item.품목명) : null;
 
             let chipClass = 'item-chip';
-            let prefix = '+ ';
             if (pendingState !== null) {
                 chipClass += pendingState ? ' pending-add' : ' pending-remove';
-                prefix = pendingState ? '+ ' : '− ';
             } else if (serverActive) {
                 chipClass += ' active';
-                prefix = '✓ ';
             }
 
             chip.className = chipClass;
-            chip.innerHTML = `${prefix}${item.품목명}`;
+            chip.textContent = item.품목명;
             chip.addEventListener('click', () => {
                 const effectiveActive = pendingState !== null ? pendingState : serverActive;
                 const target = !effectiveActive;
@@ -661,7 +664,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3열: 미배정 품목 풀 그리기 (밑작업/시공 구분)
     function renderBoardAvailableItems() {
         boardAvailableItems.innerHTML = "";
-        const tasks = currentDetailData.tasks || [];
+        const masterItems = currentDetailData.masterItems || [];
+        const tasks = [...(currentDetailData.tasks || [])];
+        
+        const getTaskPriority = (t) => {
+            if (t.fields.우선순위 !== undefined) return t.fields.우선순위;
+            const mItem = masterItems.find(m => m.품목명 === t.fields.시공품목);
+            if (mItem && mItem.우선순위 !== undefined) return mItem.우선순위;
+            return 999;
+        };
+
+        tasks.sort((a, b) => {
+            const pA = getTaskPriority(a);
+            const pB = getTaskPriority(b);
+            if (pA !== pB) return pA - pB;
+            return (a.fields.시공품목 || "").localeCompare(b.fields.시공품목 || "");
+        });
         let count = 0;
         const assignedHistory = [];
         const validKeys = new Set();
