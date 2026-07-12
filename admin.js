@@ -835,6 +835,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         boardAssignmentList.innerHTML = "";
         const tasks = currentDetailData.tasks || [];
         
+        // 기사명이 선택되면 실시간 업무 배정표를 자동으로 펼침
+        const col = document.querySelector('.assignment-column');
+        if (col && activeWorkerName) {
+            col.classList.add('open');
+        }
+
         // 1. 기사 필터 검사 (선택된 기사님이 있으면 그 기사님 배정 내역만 표시)
         const filterWorkerName = activeWorkerName;
 
