@@ -403,6 +403,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             // n8n은 데이터를 리턴할 때 항상 배열 [ { ... } ] 형태로 감싸서 주므로, 첫 번째 원소를 꺼내줍니다.
             currentDetailData = Array.isArray(result) ? result[0] : result;
             
+            // 상세 화면 첫 진입 시 첫 번째 기사님을 자동으로 선택하여 배정표가 바로 열리도록 설정
+            if (!activeWorkerName && currentDetailData.workers && currentDetailData.workers.length > 0) {
+                activeWorkerName = currentDetailData.workers[0];
+            }
+            
             renderDetailSection();
             showSection('projectDetailSection');
         } catch (error) {
