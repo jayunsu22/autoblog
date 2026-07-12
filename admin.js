@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="card-date-badge">🗓️ ${fields.시공일자 || '미지정'}</span>
                     <h3 class="card-title">${fields.현장명 || '이름 없는 현장'}</h3>
                     <div class="card-address">📍 ${fields.주소 || '주소 미지정'}</div>
-                    <div class="card-address" style="margin-top: 6px; font-size:12.5px;">👷 기사: ${workersText}</div>
+                     <div class="card-workers">👷 기사: ${workersText}</div>
                 </div>
                 <div class="card-footer-btns">
                     <button class="card-btn secondary" onclick="event.stopPropagation(); copyLink('${WORKER_APP_BASE_URL}?code=${recordId}')">🔗 기사 링크 복사</button>

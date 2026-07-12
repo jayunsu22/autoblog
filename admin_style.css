@@ -225,6 +225,13 @@ body {
     font-weight: 500;
 }
 
+.card-workers {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-top: 6px;
+}
+
 .card-footer-btns {
     display: flex;
     gap: 8px;
@@ -1392,5 +1399,87 @@ body {
         margin: 20px auto !important;
         padding: 20px 16px !important;
         max-height: none !important;
+    }
+
+    /* 모바일 글자 크기 최적화 (가독성 향상) */
+    .logo-area h1 {
+        font-size: 17.5px !important;
+    }
+    
+    .nav-btn {
+        font-size: 14.5px !important;
+        padding: 10px 8px !important;
+    }
+
+    .section-header h2 {
+        font-size: 24px !important;
+    }
+
+    .section-header .sub-text {
+        font-size: 15px !important;
+    }
+
+    /* 현장 카드 글자 크기 키우기 */
+    .card-date-badge {
+        font-size: 14px !important;
+        padding: 6px 12px !important;
+    }
+
+    .card-title {
+        font-size: 21px !important;
+        margin-top: 8px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .card-address {
+        font-size: 15.5px !important;
+        line-height: 1.4 !important;
+    }
+
+    .card-workers {
+        font-size: 15px !important;
+        margin-top: 8px !important;
+        font-weight: 700 !important;
+        color: #334155 !important;
+    }
+
+    .card-btn {
+        font-size: 15px !important;
+        padding: 12px 16px !important;
+        font-weight: 800 !important;
+    }
+
+    /* 상세 화면 글자 크기 키우기 */
+    #detailProjectTitle {
+        font-size: 23px !important;
+    }
+
+    .detail-date {
+        font-size: 15.5px !important;
+    }
+
+    .column-header h3 {
+        font-size: 16.5px !important;
+    }
+
+    .worker-card {
+        font-size: 15px !important;
+        padding: 12px 6px !important;
+        font-weight: 800 !important;
+    }
+
+    /* 공지사항 입력란 및 모달 폼 요소 */
+    #detailProjectNotice {
+        font-size: 20px !important;
+    }
+
+    .form-group label {
+        font-size: 15px !important;
+    }
+
+    .form-group input, 
+    .form-group textarea {
+        font-size: 15.5px !important;
+        padding: 12px !important;
     }
 }
