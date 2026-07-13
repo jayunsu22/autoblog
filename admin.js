@@ -1184,8 +1184,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         eligibleTasksCache = tasks.filter(t => t.fields.밑작업완료 && t.fields.시공완료);
 
         if (eligibleTasksCache.length === 0) {
-            showToast("밑작업과 시공이 모두 완료된 항목이 없습니다.", "danger");
-            return;
+            showToast("밑작업과 시공이 모두 완료된 항목이 없습니다. 발행 화면에서 시공 내역 없이 진행할 수 없습니다.", "danger");
         }
 
         dayDrafts = [1, 2, 3, 4, 5].map(createEmptyDayDraft);
