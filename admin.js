@@ -1172,8 +1172,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             episode: "",
             sceneSaved: [],      // {url, filename} - 이미 저장된 사진 (읽기 전용 표시)
             cleanupSaved: [],
+            filmSaved: [],
             scenePending: [],    // File[] - 아직 업로드 안 된, 발행 시 업로드될 사진 (삭제 가능)
-            cleanupPending: []
+            cleanupPending: [],
+            filmPending: []
         };
     }
 
@@ -1212,7 +1214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     episode: f.오늘의에피소드 || "",
                     published: !!f.발행완료,
                     sceneSaved: (f.현장사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename })),
-                    cleanupSaved: (f.정리정돈사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename }))
+                    cleanupSaved: (f.정리정돈사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename })),
+                    filmSaved: (f.필름사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename }))
                 };
             });
         } catch (e) {
@@ -1264,8 +1267,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1) 이미 저장된 사진(읽기 전용) 2) 아직 업로드 안 된 사진(삭제 가능) 3) "사진 추가" 타일
     function renderJournalPhotoGrid(gridId, kind) {
         const d = dayDrafts[activeDayIndex];
-        const saved = kind === 'scene' ? d.sceneSaved : d.cleanupSaved;
-        const pending = kind === 'scene' ? d.scenePending : d.cleanupPending;
+        const savedKey = { scene: 'sceneSaved', cleanup: 'cleanupSaved', film: 'filmSaved' }[kind];
+        const pendingKey = { scene: 'scenePending', cleanup: 'cleanupPending', film: 'filmPending' }[kind];
+        const saved = d[savedKey];
+        const pending = d[pendingKey];
         const grid = document.getElementById(gridId);
         grid.innerHTML = "";
 
@@ -1309,18 +1314,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         input.type = 'file';
         input.id = 'tempJournalFileInput';
         input.accept = 'image/*';
-        input.multiple = true;
         input.style.display = 'none';
 
         input.addEventListener('change', (e) => {
             const picked = Array.from(e.target.files);
             const d = dayDrafts[activeDayIndex];
             if (!d || picked.length === 0) { input.remove(); return; }
-            if (kind === 'scene') {
-                d.scenePending = d.scenePending.concat(picked);
-            } else {
-                d.cleanupPending = d.cleanupPending.concat(picked);
-            }
+            const pendingKey = { scene: 'scenePending', cleanup: 'cleanupPending', film: 'filmPending' }[kind];
+            d[pendingKey] = d[pendingKey].concat(picked);
             renderJournalPhotoGrid(gridId, kind);
             input.remove();
         });
@@ -1337,6 +1338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('journalEpisodeInput').value = d.episode;
         renderJournalPhotoGrid('journalScenePhotoGrid', 'scene');
         renderJournalPhotoGrid('journalCleanupPhotoGrid', 'cleanup');
+        renderJournalPhotoGrid('journalFilmPhotoGrid', 'film');
     }
 
     function switchDayTab(idx) {
@@ -1473,6 +1475,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 d.cleanupSaved.push({ url: URL.createObjectURL(file), filename: file.name });
             }
             d.cleanupPending = [];
+            for (const file of d.filmPending) {
+                await uploadSingleJournalPhoto(journalId, file, '필름사진');
+                d.filmSaved.push({ url: URL.createObjectURL(file), filename: file.name });
+            }
+            d.filmPending = [];
 
             const pubRes = await fetch(API_PUBLISH_URL, {
                 method: 'POST',
