@@ -358,6 +358,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    window.openWorkerLink = function() {
+        if (activeProjectCode) {
+            window.open(`${WORKER_APP_BASE_URL}?code=${activeProjectCode}`, '_blank');
+        }
+    };
+
     // 6. 새 현장 개설 제출
     window.handleNewProjectSubmit = async function(event) {
         event.preventDefault();
