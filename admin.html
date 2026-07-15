@@ -61,6 +61,11 @@
             <!-- 현장 공지 및 주의사항 설정 바 -->
             <div class="item-select-bar" style="display: flex; flex-direction: column; gap: 8px;">
                 <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 공지설정</h3>
+                <div class="add-notice-template-wrap" style="display: flex; gap: 8px;">
+                    <input type="text" id="detailCustomNoticeTagInput" placeholder="새로운 자주 쓰는 공지사항 추가..." style="flex: 1; padding: 8px 12px; font-size: 13px; border: 1.5px solid var(--border-color); border-radius: 8px; font-weight: 600; outline: none;">
+                    <button type="button" onclick="addNewNoticeTemplateTag('detailCustomNoticeTagInput', 'detailProjectNotice')" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
+                </div>
+                <div class="notice-quick-tags" id="detailNoticeQuickTags"></div>
                 <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 20.25px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
                 <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
             </div>
@@ -159,7 +164,7 @@
                     <label for="newProjectNotice">공지 및 주의사항 (엔터로 쪼개짐)</label>
                     <div class="add-notice-template-wrap" style="display: flex; gap: 8px; margin-bottom: 8px;">
                         <input type="text" id="customNoticeTagInput" placeholder="새로운 자주 쓰는 공지사항 추가..." style="flex: 1; padding: 8px 12px; font-size: 13px; border: 1.5px solid var(--border-color); border-radius: 8px; font-weight: 600; outline: none;">
-                        <button type="button" onclick="addNewNoticeTemplateTag()" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
+                        <button type="button" onclick="addNewNoticeTemplateTag('customNoticeTagInput', 'newProjectNotice')" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
                     </div>
                     <div class="notice-quick-tags" id="noticeQuickTags">
                         <!-- 동적으로 불러온 에어테이블 자주쓰는공지들이 그려짐 -->

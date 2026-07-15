@@ -108,8 +108,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('newProjectDate').value = today;
         
-        // 자주 쓰는 공지 칩 active 상태 초기화
-        document.querySelectorAll('.notice-tag').forEach(tag => tag.classList.remove('active'));
+        // 자주 쓰는 공지 칩 active 상태 초기화 (신규 등록 모달에서만)
+        document.querySelectorAll('#noticeQuickTags .notice-tag').forEach(tag => tag.classList.remove('active'));
     };
 
     window.closeNewProjectModal = function() {
@@ -117,15 +117,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // 자주 쓰는 공지사항 태그 토글 핸들러
-    window.toggleNoticeTag = function(element, text) {
-        const textarea = document.getElementById('newProjectNotice');
+    window.toggleNoticeTag = function(element, text, textareaId) {
+        const textarea = document.getElementById(textareaId || 'newProjectNotice');
         let currentText = textarea.value.trim();
-        
+
         // 줄바꿈 기준으로 배열 쪼개기
         let lines = currentText ? currentText.split('\n').map(l => l.trim()).filter(l => l !== "") : [];
-        
+
         const isActive = element.classList.toggle('active');
-        
+
         if (isActive) {
             // 활성화 시 추가
             if (!lines.includes(text)) {
@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 비활성화 시 제거
             lines = lines.filter(line => line !== text);
         }
-        
+
         textarea.value = lines.join('\n');
     };
 
@@ -206,50 +206,61 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 자주쓰는공지 칩 동적 렌더링
+    // 자주쓰는공지 칩 동적 렌더링 (신규 현장 등록 모달 + 기존 현장 상세 화면, 두 군데 모두에 반영)
     function renderNoticeQuickTags(notices) {
-        globalQuickNotices = notices || [];
-        const container = document.getElementById('noticeQuickTags');
+        globalQuickNotices = notices || globalQuickNotices || [];
+        renderQuickTagsInto('noticeQuickTags', 'newProjectNotice');
+        renderQuickTagsInto('detailNoticeQuickTags', 'detailProjectNotice');
+    }
+
+    // 특정 칩 컨테이너 하나를 지정된 textarea 기준으로 렌더링
+    function renderQuickTagsInto(containerId, textareaId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
         container.innerHTML = "";
-        
+
         if (globalQuickNotices.length === 0) {
             container.innerHTML = `<span style="font-size: 12px; color: var(--text-muted); padding: 4px;">에어테이블에 등록된 공지 템플릿이 없습니다. 아래에서 새로 등록해 보세요!</span>`;
             return;
         }
-        
+
         // 현재 textarea에 입력된 텍스트 수집해서 칩 active 상태 복원용 비교군 생성
-        const textarea = document.getElementById('newProjectNotice');
+        const textarea = document.getElementById(textareaId);
         const lines = textarea ? textarea.value.split('\n').map(l => l.trim()).filter(l => l !== "") : [];
-        
+
         globalQuickNotices.forEach(text => {
             const span = document.createElement('span');
             span.className = 'notice-tag';
             span.textContent = text;
-            
+
             // 만약 이미 textarea에 들어가 있는 공지라면 액티브 상태로 렌더링
             if (lines.includes(text)) {
                 span.classList.add('active');
             }
-            
+
             span.onclick = function() {
-                toggleNoticeTag(this, text);
+                toggleNoticeTag(this, text, textareaId);
             };
             container.appendChild(span);
         });
     }
 
     // 실시간 공지 템플릿 에어테이블 저장 및 웹 등록
-    window.addNewNoticeTemplateTag = async function() {
-        const input = document.getElementById('customNoticeTagInput');
+    window.addNewNoticeTemplateTag = async function(inputId, textareaId) {
+        inputId = inputId || 'customNoticeTagInput';
+        textareaId = textareaId || 'newProjectNotice';
+        const containerId = { newProjectNotice: 'noticeQuickTags', detailProjectNotice: 'detailNoticeQuickTags' }[textareaId];
+
+        const input = document.getElementById(inputId);
         const text = input.value.trim();
         if (!text) return;
-        
+
         if (globalQuickNotices.includes(text)) {
             showToast("이미 등록된 공지 템플릿입니다.", "warning");
             input.value = "";
             return;
         }
-        
+
         showLoading("새 공지 템플릿을 등록하는 중...");
         try {
             const response = await fetch("https://primary-production-a6fa.up.railway.app/webhook/film-notice-create", {
@@ -257,20 +268,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ noticeText: text })
             });
-            
+
             if (!response.ok) throw new Error("공지 등록 실패");
-            
-            // 성공 시 캐시 반영 및 칩 즉각 재생성
+
+            // 성공 시 캐시 반영 및 칩 즉각 재생성 (양쪽 화면 모두)
             globalQuickNotices.push(text);
             renderNoticeQuickTags(globalQuickNotices);
-            
-            // 새로 생성된 칩을 자동으로 클릭/활성화 처리하여 텍스트 영역에 바로 꽂아주기
-            const container = document.getElementById('noticeQuickTags');
-            const newChip = Array.from(container.children).find(el => el.textContent === text);
+
+            // 새로 생성된 칩을, 등록을 요청한 화면의 textarea에만 자동으로 클릭/활성화 처리
+            const container = document.getElementById(containerId);
+            const newChip = container ? Array.from(container.children).find(el => el.textContent === text) : null;
             if (newChip) {
-                toggleNoticeTag(newChip, text);
+                toggleNoticeTag(newChip, text, textareaId);
             }
-            
+
             input.value = "";
             showToast("공지 템플릿이 에어테이블에 실시간 등록되었습니다.", "success");
         } catch (error) {
@@ -429,6 +440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (noticeEl) {
             noticeEl.value = p.공지사항 || "";
         }
+        renderQuickTagsInto('detailNoticeQuickTags', 'detailProjectNotice');
 
         // 1. 현장 품목 설정 칩 바 렌더링
         renderItemConfigChips();
