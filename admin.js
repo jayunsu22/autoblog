@@ -1578,6 +1578,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             categoryGroups.get(cat).push(idx);
         });
 
+        // 각 카테고리 내에서 우선순위(숫자) 오름차순으로 정렬
+        categoryGroups.forEach((indices) => {
+            indices.sort((idxA, idxB) => {
+                const pA = globalMasterItems[idxA].우선순위 !== undefined ? globalMasterItems[idxA].우선순위 : 999;
+                const pB = globalMasterItems[idxB].우선순위 !== undefined ? globalMasterItems[idxB].우선순위 : 999;
+                return pA - pB;
+            });
+        });
+
         let html = "";
         categoryGroups.forEach((indices, category) => {
             html += `<h3 class="item-config-category-heading">${category} (${indices.length})</h3>`;
