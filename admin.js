@@ -1332,9 +1332,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('journalWeatherInput').value = d.weather;
         document.getElementById('journalFeatureInput').value = d.feature;
         document.getElementById('journalEpisodeInput').value = d.episode;
+        renderJournalPhotoGrid('journalFilmPhotoGrid', 'film');
         renderJournalPhotoGrid('journalScenePhotoGrid', 'scene');
         renderJournalPhotoGrid('journalCleanupPhotoGrid', 'cleanup');
-        renderJournalPhotoGrid('journalFilmPhotoGrid', 'film');
     }
 
     function switchDayTab(idx) {
