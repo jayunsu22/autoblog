@@ -1433,6 +1433,73 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!res.ok) throw new Error("사진 업로드 실패: " + file.name);
     }
 
+    // 일지제목/날씨/특징/에피소드를 Airtable에 저장하고, 아직 업로드 안 된 사진들을 업로드.
+    // 임시저장과 실제 발행이 공통으로 쓰는 부분 - 이 함수가 끝나면 창을 닫고 다시 들어와도 내용/사진이 남아있음.
+    async function persistJournalDayDraft(d) {
+        const res = await fetch(API_JOURNAL_CREATE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                journalId: d.journalId || undefined,
+                projectCode: activeProjectCode,
+                일지제목: d.title,
+                일차: d.dayNumber,
+                오늘의날씨: d.weather,
+                현장의특징: d.feature,
+                오늘의에피소드: d.episode
+            })
+        });
+        if (!res.ok) throw new Error("일지 저장 실패");
+        if (!d.journalId) {
+            const created = await res.json();
+            const rec = Array.isArray(created) ? created[0] : created;
+            d.journalId = rec.id;
+        }
+        const journalId = d.journalId;
+
+        for (const file of d.scenePending) {
+            await uploadSingleJournalPhoto(journalId, file, '현장사진');
+            d.sceneSaved.push({ url: URL.createObjectURL(file), filename: file.name });
+        }
+        d.scenePending = [];
+        for (const file of d.cleanupPending) {
+            await uploadSingleJournalPhoto(journalId, file, '정리정돈사진');
+            d.cleanupSaved.push({ url: URL.createObjectURL(file), filename: file.name });
+        }
+        d.cleanupPending = [];
+        for (const file of d.filmPending) {
+            await uploadSingleJournalPhoto(journalId, file, '필름사진');
+            d.filmSaved.push({ url: URL.createObjectURL(file), filename: file.name });
+        }
+        d.filmPending = [];
+
+        return journalId;
+    }
+
+    // 발행 없이 지금까지 작성한 내용/사진만 저장 (창을 닫았다가 다시 열어도 남아있게)
+    window.saveCurrentJournalDraft = async function() {
+        saveFormIntoCurrentDraft();
+        const d = dayDrafts[activeDayIndex];
+
+        if (!d.title.trim()) {
+            showToast("일지제목을 입력해주세요.", "danger");
+            return;
+        }
+
+        showLoading(`${d.dayNumber}일차 임시 저장 중...`);
+        try {
+            await persistJournalDayDraft(d);
+            showToast(`${d.dayNumber}일차 내용이 임시 저장되었습니다. 창을 닫았다 다시 열어도 남아있습니다.`, "success");
+            renderJournalTabs();
+            loadDayDraftIntoForm();
+        } catch (error) {
+            console.error(error);
+            showToast("임시 저장 중 오류가 발생했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
     // n8n 최종 블로그 발행 트리거 호출 (현재 활성화된 일차 탭만 발행 - 이미 발행된 일차도 내용 추가 후 재발행 가능)
     window.submitCurrentJournalDay = async function() {
         saveFormIntoCurrentDraft();
@@ -1452,42 +1519,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const wasAlreadyPublished = d.published;
         showLoading(wasAlreadyPublished ? `${d.dayNumber}일차 재발행 중...` : `${d.dayNumber}일차 자료 생성 중...`);
         try {
-            const res = await fetch(API_JOURNAL_CREATE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    journalId: d.journalId || undefined,
-                    projectCode: activeProjectCode,
-                    일지제목: d.title,
-                    일차: d.dayNumber,
-                    오늘의날씨: d.weather,
-                    현장의특징: d.feature,
-                    오늘의에피소드: d.episode
-                })
-            });
-            if (!res.ok) throw new Error("일지 저장 실패");
-            if (!d.journalId) {
-                const created = await res.json();
-                const rec = Array.isArray(created) ? created[0] : created;
-                d.journalId = rec.id;
-            }
-            const journalId = d.journalId;
-
-            for (const file of d.scenePending) {
-                await uploadSingleJournalPhoto(journalId, file, '현장사진');
-                d.sceneSaved.push({ url: URL.createObjectURL(file), filename: file.name });
-            }
-            d.scenePending = [];
-            for (const file of d.cleanupPending) {
-                await uploadSingleJournalPhoto(journalId, file, '정리정돈사진');
-                d.cleanupSaved.push({ url: URL.createObjectURL(file), filename: file.name });
-            }
-            d.cleanupPending = [];
-            for (const file of d.filmPending) {
-                await uploadSingleJournalPhoto(journalId, file, '필름사진');
-                d.filmSaved.push({ url: URL.createObjectURL(file), filename: file.name });
-            }
-            d.filmPending = [];
+            const journalId = await persistJournalDayDraft(d);
 
             const pubRes = await fetch(API_PUBLISH_URL, {
                 method: 'POST',
