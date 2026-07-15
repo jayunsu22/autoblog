@@ -1587,8 +1587,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
+        // 카테고리 표시 순서 고정 (목록에 없는 카테고리는 맨 뒤로)
+        const CATEGORY_ORDER = ['문+틀', '샤시', '가구', '몰딩', '기타'];
+        const sortedCategoryEntries = Array.from(categoryGroups.entries()).sort((a, b) => {
+            const rankA = CATEGORY_ORDER.indexOf(a[0]) === -1 ? CATEGORY_ORDER.length : CATEGORY_ORDER.indexOf(a[0]);
+            const rankB = CATEGORY_ORDER.indexOf(b[0]) === -1 ? CATEGORY_ORDER.length : CATEGORY_ORDER.indexOf(b[0]);
+            return rankA - rankB;
+        });
+
         let html = "";
-        categoryGroups.forEach((indices, category) => {
+        sortedCategoryEntries.forEach(([category, indices]) => {
             html += `<h3 class="item-config-category-heading">${category} (${indices.length})</h3>`;
             indices.forEach(idx => {
                 const item = globalMasterItems[idx];
