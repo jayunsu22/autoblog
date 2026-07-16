@@ -765,6 +765,19 @@ body {
     color: var(--primary-blue);
 }
 
+.drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 30px;
+    font-size: 16px;
+    color: var(--text-muted);
+    cursor: grab;
+    touch-action: none;
+    flex-shrink: 0;
+}
+
 .assignment-card-body h4 {
     font-size: 12px;
     font-weight: 800;
