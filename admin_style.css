@@ -703,6 +703,15 @@ body {
     padding: 16px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.01);
     position: relative;
+    transition: background 0.1s ease, box-shadow 0.1s ease, transform 0.1s ease;
+}
+
+.assignment-card.dragging {
+    background: var(--primary-light);
+    border-color: var(--primary-blue);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    transform: scale(1.02);
+    z-index: 10;
 }
 
 .assignment-card-header {
