@@ -1019,20 +1019,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 현재 배정표 DOM 순서를 로컬스토리지 + 서버(우선순위 필드)에 저장
+    // 같은 품목의 밑작업/시공 카드는 (동일 기사에게 배정된 경우) 작업자 화면에서 항상 붙어서
+    // 나오므로, 레코드당 우선순위를 하나로 통일해서 저장 - 먼저 나오는 카드의 위치를 기준으로 함
     async function persistAssignmentOrder() {
-        // 1. 배정표 내에 정렬된 카드들 순서 수집
+        // 1. 배정표 내에 정렬된 카드들 순서 수집, 레코드 ID별로 첫 등장 위치만 채택
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
-        const orderIds = cards.map(c => c.dataset.recordId);
+        const priorityByRecordId = new Map();
+        cards.forEach((c) => {
+            const id = c.dataset.recordId;
+            if (!priorityByRecordId.has(id)) {
+                priorityByRecordId.set(id, priorityByRecordId.size + 1);
+            }
+        });
+        const orderIds = Array.from(priorityByRecordId.keys());
+        const reorderTasks = orderIds.map(id => ({ id, priority: priorityByRecordId.get(id) }));
 
         // 2. 임시 로컬 캐시에 정렬 순서 보관 (즉시 반영용)
         const sortOrderKey = `task_sort_order_${activeProjectCode}`;
         localStorage.setItem(sortOrderKey, JSON.stringify(orderIds));
 
-        // 3. 우선순위 번호 맵핑
-        const reorderTasks = cards.map((c, index) => ({
-            id: c.dataset.recordId,
-            priority: index + 1
-        }));
+        // 3. 로컬 데이터에도 바로 반영해서, 같은 품목의 두 카드가 화면에서 즉시 붙어 보이게 함
+        reorderTasks.forEach(({ id, priority }) => {
+            const task = currentDetailData.tasks.find(t => t.id === id);
+            if (task) task.fields.우선순위 = priority;
+        });
 
         showLoading("우선순위 순서 저장 중...");
         try {
@@ -1051,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast("순서 저장 성공 (에어테이블 '우선순위' 숫자 필드를 개설하시면 서버에 완벽 저장됩니다!)", "warning");
         } finally {
             hideLoading();
+            renderBoardAssignments();
         }
     }
 
@@ -1062,19 +1073,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         await persistAssignmentOrder();
     });
 
-    // ▲▼ 버튼으로 바로 위/아래 카드와 순서 교체
+    // ▲▼ 버튼으로 바로 위/아래 "품목 그룹"과 순서 교체
+    // 같은 품목의 밑작업/시공 카드는 항상 붙어 다녀야 하므로(작업자 화면과 순서를 맞추기 위해),
+    // 클릭한 카드 하나만 옮기지 않고 그 품목의 카드 전체를 한 덩어리로 이웃 품목과 맞바꿈
     window.moveAssignmentCard = async function(recordId, stage, direction) {
-        const card = boardAssignmentList.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"]`);
-        if (!card) return;
+        const allCards = Array.from(boardAssignmentList.querySelectorAll('.assignment-card'));
+        const myCards = allCards.filter(c => c.dataset.recordId === recordId);
+        if (myCards.length === 0) return;
 
         if (direction === 'up') {
-            const prev = card.previousElementSibling;
-            if (!prev || !prev.classList.contains('assignment-card')) return;
-            boardAssignmentList.insertBefore(card, prev);
+            const firstIdx = allCards.indexOf(myCards[0]);
+            let neighbor = null;
+            for (let i = firstIdx - 1; i >= 0; i--) {
+                if (allCards[i].dataset.recordId !== recordId) { neighbor = allCards[i]; break; }
+            }
+            if (!neighbor) return;
+            const neighborGroup = allCards.filter(c => c.dataset.recordId === neighbor.dataset.recordId);
+            myCards.forEach(c => boardAssignmentList.insertBefore(c, neighborGroup[0]));
         } else {
-            const next = card.nextElementSibling;
-            if (!next || !next.classList.contains('assignment-card')) return;
-            boardAssignmentList.insertBefore(next, card);
+            const lastIdx = allCards.lastIndexOf(myCards[myCards.length - 1]);
+            let neighbor = null;
+            for (let i = lastIdx + 1; i < allCards.length; i++) {
+                if (allCards[i].dataset.recordId !== recordId) { neighbor = allCards[i]; break; }
+            }
+            if (!neighbor) return;
+            const neighborGroup = allCards.filter(c => c.dataset.recordId === neighbor.dataset.recordId);
+            const anchorAfter = neighborGroup[neighborGroup.length - 1].nextElementSibling;
+            myCards.forEach(c => boardAssignmentList.insertBefore(c, anchorAfter));
         }
 
         await persistAssignmentOrder();
