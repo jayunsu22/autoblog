@@ -1477,16 +1477,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // 휴대폰 원본 사진(보통 3~8MB)을 블로그에 쓰기 충분한 해상도로 줄여서 업로드 속도 개선
+    // 긴 변 1920px, JPEG 85% 품질 - 화면/블로그에서는 원본과 차이 안 보이면서 용량은 크게 줄어듦
+    function resizeImageFile(file, maxDimension = 1920, quality = 0.85) {
+        return new Promise((resolve) => {
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                let { width, height } = img;
+                if (width > maxDimension || height > maxDimension) {
+                    if (width > height) {
+                        height = Math.round(height * (maxDimension / width));
+                        width = maxDimension;
+                    } else {
+                        width = Math.round(width * (maxDimension / height));
+                        height = maxDimension;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    if (!blob) { resolve(file); return; }
+                    resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+            img.src = objectUrl;
+        });
+    }
+
     async function uploadSingleJournalPhoto(journalId, file, fieldName) {
-        const base64 = await fileToBase64(file);
+        const resizedFile = await resizeImageFile(file);
+        const base64 = await fileToBase64(resizedFile);
         const res = await fetch(API_JOURNAL_PHOTO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 journalId,
                 fieldName,
-                filename: file.name,
-                contentType: file.type || 'image/jpeg',
+                filename: resizedFile.name,
+                contentType: resizedFile.type || 'image/jpeg',
                 fileBase64: base64
             })
         });
