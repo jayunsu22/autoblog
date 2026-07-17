@@ -339,18 +339,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // 각 태스크별로 화면에 렌더링
+        // 품목 우선순위 순서는 유지하되, 밑작업/시공 각 단계를 독립된 카드로 나열
+        const cardEntries = [];
         filteredTasks.forEach(task => {
+            const fields = task.fields;
+            if (fields.밑작업기사 === currentWorker) {
+                cardEntries.push({ task, stage: '밑작업', isCompleted: !!fields.밑작업완료 });
+            }
+            if (fields.시공기사 === currentWorker) {
+                cardEntries.push({ task, stage: '시공', isCompleted: !!fields.시공완료 });
+            }
+        });
+
+        // 완료된 카드를 맨 아래로 - 완료 여부로만 재배치하고, 그 안에서는 원래 순서(우선순위) 유지
+        cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
+
+        cardEntries.forEach(({ task, stage }) => {
             const fields = task.fields;
             const item = projectData.items[fields.시공품목] || { 밑작업지침: "", 시공후점검지침: "", 필수사진슬롯: "" };
 
-            // 1. 밑작업 카드 그리기 (선택 기사가 밑작업기사로 지정된 경우)
-            if (fields.밑작업기사 === currentWorker) {
+            if (stage === '밑작업') {
                 renderTaskCard(task, '밑작업', item.밑작업지침, "시공전사진");
-            }
-
-            // 2. 시공 카드 그리기 (선택 기사가 시공기사로 지정된 경우)
-            if (fields.시공기사 === currentWorker) {
+            } else {
                 renderTaskCard(task, '시공', item.시공후점검지침, "시공후사진", item.필수사진슬롯);
             }
         });
