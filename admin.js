@@ -435,6 +435,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // 🔄 버튼 - 현재 보고 있는 현장 데이터를 다시 불러와서 배정표/완료 상태를 최신으로 갱신
+    window.refreshBoardData = async function() {
+        if (!activeProjectCode) return;
+        await showProjectDetail(activeProjectCode);
+        showToast("최신 정보로 새로고침했습니다.", "success");
+    };
+
 
     function renderDetailSection() {
         const p = currentDetailData.project;

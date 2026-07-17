@@ -125,10 +125,11 @@
                 <!-- 2열 (중간): 실시간 배정 완료 내역 (모바일에서는 접이식) -->
                 <div class="board-column assignment-column">
                     <div class="column-header" id="assignmentColumnHeader">
-                        <h3>🤝 실시간 업무 배정표</h3>
-                        <select id="assignmentWorkerFilter" onclick="event.stopPropagation()" onchange="event.stopPropagation(); onAssignmentWorkerFilterChange()" style="flex: 1; min-width: 0; margin: 0 8px; padding: 5px 8px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main);">
+                        <h3>🤝 업무배정표</h3>
+                        <select id="assignmentWorkerFilter" onclick="event.stopPropagation()" onchange="event.stopPropagation(); onAssignmentWorkerFilterChange()" style="width: 96px; flex: 0 0 auto; margin: 0 8px; padding: 5px 6px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main);">
                             <option value="">전체보기</option>
                         </select>
+                        <button type="button" onclick="event.stopPropagation(); refreshBoardData()" title="새로고침" style="padding: 5px 8px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; flex-shrink: 0;">🔄</button>
                         <span class="count-badge" id="assignedCountBadge" style="display: none;">0개</span>
                     </div>
                     <div class="column-body" id="boardAssignmentList">
