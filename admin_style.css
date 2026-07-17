@@ -706,12 +706,32 @@ body {
     transition: background 0.1s ease, box-shadow 0.1s ease, transform 0.1s ease;
 }
 
+.assignment-card.completed {
+    background: var(--success-light);
+    border-color: #a7f3d0;
+}
+
 .assignment-card.dragging {
     background: var(--primary-light);
     border-color: var(--primary-blue);
     box-shadow: 0 6px 16px rgba(0,0,0,0.15);
     transform: scale(1.02);
     z-index: 10;
+}
+
+.assignment-status-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #f1f5f9;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.assignment-status-badge.completed {
+    background: var(--success-light);
+    color: var(--success);
 }
 
 .assignment-card-header {

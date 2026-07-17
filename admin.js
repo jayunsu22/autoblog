@@ -896,21 +896,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             return pA - pB;
         });
 
-        let count = 0;
+        // 우선순위 순서는 유지하되, 밑작업/시공을 독립된 카드로 나열한 뒤
+        // 완료된 카드를 맨 아래로 내려서 다음에 배정할 작업을 한눈에 보이게 함
+        const cardEntries = [];
         tasks.forEach(task => {
             const fields = task.fields;
 
-            // 밑작업 기사 배정 완료 카드 그리기
             if (fields.밑작업기사 && (!filterWorkerName || fields.밑작업기사 === filterWorkerName)) {
-                createAssignmentCard(task, '밑작업', fields.밑작업기사);
-                count++;
+                cardEntries.push({ task, stage: '밑작업', assignee: fields.밑작업기사, isCompleted: !!fields.밑작업완료 });
             }
 
-            // 시공 기사 배정 완료 카드 그리기
             if (fields.시공기사 && (!filterWorkerName || fields.시공기사 === filterWorkerName)) {
-                createAssignmentCard(task, '시공', fields.시공기사);
-                count++;
+                cardEntries.push({ task, stage: '시공', assignee: fields.시공기사, isCompleted: !!fields.시공완료 });
             }
+        });
+
+        cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
+
+        let count = 0;
+        cardEntries.forEach(({ task, stage, assignee }) => {
+            createAssignmentCard(task, stage, assignee);
+            count++;
         });
 
         assignedCountBadge.textContent = `${count}개`;
@@ -921,12 +927,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     function createAssignmentCard(task, stage, assigneeName) {
         const fields = task.fields;
         const recordId = task.id;
-        
+        const isCompleted = !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+
         const card = document.createElement('div');
-        card.className = 'assignment-card';
+        card.className = `assignment-card${isCompleted ? ' completed' : ''}`;
         card.dataset.recordId = recordId;
         card.dataset.stage = stage;
-        
+
         // 상하 우선순위 정렬용 드래그앤드롭 이벤트 리스너 바인딩
         card.draggable = true;
         card.addEventListener('dragstart', (e) => {
@@ -937,14 +944,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.classList.remove('dragging');
         });
 
-        // 1. 헤더 (배정 기사 이름, 작업이름, 아코디언 ▼ 표시, 순서 이동 ▲▼, 배정 취소 x)
+        // 1. 헤더 (배정 기사 이름, 작업이름, 완료 상태, 아코디언 ▼ 표시, 순서 이동 ▲▼, 배정 취소 x)
         // 특정 기사님으로 필터링된 상태면 카드마다 이름을 반복 표시할 필요가 없어 배지를 생략함
         const assigneeBadgeHtml = activeWorkerName ? '' : `<span class="assignee-badge">${assigneeName}</span>`;
+        const statusBadgeHtml = `<span class="assignment-status-badge${isCompleted ? ' completed' : ''}">${isCompleted ? '✅ 완료됨' : '진행중'}</span>`;
         let headerHtml = `
             <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
                     ${assigneeBadgeHtml}
                     <span class="assigned-item-name">${fields.시공품목} (${stage})</span>
+                    ${statusBadgeHtml}
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
                 <span class="drag-handle" title="여기를 잡고 위아래로 드래그해서 순서 이동">✋</span>
