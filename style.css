@@ -238,6 +238,24 @@ body {
     text-decoration: none;
 }
 
+.check-item.site-note-item {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.check-item.site-note-item .check-text {
+    color: #92400e;
+}
+
+.check-item.site-note-item.checked {
+    background: var(--success-light);
+    border-color: #a7f3d0;
+}
+
+.check-item.site-note-item.checked .check-text {
+    color: #065f46;
+}
+
 /* 섹션 타이틀 */
 .section-title {
     margin: 24px 0 12px;

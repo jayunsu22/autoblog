@@ -863,6 +863,31 @@ body {
     font-weight: 800;
 }
 
+/* 지침 개별 제외(X) 버튼 */
+.btn-exclude-guideline {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 6px;
+    background: #fee2e2;
+    color: #dc2626;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.btn-exclude-guideline:hover {
+    background: #fecaca;
+}
+
+/* 현장 특이사항(1회성 코멘트) 입력 박스 */
+.site-note-box textarea {
+    font-family: inherit;
+    color: var(--text-primary, #1e293b);
+}
+
 /* 드래그 플레이스홀더 */
 .drag-placeholder {
     text-align: center;

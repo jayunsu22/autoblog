@@ -977,31 +977,48 @@ document.addEventListener('DOMContentLoaded', async () => {
         const guidelinesText = stage === '밑작업' ? itemInfo.밑작업지침 : itemInfo.시공후점검지침;
         
         let bodyHtml = "";
+        const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+        const siteNoteValue = fields.현장특이사항 || '';
+
+        bodyHtml += `<div class="assignment-card-body" style="display: none; padding-top: 10px;">`;
+
         if (guidelinesText) {
-            const linesList = guidelinesText.split('\n').filter(l => l.trim() !== "");
+            const linesList = guidelinesText.split('\n').filter(l => l.trim() !== "" && !excludedLines.includes(l.trim()));
             const existingResults = fields.점검결과 || "";
 
-            bodyHtml = `
-                <div class="assignment-card-body" style="display: none; padding-top: 10px;">
-                    <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">💡 현장 품질 지침 토글 (체크된 사항만 기사에게 노출됨)</h4>
-                    <div class="assign-checkbox-list">
+            bodyHtml += `
+                <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">💡 현장 품질 지침 토글 (체크된 사항만 기사에게 노출됨)</h4>
+                <div class="assign-checkbox-list">
             `;
 
             linesList.forEach(line => {
                 const cleanLine = line.trim();
                 const isGuidelineActive = !existingResults || existingResults.includes(cleanLine);
+                const escapedLine = cleanLine.replace(/'/g, "\\'");
 
                 bodyHtml += `
-                    <div class="assign-toggle-item ${isGuidelineActive ? 'active' : ''}" 
-                          onclick="toggleGuidelineItem('${recordId}', '${stage}', '${cleanLine.replace(/'/g, "\\'")}', ${isGuidelineActive})">
-                        <span class="toggle-dot"></span>
-                        <span class="toggle-text">${cleanLine}</span>
+                    <div class="assign-toggle-item ${isGuidelineActive ? 'active' : ''}">
+                        <span onclick="toggleGuidelineItem('${recordId}', '${stage}', '${escapedLine}', ${isGuidelineActive})" style="display:flex; align-items:center; gap:8px; flex:1; cursor:pointer;">
+                            <span class="toggle-dot"></span>
+                            <span class="toggle-text">${cleanLine}</span>
+                        </span>
+                        <button type="button" class="btn-exclude-guideline" title="이 현장에서만 이 지침 제외" onclick="event.stopPropagation(); excludeGuidelineLine('${recordId}', '${escapedLine}')">×</button>
                     </div>
                 `;
             });
 
-            bodyHtml += `</div></div>`;
+            bodyHtml += `</div>`;
         }
+
+        bodyHtml += `
+            <div class="site-note-box" style="margin-top: 14px;">
+                <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">📝 이 현장의 이 품목만의 특이사항 (작업자에게 체크 항목으로 노출됨)</h4>
+                <textarea id="siteNoteInput-${recordId}" rows="2" placeholder="예: 이 문틀은 이미 파손 이력 있음, 더 조심히 다뤄주세요" style="width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 8px; resize: vertical; box-sizing: border-box;">${siteNoteValue}</textarea>
+                <button type="button" onclick="saveSiteNote('${recordId}')" style="margin-top: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">특이사항 저장</button>
+            </div>
+        `;
+
+        bodyHtml += `</div>`;
 
         card.innerHTML = `${headerHtml}${bodyHtml}`;
         boardAssignmentList.appendChild(card);
@@ -1242,6 +1259,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error(error);
             showToast("가이드 변경 저장에 실패했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
+    window.excludeGuidelineLine = async function(recordId, guidelineLine) {
+        if (!confirm("이 지침을 이 현장의 이 작업에서만 제외할까요? (공통 지침 원본은 그대로 유지됩니다)")) return;
+        showLoading("지침 제외 처리 중...");
+        try {
+            const task = (currentDetailData.tasks || []).find(t => t.id === recordId);
+            const existingExcluded = (task && task.fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+            if (!existingExcluded.includes(guidelineLine)) existingExcluded.push(guidelineLine);
+            const excludedText = existingExcluded.join('\n');
+
+            const response = await fetch(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'exclude_guideline_line',
+                    projectCode: activeProjectCode,
+                    recordId: recordId,
+                    excludedText: excludedText
+                })
+            });
+
+            if (!response.ok) throw new Error("지침 제외 실패");
+
+            showToast("이 현장에서 해당 지침을 제외했습니다.");
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("지침 제외에 실패했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
+    window.saveSiteNote = async function(recordId) {
+        const textarea = document.getElementById(`siteNoteInput-${recordId}`);
+        const noteText = textarea ? textarea.value.trim() : "";
+        showLoading("현장 특이사항 저장 중...");
+        try {
+            const response = await fetch(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_site_note',
+                    projectCode: activeProjectCode,
+                    recordId: recordId,
+                    noteText: noteText
+                })
+            });
+
+            if (!response.ok) throw new Error("특이사항 저장 실패");
+
+            showToast("현장 특이사항이 저장되었습니다.");
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("특이사항 저장에 실패했습니다.", "danger");
         } finally {
             hideLoading();
         }

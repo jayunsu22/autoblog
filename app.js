@@ -396,23 +396,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
 
-        // 가이드라인 체크리스트 파싱
-        const lines = (guidelinesText || "").split('\n').filter(l => l.trim() !== "");
+        // 가이드라인 체크리스트 파싱 (이 현장에서 제외 처리된 지침은 숨김)
+        const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+        const lines = (guidelinesText || "").split('\n').filter(l => l.trim() !== "" && !excludedLines.includes(l.trim()));
+        const siteNote = (fields.현장특이사항 || "").trim();
         let checklistHtml = "";
-        
+
         // Airtable 점검결과 텍스트 읽어서 이전에 체크했던 값 파싱
         const existingResults = fields.점검결과 || "";
-        
-        if (lines.length > 0) {
+
+        if (lines.length > 0 || siteNote) {
             checklistHtml = `
                 <div class="checklist-box">
                     <h3>📋 품질 준수사항 점검</h3>
                     <div class="checklist-list">
             `;
-            
+
             lines.forEach((line, idx) => {
                 const isItemChecked = isCompleted || existingResults.includes(`[✓] ${line.trim()}`);
-                
+
                 checklistHtml += `
                     <div class="check-item ${isItemChecked ? 'checked' : ''} ${isCompleted ? 'disabled' : ''}" data-index="${idx}">
                         <div class="custom-checkbox"></div>
@@ -420,7 +422,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 `;
             });
-            
+
+            if (siteNote) {
+                const noteLine = `⚠️ 현장 특이사항: ${siteNote}`;
+                const isNoteChecked = isCompleted || existingResults.includes(`[✓] ${noteLine}`);
+
+                checklistHtml += `
+                    <div class="check-item site-note-item ${isNoteChecked ? 'checked' : ''} ${isCompleted ? 'disabled' : ''}" data-index="site-note">
+                        <div class="custom-checkbox"></div>
+                        <div class="check-text">${noteLine}</div>
+                    </div>
+                `;
+            }
+
             checklistHtml += `</div></div>`;
         }
 
