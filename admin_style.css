@@ -977,13 +977,11 @@ body {
     color: white;
 }
 
-/* 블로그 발행 모달 목록 */
+/* 블로그 발행 모달 목록 - 2열, 별도 스크롤 없이 모달과 함께 자연스럽게 이어서 스크롤됨 */
 .publish-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
-    max-height: 250px;
-    overflow-y: auto;
     margin-top: 16px;
     padding: 4px;
 }

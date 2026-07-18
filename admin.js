@@ -1268,6 +1268,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     window.requestBlogPublish = async function() {
+        // 발행 화면을 열 때마다 최신 완료 현황을 먼저 새로 불러옴 (새로고침을 깜빡해도 최신 상태 보장)
+        await showProjectDetail(activeProjectCode);
+
         const tasks = currentDetailData.tasks || [];
 
         // 밑작업 + 시공이 모두 완료된 항목만 표시
@@ -1461,7 +1464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             item.innerHTML = `
                 <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation()" style="width: 16px; height: 16px; flex-shrink:0;">
                 <span style="font-size: 14px; font-weight:800; color:var(--text-main); margin-left: 8px;">
-                    ${fields.시공품목} (밑작업완료, 시공완료)
+                    ${fields.시공품목}
                 </span>
             `;
 
