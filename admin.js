@@ -15,15 +15,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_JOURNAL_LIST_URL = `${n8nBase}/webhook/film-journal-list`;
     const API_JOURNAL_PHOTO_URL = `${n8nBase}/webhook/film-journal-photo-upload`;
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
+    const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타']; // 구역은 이 9개로 고정
 
 
     let activeProjectCode = "";
     let currentDetailData = null; // 상세 현장 데이터 캐시
     let draggedData = null; // HTML5 드래그 중 임시 저장 공간
-    let activeItemCategory = null; // 현장 시공품목 설정 탭에서 현재 선택된 카테고리
-    let pendingItemToggles = new Map(); // 품목명 -> true(추가예정)/false(제외예정), 일괄 적용 전 임시 상태
+    let activeZoneTab = null; // 품목 배정 매트릭스에서 현재 선택된 구역 탭
     let activeWorkerName = null; // 배정 보드에서 현재 선택된(활성화된) 기사님 이름, 새로고침에도 유지됨
-    let selectedItemIds = new Set(); // 미배정 작업 일괄 배정을 위해 선택된 `${recordId}|${stage}` 키 목록
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -49,14 +48,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Detail UI Elements
     const detailProjectTitle = document.getElementById('detailProjectTitle');
     const detailProjectDate = document.getElementById('detailProjectDate');
-    const itemCheckboxGroup = document.getElementById('itemCheckboxGroup');
-    const itemCategoryTabs = document.getElementById('itemCategoryTabs');
+    const zoneAssignTabs = document.getElementById('zoneAssignTabs');
+    const zoneAssignItemList = document.getElementById('zoneAssignItemList');
+    const zoneItemCountBadge = document.getElementById('zoneItemCountBadge');
     const boardWorkerList = document.getElementById('boardWorkerList');
     const boardAssignmentList = document.getElementById('boardAssignmentList');
-    const boardAvailableItems = document.getElementById('boardAvailableItems');
     const workerCountBadge = document.getElementById('workerCountBadge');
     const assignedCountBadge = document.getElementById('assignedCountBadge');
-    const availableCountBadge = document.getElementById('availableCountBadge');
     const publishTaskList = document.getElementById('publishTaskList');
 
     // 모바일: 실시간 업무 배정표 접이식 토글 (데스크탑에서는 CSS가 무시함)
@@ -407,8 +405,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (recordId !== activeProjectCode) {
             // 다른 현장으로 이동하는 경우에만 이전 현장의 선택/배정 상태를 초기화
             activeWorkerName = null;
-            selectedItemIds.clear();
-            pendingItemToggles.clear();
+            activeZoneTab = null;
         }
         activeProjectCode = recordId;
         showLoading("현장 상세 정보를 불러오는 중...");
@@ -455,144 +452,144 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         renderQuickTagsInto('detailNoticeQuickTags', 'detailProjectNotice');
 
-        // 1. 현장 품목 설정 칩 바 렌더링
-        renderItemConfigChips();
-
-        // 2. 3분할 보드 - 1열 (시공기사 목록) 렌더링
+        // 1. 3분할 보드 - 1열 (시공기사 목록) 렌더링
         renderBoardWorkers();
 
-        // 3. 3분할 보드 - 3열 (미배정 품목 풀) 렌더링
-        renderBoardAvailableItems();
+        // 2. 3분할 보드 - 3열 (구역별 품목 활성화 + 기사 배정 매트릭스) 렌더링
+        renderZoneAssignBoard();
 
-        // 4. 3분할 보드 - 2열 (배정 내역 리스트) 렌더링
+        // 3. 3분할 보드 - 2열 (배정 내역 리스트) 렌더링
         renderBoardAssignments();
     }
 
-    // 품목 설정 칩들 (카테고리 탭 + 활성 탭의 품목만 표시)
-    function renderItemConfigChips() {
+    // 구역별 품목 활성화 + 기사 배정 매트릭스 (구역 탭 + 탭 내 품목 행 리스트)
+    function renderZoneAssignBoard() {
         const allItems = [...(currentDetailData.masterItems || [])];
-        allItems.sort((a, b) => {
+        const activeItems = currentDetailData.activeItems || []; // 이미 현장에 개설 완료된 품목들
+        const tasks = currentDetailData.tasks || [];
+        const workers = currentDetailData.workers || [];
+
+        const zoneMap = new Map();
+        ZONE_ORDER.forEach(zone => zoneMap.set(zone, []));
+        allItems.forEach(item => {
+            const zone = ZONE_ORDER.includes(item.구역) ? item.구역 : "기타";
+            zoneMap.get(zone).push(item);
+        });
+
+        const zoneNames = ZONE_ORDER;
+
+        if (!activeZoneTab || !zoneMap.has(activeZoneTab)) {
+            activeZoneTab = zoneNames[0] || null;
+        }
+
+        zoneAssignTabs.innerHTML = "";
+        zoneNames.forEach(zone => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = `item-category-tab ${zone === activeZoneTab ? 'active' : ''}`;
+            tab.textContent = `${zone} (${zoneMap.get(zone).length})`;
+            tab.addEventListener('click', () => {
+                activeZoneTab = zone;
+                renderZoneAssignBoard();
+            });
+            zoneAssignTabs.appendChild(tab);
+        });
+
+        const itemsInZone = [...(zoneMap.get(activeZoneTab) || [])];
+        itemsInZone.sort((a, b) => {
             const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
             const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
             if (pA !== pB) return pA - pB;
             return (a.품목명 || "").localeCompare(b.품목명 || "");
         });
-        const activeItems = currentDetailData.activeItems || []; // 이미 현장에 개설 완료된 품목들
 
-        const categoryMap = new Map();
-        allItems.forEach(item => {
-            const cat = item.카테고리 || "기타";
-            if (!categoryMap.has(cat)) categoryMap.set(cat, []);
-            categoryMap.get(cat).push(item);
-        });
+        zoneItemCountBadge.textContent = `${itemsInZone.length}개`;
 
-        // 항상 고정된 순서로 노출 (목록에 없는 새 카테고리는 뒤에 붙음)
-        const CATEGORY_ORDER = ['문+틀', '샤시', '가구', '몰딩', '기타'];
-        const categoryNames = [...categoryMap.keys()].sort((a, b) => {
-            const idxA = CATEGORY_ORDER.indexOf(a);
-            const idxB = CATEGORY_ORDER.indexOf(b);
-            return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-        });
-
-        if (!activeItemCategory || !categoryMap.has(activeItemCategory)) {
-            activeItemCategory = categoryNames[0] || null;
+        zoneAssignItemList.innerHTML = "";
+        if (itemsInZone.length === 0) {
+            zoneAssignItemList.innerHTML = `<div class="empty-state" style="padding: 20px;">이 구역에 등록된 품목이 없습니다.</div>`;
+            return;
         }
 
-        itemCategoryTabs.innerHTML = "";
-        categoryNames.forEach(category => {
-            const tab = document.createElement('button');
-            tab.type = 'button';
-            tab.className = `item-category-tab ${category === activeItemCategory ? 'active' : ''}`;
-            tab.textContent = category;
-            tab.addEventListener('click', () => {
-                activeItemCategory = category;
-                renderItemConfigChips();
-            });
-            itemCategoryTabs.appendChild(tab);
+        itemsInZone.forEach(item => {
+            const isActive = activeItems.includes(item.품목명);
+            const task = tasks.find(t => t.fields.시공품목 === item.품목명);
+            zoneAssignItemList.appendChild(createZoneItemRow(item, isActive, task, workers));
         });
+    }
 
-        itemCheckboxGroup.innerHTML = "";
-        const itemsInTab = categoryMap.get(activeItemCategory) || [];
-        itemsInTab.forEach(item => {
-            const chip = document.createElement('div');
-            const serverActive = activeItems.includes(item.품목명);
-            const pendingState = pendingItemToggles.has(item.품목명) ? pendingItemToggles.get(item.품목명) : null;
+    function createZoneItemRow(item, isActive, task, workers) {
+        const itemName = item.품목명;
+        const fields = task ? task.fields : {};
+        const hasAnyAssignee = !!(fields.밑작업기사 || fields.시공기사);
+        const isFullyCompleted = !!(fields.밑작업완료 && fields.시공완료);
 
-            let chipClass = 'item-chip';
-            if (pendingState !== null) {
-                chipClass += pendingState ? ' pending-add' : ' pending-remove';
-            } else if (serverActive) {
-                chipClass += ' active';
+        const row = document.createElement('div');
+        row.className = `zone-item-row ${isFullyCompleted ? 'completed' : ''}`;
+
+        const toggleLabel = document.createElement('label');
+        toggleLabel.className = 'zone-item-toggle';
+        if (hasAnyAssignee) toggleLabel.title = '기사가 배정된 품목은 비활성화할 수 없습니다.';
+        const toggleInput = document.createElement('input');
+        toggleInput.type = 'checkbox';
+        toggleInput.checked = isActive;
+        toggleInput.disabled = hasAnyAssignee;
+        toggleInput.addEventListener('change', async () => {
+            await toggleProjectItem(itemName, toggleInput.checked);
+        });
+        toggleLabel.appendChild(toggleInput);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'zone-item-name';
+        nameSpan.textContent = itemName;
+
+        const assignWrap = document.createElement('div');
+        assignWrap.className = 'zone-item-assign';
+        assignWrap.appendChild(createZoneAssignSelect(task, '밑작업', fields, workers, isActive));
+        assignWrap.appendChild(createZoneAssignSelect(task, '시공', fields, workers, isActive));
+
+        row.appendChild(toggleLabel);
+        row.appendChild(nameSpan);
+        row.appendChild(assignWrap);
+
+        if (isFullyCompleted) {
+            const badge = document.createElement('span');
+            badge.className = 'zone-item-done-badge';
+            badge.textContent = '✅';
+            row.appendChild(badge);
+        }
+
+        return row;
+    }
+
+    function createZoneAssignSelect(task, stage, fields, workers, isActive) {
+        const select = document.createElement('select');
+        select.className = 'zone-assign-select';
+        const isDone = !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+        select.disabled = !isActive || !task || isDone;
+        if (isDone) select.classList.add('done');
+
+        let optionsHtml = `<option value="">${stage} 선택</option>`;
+        workers.forEach(w => {
+            optionsHtml += `<option value="${w}">${w}</option>`;
+        });
+        select.innerHTML = optionsHtml;
+        select.value = (stage === '밑작업' ? fields.밑작업기사 : fields.시공기사) || "";
+
+        select.addEventListener('change', async () => {
+            if (!task) return;
+            const value = select.value;
+            if (!value) {
+                await unassignWorker(task.id, stage);
+            } else {
+                await assignWorker(task.id, value, stage);
             }
-
-            chip.className = chipClass;
-            chip.textContent = item.품목명;
-            chip.addEventListener('click', () => {
-                const effectiveActive = pendingState !== null ? pendingState : serverActive;
-                const target = !effectiveActive;
-                if (target === serverActive) {
-                    pendingItemToggles.delete(item.품목명);
-                } else {
-                    pendingItemToggles.set(item.품목명, target);
-                }
-                renderItemConfigChips();
-            });
-            itemCheckboxGroup.appendChild(chip);
         });
 
-        updateItemBatchToolbar();
+        return select;
     }
 
-    function updateItemBatchToolbar() {
-        const toolbar = document.getElementById('itemBatchToolbar');
-        const countEl = document.getElementById('itemBatchCount');
-        if (!toolbar || !countEl) return;
-        const n = pendingItemToggles.size;
-        if (n > 0) {
-            toolbar.style.display = 'flex';
-            countEl.textContent = `${n}개 선택됨`;
-        } else {
-            toolbar.style.display = 'none';
-        }
-    }
-
-    window.applyPendingItemToggles = async function() {
-        if (pendingItemToggles.size === 0) return;
-        const entries = [...pendingItemToggles.entries()];
-
-        showLoading(`${entries.length}개 품목 일괄 적용 중...`);
-        try {
-            await Promise.all(entries.map(([itemName, enable]) =>
-                fetch(API_SAVE_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: enable ? 'toggle_item_create' : 'toggle_item_delete',
-                        projectCode: activeProjectCode,
-                        itemName: itemName
-                    })
-                }).then(res => { if (!res.ok) throw new Error(`${itemName} 처리 실패`); })
-            ));
-
-            showToast(`${entries.length}개 품목이 일괄 적용되었습니다!`);
-            pendingItemToggles.clear();
-            await showProjectDetail(activeProjectCode);
-        } catch (error) {
-            console.error(error);
-            showToast("일괄 적용 중 일부 품목 처리에 실패했습니다.", "danger");
-            pendingItemToggles.clear();
-            await showProjectDetail(activeProjectCode);
-        } finally {
-            hideLoading();
-        }
-    };
-
-    window.cancelPendingItemToggles = function() {
-        pendingItemToggles.clear();
-        renderItemConfigChips();
-    };
-
-    // 품목 켜고 끄기 요청 (즉시 실행 - 배정 보드의 × 삭제 버튼에서 사용)
+    // 품목 켜고 끄기 요청 (즉시 실행 - 배정 보드의 × 삭제 버튼, 매트릭스 활성화 토글에서 사용)
     async function toggleProjectItem(itemName, enable) {
         showLoading(`${itemName} 품목 상태 업데이트 중...`);
         try {
@@ -686,197 +683,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderBoardAssignments();
     };
 
-    // 3열: 미배정 품목 풀 그리기 (밑작업/시공 구분)
-    function renderBoardAvailableItems() {
-        boardAvailableItems.innerHTML = "";
-        const masterItems = currentDetailData.masterItems || [];
-        const tasks = [...(currentDetailData.tasks || [])];
-        
-        const getTaskPriority = (t) => {
-            if (t.fields.우선순위 !== undefined) return t.fields.우선순위;
-            const mItem = masterItems.find(m => m.품목명 === t.fields.시공품목);
-            if (mItem && mItem.우선순위 !== undefined) return mItem.우선순위;
-            return 999;
-        };
-
-        tasks.sort((a, b) => {
-            const pA = getTaskPriority(a);
-            const pB = getTaskPriority(b);
-            if (pA !== pB) return pA - pB;
-            return (a.fields.시공품목 || "").localeCompare(b.fields.시공품목 || "");
-        });
-        let count = 0;
-        const assignedHistory = [];
-        const validKeys = new Set();
-
-        tasks.forEach((task, taskIdx) => {
-            const fields = task.fields;
-            const groupCards = [];
-
-            // 1. 밑작업 기사가 아직 배정되지 않은 경우
-            if (!fields.밑작업기사) {
-                validKeys.add(`${task.id}|밑작업`);
-                groupCards.push(createDragItemCard(task, '밑작업'));
-                count++;
-            } else {
-                assignedHistory.push(`${fields.시공품목} (밑작업) ${fields.밑작업기사} 배정완료`);
-            }
-
-            // 2. 시공 기사가 아직 배정되지 않은 경우
-            if (!fields.시공기사) {
-                validKeys.add(`${task.id}|시공`);
-                groupCards.push(createDragItemCard(task, '시공'));
-                count++;
-            } else {
-                assignedHistory.push(`${fields.시공품목} (시공) ${fields.시공기사} 배정완료`);
-            }
-
-            // 같은 품목(태스크)의 카드들을 하나의 그룹으로 묶어서 시각적으로 구분
-            if (groupCards.length > 0) {
-                const groupWrap = document.createElement('div');
-                groupWrap.className = `item-task-group ${taskIdx % 2 === 0 ? 'even' : 'odd'}`;
-                groupCards.forEach(card => groupWrap.appendChild(card));
-                boardAvailableItems.appendChild(groupWrap);
-            }
-        });
-
-        // 이미 배정되었거나 삭제되어 더 이상 유효하지 않은 선택 항목 정리
-        [...selectedItemIds].forEach(key => {
-            if (!validKeys.has(key)) selectedItemIds.delete(key);
-        });
-        updateItemAssignBatchToolbar();
-
-        availableCountBadge.textContent = `${count}개`;
-        if (count === 0) {
-            boardAvailableItems.innerHTML = `<div class="empty-state" style="padding: 20px;">모든 품목의 기사 배정이 완료되었습니다.</div>`;
-        }
-
-        // 배정 완료 내역 하단 렌더링
-        if (assignedHistory.length > 0) {
-            const historyBox = document.createElement('div');
-            historyBox.className = 'assigned-history-box';
-            historyBox.style.marginTop = '20px';
-            historyBox.style.borderTop = '1px dashed #ddd';
-            historyBox.style.paddingTop = '15px';
-            
-            let historyHtml = `<h4 style="font-size: 13px; color: #666; margin-bottom: 8px; font-weight: 800;">📋 기사 배정 완료 내역</h4>`;
-            assignedHistory.forEach(item => {
-                historyHtml += `
-                    <div style="font-size: 12px; color: #555; padding: 4px 8px; margin-bottom: 4px; background: #f9f9f9; border-radius: 4px; border-left: 3px solid #888; font-weight: 600;">
-                        ${item}
-                    </div>
-                `;
-            });
-            historyBox.innerHTML = historyHtml;
-            boardAvailableItems.appendChild(historyBox);
-        }
-    }
-
-
-    function createDragItemCard(task, stage) {
-        const fields = task.fields;
-        const card = document.createElement('div');
-        const key = `${task.id}|${stage}`;
-        const isSelected = selectedItemIds.has(key);
-        card.className = `draggable-item-card ${isSelected ? 'selected' : ''}`;
-        card.draggable = true;
-        card.dataset.recordId = task.id;
-        card.dataset.stage = stage;
-
-        card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="card-select-check">${isSelected ? '✅' : '☐'}</span>
-                    <span class="card-item-name">${fields.시공품목}</span>
-                    <span class="card-item-stage-badge ${stage === '밑작업' ? 'prep' : 'wrap'}">${stage}</span>
-                </div>
-                <button class="btn-item-delete" title="이 품목 삭제 (시공 안 함)" style="padding: 3px 8px; font-size: 11px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 700;">×</button>
-            </div>
-        `;
-
-        card.querySelector('.btn-item-delete').addEventListener('click', async (e) => {
-            e.stopPropagation();
-            if (!confirm(`'${fields.시공품목}' 품목을 이 현장에서 삭제할까요?\n(밑작업/시공 내역이 모두 삭제되며 되돌릴 수 없습니다)`)) return;
-            await toggleProjectItem(fields.시공품목, false);
-        });
-
-        // HTML5 드래그 소스(Drag Source) 이벤트 연결 - 워커 카드로 바로 드래그하면 즉시 1건 배정됨
-        card.addEventListener('dragstart', () => {
-            draggedData = {
-                recordId: task.id,
-                stage: stage
-            };
-            card.style.opacity = '0.4';
-        });
-
-        card.addEventListener('dragend', () => {
-            draggedData = null;
-            card.style.opacity = '1';
-        });
-
-        // 클릭 시 즉시 배정하지 않고, 일괄 배정을 위한 선택/해제만 수행
-        card.addEventListener('click', () => {
-            const nowSelected = !selectedItemIds.has(key);
-            if (nowSelected) {
-                selectedItemIds.add(key);
-                card.classList.add('selected');
-            } else {
-                selectedItemIds.delete(key);
-                card.classList.remove('selected');
-            }
-            card.querySelector('.card-select-check').textContent = nowSelected ? '✅' : '☐';
-            updateItemAssignBatchToolbar();
-        });
-
-        return card;
-    }
-
-    function updateItemAssignBatchToolbar() {
-        const toolbar = document.getElementById('itemAssignBatchToolbar');
-        const countEl = document.getElementById('itemAssignBatchCount');
-        if (!toolbar || !countEl) return;
-        const n = selectedItemIds.size;
-        if (n > 0) {
-            toolbar.style.display = 'flex';
-            countEl.textContent = `${n}개 선택됨`;
-        } else {
-            toolbar.style.display = 'none';
-        }
-    }
-
-    window.assignSelectedItemsBatch = async function() {
-        if (!activeWorkerName) {
-            showToast("먼저 왼쪽에서 배정할 기사님을 선택해 주세요!", "warning");
-            return;
-        }
-        if (selectedItemIds.size === 0) return;
-
-        const items = [...selectedItemIds].map(key => {
-            const [recordId, stage] = key.split('|');
-            return { recordId, stage };
-        });
-        const workerName = activeWorkerName;
-
-        showLoading(`${workerName} 기사님에게 ${items.length}개 항목 일괄 배정 중...`);
-        try {
-            await Promise.all(items.map(it => postAssignWorker(it.recordId, workerName, it.stage)));
-            showToast(`${items.length}개 항목이 ${workerName} 기사님에게 일괄 배정되었습니다!`);
-            selectedItemIds.clear();
-            await showProjectDetail(activeProjectCode);
-        } catch (error) {
-            console.error(error);
-            showToast(`일괄 배정 중 문제가 발생했습니다: ${error.message}`, "danger");
-            selectedItemIds.clear();
-            await showProjectDetail(activeProjectCode);
-        } finally {
-            hideLoading();
-        }
-    };
-
-    window.clearSelectedItemsBatch = function() {
-        selectedItemIds.clear();
-        renderBoardAvailableItems();
-    };
 
     // 2열: 배정 완료 내역 그리기
     function renderBoardAssignments() {
@@ -1811,6 +1617,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditModalTitle').textContent = '📦 시공품목 편집';
         document.getElementById('itemEditNameInput').value = item.품목명 || '';
         document.getElementById('itemEditCategoryInput').value = item.카테고리 || '문+틀';
+        document.getElementById('itemEditZoneInput').value = ZONE_ORDER.includes(item.구역) ? item.구역 : '기타';
         document.getElementById('itemEditPrepInput').value = item.밑작업지침 || '';
         document.getElementById('itemEditInspInput').value = item.시공후점검지침 || '';
         editingItemSlots = (item.필수사진슬롯 || '').split(',').map(s => s.trim()).filter(s => s !== '');
@@ -1823,6 +1630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditModalTitle').textContent = '➕ 새 시공품목 추가';
         document.getElementById('itemEditNameInput').value = '';
         document.getElementById('itemEditCategoryInput').value = '문+틀';
+        document.getElementById('itemEditZoneInput').value = '기타';
         document.getElementById('itemEditPrepInput').value = '';
         document.getElementById('itemEditInspInput').value = '';
         editingItemSlots = [];
@@ -1868,6 +1676,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isCreate = (idx === null);
         const nameText = document.getElementById('itemEditNameInput').value.trim();
         const categoryText = document.getElementById('itemEditCategoryInput').value;
+        const zoneText = document.getElementById('itemEditZoneInput').value.trim();
         const prepText = document.getElementById('itemEditPrepInput').value;
         const inspText = document.getElementById('itemEditInspInput').value;
         const slotsText = editingItemSlots.join(',');
@@ -1888,6 +1697,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     type: 'create_item',
                     품목명: nameText,
                     카테고리: categoryText,
+                    구역: zoneText,
                     밑작업지침: prepText,
                     시공후점검지침: inspText,
                     필수사진슬롯: slotsText
@@ -1897,6 +1707,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     recordId: globalMasterItems[idx].id,
                     품목명: nameText,
                     카테고리: categoryText,
+                    구역: zoneText,
                     밑작업지침: prepText,
                     시공후점검지침: inspText,
                     필수사진슬롯: slotsText
@@ -1916,6 +1727,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const item = globalMasterItems[idx];
                 item.품목명 = nameText;
                 item.카테고리 = categoryText;
+                item.구역 = zoneText;
                 item.밑작업지침 = prepText;
                 item.시공후점검지침 = inspText;
                 item.필수사진슬롯 = slotsText;

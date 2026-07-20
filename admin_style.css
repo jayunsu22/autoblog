@@ -695,6 +695,83 @@ body {
     color: #1d4ed8;
 }
 
+/* 구역별 품목 활성화 + 기사 배정 매트릭스 행 (3열) */
+.zone-item-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+.zone-item-row.completed {
+    background: var(--success-light);
+    border-color: #a7f3d0;
+}
+
+.zone-item-toggle {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.zone-item-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.zone-item-toggle input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
+.zone-item-name {
+    flex: 1 1 140px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-main);
+    min-width: 0;
+    word-break: keep-all;
+}
+
+.zone-item-assign {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.zone-assign-select {
+    padding: 6px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    background: white;
+    color: var(--text-main);
+    max-width: 88px;
+}
+
+.zone-assign-select:disabled {
+    background: #f1f5f9;
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.zone-assign-select.done {
+    background: var(--success-light);
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.zone-item-done-badge {
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
 /* 실시간 배정 완료 내역 (2열) */
 .assignment-card {
     background: var(--bg-card);

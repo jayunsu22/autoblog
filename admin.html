@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260719">
+    <link rel="stylesheet" href="admin_style.css?v=20260720">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -71,24 +71,6 @@
                 <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
             </div>
 
-            <!-- 현장 품목 체크 개설 팝업 바 -->
-            <div class="item-select-bar" style="margin-top: 15px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3>📌품목 설정</h3>
-                    <div id="itemBatchToolbar" style="display: none; align-items: center; gap: 8px;">
-                        <span id="itemBatchCount" style="font-size: 12px; font-weight: 700; color: var(--text-muted);"></span>
-                        <button type="button" onclick="applyPendingItemToggles()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">✔ 일괄 적용</button>
-                        <button type="button" onclick="cancelPendingItemToggles()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">취소</button>
-                    </div>
-                </div>
-                <div class="item-category-tabs" id="itemCategoryTabs">
-                    <!-- 카테고리 탭 버튼들이 동적으로 렌더링됨 -->
-                </div>
-                <div class="item-checkbox-group" id="itemCheckboxGroup">
-                    <!-- 활성 카테고리의 품목 칩들만 동적 생성 -->
-                </div>
-            </div>
-
             <!-- ★ 사장님 기획: 드래그 앤 드롭 3분할 업무 배분판 ★ -->
             <div class="drag-board-container">
                 <!-- 1열 (좌측): 시공 기사 목록 -->
@@ -105,20 +87,18 @@
                     </div>
                 </div>
 
-                <!-- 3열 (우측): 미배정 시공 품목 풀 (밑작업/시공 쪼개짐) -->
+                <!-- 3열 (우측): 구역별 품목 활성화 + 기사 배정 매트릭스 -->
                 <div class="board-column items-column">
                     <div class="column-header">
-                        <h3>📦 미배정 작업</h3>
-                        <span class="count-badge" id="availableCountBadge">0개</span>
+                        <h3>📦 품목 배정</h3>
+                        <span class="count-badge" id="zoneItemCountBadge">0개</span>
                     </div>
-                    <div id="itemAssignBatchToolbar" style="display: none; align-items: center; gap: 8px; margin-bottom: 12px;">
-                        <span id="itemAssignBatchCount" style="font-size: 12px; font-weight: 700; color: var(--text-muted);"></span>
-                        <button type="button" onclick="assignSelectedItemsBatch()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">✔ 일괄 배정</button>
-                        <button type="button" onclick="clearSelectedItemsBatch()" style="padding: 6px 14px; font-size: 12.5px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">선택 해제</button>
+                    <p style="font-size: 11.5px; color: var(--text-muted); margin: -6px 0 10px 0;">구역 탭을 고른 뒤, 품목을 켜고 밑작업/시공 기사를 바로 선택하세요.</p>
+                    <div class="item-category-tabs" id="zoneAssignTabs">
+                        <!-- 구역 탭 버튼들이 동적으로 렌더링됨 -->
                     </div>
-                    <p style="font-size: 11.5px; color: var(--text-muted); margin: -6px 0 10px 0;">카드를 클릭해 여러 개를 선택한 뒤, 왼쪽에서 기사님을 선택하고 일괄 배정하세요.</p>
-                    <div class="column-body" id="boardAvailableItems">
-                        <!-- 설정한 품목들의 밑작업/시공 세부 카드 생성됨 -->
+                    <div class="column-body" id="zoneAssignItemList">
+                        <!-- 구역별 품목 행이 동적으로 렌더링됨 -->
                     </div>
                 </div>
 
@@ -280,6 +260,19 @@
                 <option value="기타">기타</option>
             </select>
 
+            <label style="margin-top: 14px; display: block;">구역 (업무배정표 탭 구분용)</label>
+            <select id="itemEditZoneInput" style="width: 100%; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; margin-top: 6px; background: white;">
+                <option value="방1">방1</option>
+                <option value="방2">방2</option>
+                <option value="방3">방3</option>
+                <option value="방4">방4</option>
+                <option value="방5">방5</option>
+                <option value="거실">거실</option>
+                <option value="주방">주방</option>
+                <option value="현관">현관</option>
+                <option value="기타">기타</option>
+            </select>
+
             <label style="margin-top: 14px; display: block;">밑작업 지침 (엔터로 줄 구분)</label>
             <textarea id="itemEditPrepInput" rows="3" style="width: 100%; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; margin-top: 6px; resize: vertical;"></textarea>
 
@@ -300,6 +293,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260719"></script>
+    <script src="admin.js?v=20260720"></script>
 </body>
 </html>
