@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260720">
+    <link rel="stylesheet" href="admin_style.css?v=20260720c">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -99,6 +99,11 @@
                     </div>
                     <div class="column-body" id="zoneAssignItemList">
                         <!-- 구역별 품목 행이 동적으로 렌더링됨 -->
+                    </div>
+                    <div id="zoneSaveToolbar" style="display: none; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--border-color);">
+                        <span id="zoneSaveCount" style="font-size: 12px; font-weight: 700; color: var(--text-muted); flex: 1;"></span>
+                        <button type="button" onclick="cancelZonePendingChanges()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">취소</button>
+                        <button type="button" onclick="saveZonePendingChanges()" style="padding: 8px 16px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">💾 저장</button>
                     </div>
                 </div>
 
@@ -293,6 +298,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260720b"></script>
+    <script src="admin.js?v=20260720c"></script>
 </body>
 </html>

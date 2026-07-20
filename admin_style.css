@@ -712,6 +712,12 @@ body {
     border-color: #a7f3d0;
 }
 
+.zone-item-row.pending {
+    background: var(--warning-light);
+    border-color: var(--warning);
+    border-style: dashed;
+}
+
 .zone-item-toggle {
     display: flex;
     align-items: center;

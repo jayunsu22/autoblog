@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentDetailData = null; // 상세 현장 데이터 캐시
     let draggedData = null; // HTML5 드래그 중 임시 저장 공간
     let activeZoneTab = null; // 품목 배정 매트릭스에서 현재 선택된 구역 탭
+    let zonePendingChanges = new Map(); // 매트릭스에서 저장 버튼을 누르기 전까지 쌓아두는 변경사항: 품목명 -> { active?, 밑작업?, 시공? }
     let activeWorkerName = null; // 배정 보드에서 현재 선택된(활성화된) 기사님 이름, 새로고침에도 유지됨
 
     // 현장일지 탭 상태
@@ -406,6 +407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 다른 현장으로 이동하는 경우에만 이전 현장의 선택/배정 상태를 초기화
             activeWorkerName = null;
             activeZoneTab = null;
+            zonePendingChanges.clear();
         }
         activeProjectCode = recordId;
         showLoading("현장 상세 정보를 불러오는 중...");
@@ -516,26 +518,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             const task = tasks.find(t => t.fields.시공품목 === item.품목명);
             zoneAssignItemList.appendChild(createZoneItemRow(item, isActive, task, workers));
         });
+
+        updateZoneSaveToolbar();
     }
 
     function createZoneItemRow(item, isActive, task, workers) {
         const itemName = item.품목명;
         const fields = task ? task.fields : {};
-        const hasAnyAssignee = !!(fields.밑작업기사 || fields.시공기사);
+        const pending = zonePendingChanges.get(itemName) || {};
+        const effectiveActive = pending.active !== undefined ? pending.active : isActive;
+        const effectivePrep = pending.밑작업 !== undefined ? pending.밑작업 : (fields.밑작업기사 || "");
+        const effectiveWrap = pending.시공 !== undefined ? pending.시공 : (fields.시공기사 || "");
+        const hasAnyAssignee = !!(effectivePrep || effectiveWrap);
         const isFullyCompleted = !!(fields.밑작업완료 && fields.시공완료);
 
         const row = document.createElement('div');
-        row.className = `zone-item-row ${isFullyCompleted ? 'completed' : ''}`;
+        row.className = `zone-item-row ${isFullyCompleted ? 'completed' : ''} ${zonePendingChanges.has(itemName) ? 'pending' : ''}`;
 
         const toggleLabel = document.createElement('label');
         toggleLabel.className = 'zone-item-toggle';
         if (hasAnyAssignee) toggleLabel.title = '기사가 배정된 품목은 비활성화할 수 없습니다.';
         const toggleInput = document.createElement('input');
         toggleInput.type = 'checkbox';
-        toggleInput.checked = isActive;
+        toggleInput.checked = effectiveActive;
         toggleInput.disabled = hasAnyAssignee;
-        toggleInput.addEventListener('change', async () => {
-            await toggleProjectItem(itemName, toggleInput.checked, task);
+        toggleInput.addEventListener('change', () => {
+            setZonePending(itemName, 'active', toggleInput.checked, isActive);
+            renderZoneAssignBoard();
         });
         toggleLabel.appendChild(toggleInput);
 
@@ -545,8 +554,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const assignWrap = document.createElement('div');
         assignWrap.className = 'zone-item-assign';
-        assignWrap.appendChild(createZoneAssignSelect(task, '밑작업', fields, workers, isActive));
-        assignWrap.appendChild(createZoneAssignSelect(task, '시공', fields, workers, isActive));
+        assignWrap.appendChild(createZoneAssignSelect(itemName, '밑작업', effectivePrep, effectiveActive, fields, workers, isActive));
+        assignWrap.appendChild(createZoneAssignSelect(itemName, '시공', effectiveWrap, effectiveActive, fields, workers, isActive));
 
         row.appendChild(toggleLabel);
         row.appendChild(nameSpan);
@@ -562,11 +571,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return row;
     }
 
-    function createZoneAssignSelect(task, stage, fields, workers, isActive) {
+    function createZoneAssignSelect(itemName, stage, effectiveValue, effectiveActive, fields, workers, isActive) {
         const select = document.createElement('select');
         select.className = 'zone-assign-select';
-        const isDone = !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
-        select.disabled = !isActive || !task || isDone;
+        const isDone = isActive && !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+        select.disabled = !effectiveActive || isDone;
         if (isDone) select.classList.add('done');
 
         let optionsHtml = `<option value="">${stage}</option>`;
@@ -574,105 +583,127 @@ document.addEventListener('DOMContentLoaded', async () => {
             optionsHtml += `<option value="${w}">${w}</option>`;
         });
         select.innerHTML = optionsHtml;
-        select.value = (stage === '밑작업' ? fields.밑작업기사 : fields.시공기사) || "";
+        select.value = effectiveValue || "";
 
         select.addEventListener('change', () => {
-            if (!task) return;
-            zoneAssignChange(task, stage, select.value);
+            const serverValue = isActive ? (fields[stage + '기사'] || "") : "";
+            setZonePending(itemName, stage, select.value, serverValue);
+            renderZoneAssignBoard();
         });
 
         return select;
     }
 
-    // 매트릭스 드롭다운에서 기사 배정/취소 - 이미 알고 있는 레코드이므로 화면에 즉시 반영 후 백그라운드로 저장
-    async function zoneAssignChange(task, stage, value) {
-        const fields = task.fields;
-        const prevWorker = fields[stage + '기사'] || "";
-        const prevDone = !!fields[stage + '완료'];
-
-        fields[stage + '기사'] = value;
-        if (!value) fields[stage + '완료'] = false;
-        renderZoneAssignBoard();
-        renderBoardAssignments();
-
-        try {
-            const body = value
-                ? { type: 'assign_worker', projectCode: activeProjectCode, recordId: task.id, workerName: value, stage: stage }
-                : { type: 'unassign_worker', projectCode: activeProjectCode, recordId: task.id, stage: stage };
-            const response = await fetch(API_SAVE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            if (!response.ok) throw new Error("배정 오류");
-        } catch (error) {
-            console.error(error);
-            fields[stage + '기사'] = prevWorker;
-            fields[stage + '완료'] = prevDone;
-            renderZoneAssignBoard();
-            renderBoardAssignments();
-            showToast("기사 배정 저장에 실패했습니다. 다시 시도해 주세요.", "danger");
-        }
-    }
-
-    // 품목 켜고 끄기 요청 (매트릭스 활성화 토글에서 사용)
-    // 비활성화는 이미 알고 있는 레코드를 지우는 것이라 화면에 즉시 반영 후 백그라운드로 삭제
-    // 활성화는 새 레코드 ID가 필요해 서버 응답을 반영해 새로고침
-    async function toggleProjectItem(itemName, enable, task) {
-        if (!enable && task) {
-            const activeItems = currentDetailData.activeItems || [];
-            const idx = activeItems.indexOf(itemName);
-            if (idx !== -1) activeItems.splice(idx, 1);
-            const tasks = currentDetailData.tasks || [];
-            const taskIdx = tasks.findIndex(t => t.id === task.id);
-            if (taskIdx !== -1) tasks.splice(taskIdx, 1);
-            renderZoneAssignBoard();
-            renderBoardAssignments();
-            showToast(`${itemName} 품목이 제외되었습니다.`);
-
-            try {
-                const response = await fetch(API_SAVE_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'toggle_item_delete',
-                        projectCode: activeProjectCode,
-                        itemName: itemName
-                    })
-                });
-                if (!response.ok) throw new Error("업데이트 오류");
-            } catch (error) {
-                console.error(error);
-                showToast(`${itemName} 품목 제외 처리에 실패했습니다. 다시 확인해 주세요.`, "danger");
-                await showProjectDetail(activeProjectCode);
+    // 매트릭스에서 체크/선택한 내용을 임시로만 기록 (서버에는 저장 버튼을 눌러야 반영됨)
+    // 원래 서버 상태로 되돌아오면 해당 항목의 대기 기록을 지워서 "N개 대기중" 카운트를 정확히 유지
+    function setZonePending(itemName, key, value, baseline) {
+        let entry = zonePendingChanges.get(itemName);
+        if (value === baseline) {
+            if (entry) {
+                delete entry[key];
+                if (Object.keys(entry).length === 0) zonePendingChanges.delete(itemName);
             }
             return;
         }
+        if (!entry) {
+            entry = {};
+            zonePendingChanges.set(itemName, entry);
+        }
+        entry[key] = value;
+    }
 
-        showLoading(`${itemName} 품목 상태 업데이트 중...`);
+    function updateZoneSaveToolbar() {
+        const toolbar = document.getElementById('zoneSaveToolbar');
+        const countEl = document.getElementById('zoneSaveCount');
+        if (!toolbar || !countEl) return;
+        const n = zonePendingChanges.size;
+        if (n > 0) {
+            toolbar.style.display = 'flex';
+            countEl.textContent = `${n}개 품목 변경사항 대기 중`;
+        } else {
+            toolbar.style.display = 'none';
+        }
+    }
+
+    window.cancelZonePendingChanges = function() {
+        zonePendingChanges.clear();
+        renderZoneAssignBoard();
+    };
+
+    // 매트릭스에 쌓인 활성화/비활성화 + 기사 배정 변경사항을 한 번에 서버에 반영
+    window.saveZonePendingChanges = async function() {
+        if (zonePendingChanges.size === 0) return;
+        const entries = [...zonePendingChanges.entries()];
+        const activeItems = currentDetailData.activeItems || [];
+        const tasks = currentDetailData.tasks || [];
+
+        showLoading(`변경사항 ${entries.length}건 저장 중...`);
         try {
-            const response = await fetch(API_SAVE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'toggle_item_create',
-                    projectCode: activeProjectCode,
-                    itemName: itemName
-                })
+            // 1. 활성화/비활성화 처리 (신규 생성된 품목의 레코드 ID 확보)
+            const newRecordIds = {};
+            for (const [itemName, change] of entries) {
+                if (change.active === undefined) continue;
+                const serverActive = activeItems.includes(itemName);
+                if (change.active === serverActive) continue;
+
+                if (change.active) {
+                    const res = await fetch(API_SAVE_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'toggle_item_create', projectCode: activeProjectCode, itemName: itemName })
+                    });
+                    if (!res.ok) throw new Error(`${itemName} 활성화 실패`);
+                    const data = await res.json().catch(() => null);
+                    const rec = Array.isArray(data) ? data[0] : data;
+                    if (rec && rec.id) newRecordIds[itemName] = rec.id;
+                } else {
+                    const res = await fetch(API_SAVE_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'toggle_item_delete', projectCode: activeProjectCode, itemName: itemName })
+                    });
+                    if (!res.ok) throw new Error(`${itemName} 제외 실패`);
+                }
+            }
+
+            // 2. 기사 배정/취소 처리 (신규 활성화된 품목은 방금 받은 레코드 ID 사용)
+            const assignPromises = [];
+            entries.forEach(([itemName, change]) => {
+                const task = tasks.find(t => t.fields.시공품목 === itemName);
+                const recordId = newRecordIds[itemName] || (task && task.id);
+                if (!recordId) return;
+
+                ['밑작업', '시공'].forEach(stage => {
+                    if (change[stage] === undefined) return;
+                    const serverValue = task ? (task.fields[stage + '기사'] || "") : "";
+                    if (change[stage] === serverValue) return;
+
+                    const body = change[stage]
+                        ? { type: 'assign_worker', projectCode: activeProjectCode, recordId: recordId, workerName: change[stage], stage: stage }
+                        : { type: 'unassign_worker', projectCode: activeProjectCode, recordId: recordId, stage: stage };
+                    assignPromises.push(
+                        fetch(API_SAVE_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        }).then(res => { if (!res.ok) throw new Error(`${itemName} ${stage} 배정 실패`); })
+                    );
+                });
             });
+            await Promise.all(assignPromises);
 
-            if (!response.ok) throw new Error("업데이트 오류");
-
-            showToast(`${itemName} 품목이 추가되었습니다.`);
-            // 신규 생성된 레코드 ID를 받아야 하므로 데이터 재조회 및 화면 갱신
+            showToast(`${entries.length}개 품목의 변경사항이 저장되었습니다!`);
+            zonePendingChanges.clear();
             await showProjectDetail(activeProjectCode);
         } catch (error) {
             console.error(error);
-            showToast("품목 변경 중 문제가 발생했습니다.", "danger");
+            showToast("일부 변경사항 저장에 실패했습니다. 다시 확인해 주세요.", "danger");
+            zonePendingChanges.clear();
+            await showProjectDetail(activeProjectCode);
         } finally {
             hideLoading();
         }
-    }
+    };
 
 
     // 1열: 기사 리스트 그리기
