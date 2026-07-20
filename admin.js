@@ -535,7 +535,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         toggleInput.checked = isActive;
         toggleInput.disabled = hasAnyAssignee;
         toggleInput.addEventListener('change', async () => {
-            await toggleProjectItem(itemName, toggleInput.checked);
+            await toggleProjectItem(itemName, toggleInput.checked, task);
         });
         toggleLabel.appendChild(toggleInput);
 
@@ -569,44 +569,102 @@ document.addEventListener('DOMContentLoaded', async () => {
         select.disabled = !isActive || !task || isDone;
         if (isDone) select.classList.add('done');
 
-        let optionsHtml = `<option value="">${stage} 선택</option>`;
+        let optionsHtml = `<option value="">${stage}</option>`;
         workers.forEach(w => {
             optionsHtml += `<option value="${w}">${w}</option>`;
         });
         select.innerHTML = optionsHtml;
         select.value = (stage === '밑작업' ? fields.밑작업기사 : fields.시공기사) || "";
 
-        select.addEventListener('change', async () => {
+        select.addEventListener('change', () => {
             if (!task) return;
-            const value = select.value;
-            if (!value) {
-                await unassignWorker(task.id, stage);
-            } else {
-                await assignWorker(task.id, value, stage);
-            }
+            zoneAssignChange(task, stage, select.value);
         });
 
         return select;
     }
 
-    // 품목 켜고 끄기 요청 (즉시 실행 - 배정 보드의 × 삭제 버튼, 매트릭스 활성화 토글에서 사용)
-    async function toggleProjectItem(itemName, enable) {
+    // 매트릭스 드롭다운에서 기사 배정/취소 - 이미 알고 있는 레코드이므로 화면에 즉시 반영 후 백그라운드로 저장
+    async function zoneAssignChange(task, stage, value) {
+        const fields = task.fields;
+        const prevWorker = fields[stage + '기사'] || "";
+        const prevDone = !!fields[stage + '완료'];
+
+        fields[stage + '기사'] = value;
+        if (!value) fields[stage + '완료'] = false;
+        renderZoneAssignBoard();
+        renderBoardAssignments();
+
+        try {
+            const body = value
+                ? { type: 'assign_worker', projectCode: activeProjectCode, recordId: task.id, workerName: value, stage: stage }
+                : { type: 'unassign_worker', projectCode: activeProjectCode, recordId: task.id, stage: stage };
+            const response = await fetch(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) throw new Error("배정 오류");
+        } catch (error) {
+            console.error(error);
+            fields[stage + '기사'] = prevWorker;
+            fields[stage + '완료'] = prevDone;
+            renderZoneAssignBoard();
+            renderBoardAssignments();
+            showToast("기사 배정 저장에 실패했습니다. 다시 시도해 주세요.", "danger");
+        }
+    }
+
+    // 품목 켜고 끄기 요청 (매트릭스 활성화 토글에서 사용)
+    // 비활성화는 이미 알고 있는 레코드를 지우는 것이라 화면에 즉시 반영 후 백그라운드로 삭제
+    // 활성화는 새 레코드 ID가 필요해 서버 응답을 반영해 새로고침
+    async function toggleProjectItem(itemName, enable, task) {
+        if (!enable && task) {
+            const activeItems = currentDetailData.activeItems || [];
+            const idx = activeItems.indexOf(itemName);
+            if (idx !== -1) activeItems.splice(idx, 1);
+            const tasks = currentDetailData.tasks || [];
+            const taskIdx = tasks.findIndex(t => t.id === task.id);
+            if (taskIdx !== -1) tasks.splice(taskIdx, 1);
+            renderZoneAssignBoard();
+            renderBoardAssignments();
+            showToast(`${itemName} 품목이 제외되었습니다.`);
+
+            try {
+                const response = await fetch(API_SAVE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'toggle_item_delete',
+                        projectCode: activeProjectCode,
+                        itemName: itemName
+                    })
+                });
+                if (!response.ok) throw new Error("업데이트 오류");
+            } catch (error) {
+                console.error(error);
+                showToast(`${itemName} 품목 제외 처리에 실패했습니다. 다시 확인해 주세요.`, "danger");
+                await showProjectDetail(activeProjectCode);
+            }
+            return;
+        }
+
         showLoading(`${itemName} 품목 상태 업데이트 중...`);
         try {
             const response = await fetch(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    type: enable ? 'toggle_item_create' : 'toggle_item_delete',
+                    type: 'toggle_item_create',
                     projectCode: activeProjectCode,
                     itemName: itemName
                 })
             });
 
             if (!response.ok) throw new Error("업데이트 오류");
-            
-            showToast(`${itemName} 품목이 ${enable ? '추가' : '제외'}되었습니다.`);
-            // 데이터 재조회 및 화면 갱신
+
+            showToast(`${itemName} 품목이 추가되었습니다.`);
+            // 신규 생성된 레코드 ID를 받아야 하므로 데이터 재조회 및 화면 갱신
             await showProjectDetail(activeProjectCode);
         } catch (error) {
             console.error(error);
