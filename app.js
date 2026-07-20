@@ -33,6 +33,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingOverlay.style.display = 'none';
     }
 
+    // 현장 신호가 약해 응답이 안 올 때 로딩이 무한정 멈춰있지 않도록 타임아웃을 걸어주는 fetch 래퍼
+    function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, { ...options, signal: controller.signal })
+            .catch(err => {
+                if (err.name === 'AbortError') {
+                    throw new Error('네트워크 응답이 없습니다. 신호가 약한 곳인지 확인 후 다시 시도해 주세요.');
+                }
+                throw err;
+            })
+            .finally(() => clearTimeout(timer));
+    }
+
     function showToast(message, type = 'success') {
         toast.textContent = message;
         toast.className = `toast show ${type}`;
@@ -93,7 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadProjectData(recordId) {
         showLoading("현장 데이터를 불러오는 중...");
         try {
-            const response = await fetch(`${API_GET_URL}?code=${recordId}&_t=${Date.now()}`, {
+            const response = await fetchWithTimeout(`${API_GET_URL}?code=${recordId}&_t=${Date.now()}`, {
                 cache: "no-store"
             });
             if (!response.ok) throw new Error("서버 연동 실패");
@@ -274,7 +288,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("공지 확인 보고를 전송하는 중...");
         try {
-            const response = await fetch("https://primary-production-a6fa.up.railway.app/webhook/film-notice-confirm", {
+            const response = await fetchWithTimeout("https://primary-production-a6fa.up.railway.app/webhook/film-notice-confirm", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -674,10 +688,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             formData.append('slotName', slotName);
             formData.append('projectCode', projectRecordId);
 
-            const response = await fetch(API_UPLOAD_URL, {
+            const response = await fetchWithTimeout(API_UPLOAD_URL, {
                 method: 'POST',
                 body: formData
-            });
+            }, 40000);
 
             if (!response.ok) {
                 const errText = await response.text();
@@ -714,7 +728,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("사진 삭제하는 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -776,7 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     resultsText: checkedTexts.join('\n')
                 };
 
-                const response = await fetch(API_SAVE_URL, {
+                const response = await fetchWithTimeout(API_SAVE_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -840,9 +854,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             // 2. 현재 현장에 배정된 모든 태스크들을 순회하며 초기화 요청 전송 (Airtable 클리어)
+            // Airtable 초당 요청 한도 방어를 위해 동시 요청 대신 순차 처리
             const tasks = projectData.tasks || [];
-            const promises = tasks.map(task => {
-                return fetch(API_SAVE_URL, {
+            for (const task of tasks) {
+                await fetchWithTimeout(API_SAVE_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -851,10 +866,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         type: 'reset_task'
                     })
                 });
-            });
-
-            // 모든 초기화 요청이 완료될 때까지 대기
-            await Promise.all(promises);
+                await new Promise(r => setTimeout(r, 220));
+            }
 
             showToast("모든 내역이 깨끗하게 초기화되었습니다!", "success");
             

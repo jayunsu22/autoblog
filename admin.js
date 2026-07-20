@@ -76,6 +76,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingOverlay.style.display = 'none';
     }
 
+    // 현장 신호가 약해 응답이 안 올 때 로딩이 무한정 멈춰있지 않도록 타임아웃을 걸어주는 fetch 래퍼
+    function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, { ...options, signal: controller.signal })
+            .catch(err => {
+                if (err.name === 'AbortError') {
+                    throw new Error('네트워크 응답이 없습니다. 신호가 약한 곳인지 확인 후 다시 시도해 주세요.');
+                }
+                throw err;
+            })
+            .finally(() => clearTimeout(timer));
+    }
+
     function showToast(message, type = 'success') {
         toast.textContent = message;
         toast.className = `toast show ${type}`;
@@ -178,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadProjectList() {
         showLoading("현장 목록을 조회하는 중...");
         try {
-            const response = await fetch(`${API_ADMIN_GET_URL}?_t=${Date.now()}`, {
+            const response = await fetchWithTimeout(`${API_ADMIN_GET_URL}?_t=${Date.now()}`, {
                 cache: "no-store"
             });
             if (!response.ok) throw new Error("서버에서 목록 로드 실패");
@@ -262,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("새 공지 템플릿을 등록하는 중...");
         try {
-            const response = await fetch("https://primary-production-a6fa.up.railway.app/webhook/film-notice-create", {
+            const response = await fetchWithTimeout("https://primary-production-a6fa.up.railway.app/webhook/film-notice-create", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ noticeText: text })
@@ -375,7 +389,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("신규 현장 등록 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -412,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         activeProjectCode = recordId;
         showLoading("현장 상세 정보를 불러오는 중...");
         try {
-            const response = await fetch(`${API_DETAIL_URL}?code=${recordId}`);
+            const response = await fetchWithTimeout(`${API_DETAIL_URL}?code=${recordId}`);
             if (!response.ok) throw new Error("상세조회 실패");
             
             const result = await response.json();
@@ -647,7 +661,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (change.active === serverActive) continue;
 
                 if (change.active) {
-                    const res = await fetch(API_SAVE_URL, {
+                    const res = await fetchWithTimeout(API_SAVE_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ type: 'toggle_item_create', projectCode: activeProjectCode, itemName: itemName })
@@ -657,7 +671,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const rec = Array.isArray(data) ? data[0] : data;
                     if (rec && rec.id) newRecordIds[itemName] = rec.id;
                 } else {
-                    const res = await fetch(API_SAVE_URL, {
+                    const res = await fetchWithTimeout(API_SAVE_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ type: 'toggle_item_delete', projectCode: activeProjectCode, itemName: itemName })
@@ -682,7 +696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ? { type: 'assign_worker', projectCode: activeProjectCode, recordId: recordId, workerName: change[stage], stage: stage }
                         : { type: 'unassign_worker', projectCode: activeProjectCode, recordId: recordId, stage: stage };
                     assignPromises.push(
-                        fetch(API_SAVE_URL, {
+                        fetchWithTimeout(API_SAVE_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(body)
@@ -1003,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("우선순위 순서 저장 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1065,7 +1079,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 기사 배정 실행
     // 배정 요청 1건만 서버로 전송 (로딩/토스트/새로고침은 호출부에서 관리 - 단건/일괄 배정 공용)
     async function postAssignWorker(recordId, workerName, stage) {
-        const response = await fetch(API_SAVE_URL, {
+        const response = await fetchWithTimeout(API_SAVE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1105,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("배정 취소 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1134,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 현재 켜져있는 지침과 꺼지는 지침 정보를 취합해서 점검결과 텍스트로 밀어넣어줌
         showLoading("지침 가이드 갱신 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1168,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!existingExcluded.includes(guidelineLine)) existingExcluded.push(guidelineLine);
             const excludedText = existingExcluded.join('\n');
 
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1196,7 +1210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const noteText = textarea ? textarea.value.trim() : "";
         showLoading("현장 특이사항 저장 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1254,7 +1268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 기존에 저장된 (아직 발행 전이거나 이미 발행된) 일지가 있으면 해당 일차 슬롯에 병합
         try {
-            const res = await fetch(`${API_JOURNAL_LIST_URL}?projectCode=${encodeURIComponent(activeProjectCode)}`);
+            const res = await fetchWithTimeout(`${API_JOURNAL_LIST_URL}?projectCode=${encodeURIComponent(activeProjectCode)}`);
             const data = await res.json();
             (Array.isArray(data) ? data : []).forEach(rec => {
                 const f = rec.fields ? rec.fields : rec;
@@ -1459,15 +1473,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
     // 휴대폰 원본 사진(보통 3~8MB)을 블로그에 쓰기 충분한 해상도로 줄여서 업로드 속도 개선
     // 긴 변 1920px, JPEG 85% 품질 - 화면/블로그에서는 원본과 차이 안 보이면서 용량은 크게 줄어듦
     function resizeImageFile(file, maxDimension = 1920, quality = 0.85) {
@@ -1502,25 +1507,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function uploadSingleJournalPhoto(journalId, file, fieldName) {
         const resizedFile = await resizeImageFile(file);
-        const base64 = await fileToBase64(resizedFile);
-        const res = await fetch(API_JOURNAL_PHOTO_URL, {
+
+        // Base64는 원본 대비 전송량이 약 33% 늘어나므로, 사진 업로드(app.js)와 동일하게 바이너리(FormData)로 전송
+        const formData = new FormData();
+        formData.append('image', resizedFile, resizedFile.name);
+        formData.append('journalId', journalId);
+        formData.append('fieldName', fieldName);
+        formData.append('filename', resizedFile.name);
+        formData.append('contentType', resizedFile.type || 'image/jpeg');
+
+        const res = await fetchWithTimeout(API_JOURNAL_PHOTO_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                journalId,
-                fieldName,
-                filename: resizedFile.name,
-                contentType: resizedFile.type || 'image/jpeg',
-                fileBase64: base64
-            })
-        });
+            body: formData
+        }, 40000);
         if (!res.ok) throw new Error("사진 업로드 실패: " + file.name);
     }
 
     // 일지제목/날씨/특징/에피소드를 Airtable에 저장하고, 아직 업로드 안 된 사진들을 업로드.
     // 임시저장과 실제 발행이 공통으로 쓰는 부분 - 이 함수가 끝나면 창을 닫고 다시 들어와도 내용/사진이 남아있음.
     async function persistJournalDayDraft(d) {
-        const res = await fetch(API_JOURNAL_CREATE_URL, {
+        const res = await fetchWithTimeout(API_JOURNAL_CREATE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1605,7 +1611,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const journalId = await persistJournalDayDraft(d);
 
-            const pubRes = await fetch(API_PUBLISH_URL, {
+            const pubRes = await fetchWithTimeout(API_PUBLISH_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ journalId, taskIds })
@@ -1802,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     필수사진슬롯: slotsText
                 };
 
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
@@ -1840,7 +1846,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading("공지사항 업데이트 중...");
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1878,7 +1884,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoading(`${newName} 기사님 추가 중...`);
         try {
-            const response = await fetch(API_SAVE_URL, {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
