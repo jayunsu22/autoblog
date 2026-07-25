@@ -1410,6 +1410,66 @@ body {
     background: #059669;
 }
 
+/* 지침/사진슬롯/공지 줄마다 샘플사진 첨부·미리보기 UI */
+.sample-photo-section-title {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.sample-photo-line-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sample-photo-line-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.sample-photo-line-text {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    min-width: 0;
+    word-break: keep-all;
+}
+
+.sample-photo-thumb {
+    width: 34px;
+    height: 34px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1.5px solid #cbd5e1;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.btn-sample-photo-add {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    background: white;
+    color: #475569;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-sample-photo-add:hover {
+    background: #f1f5f9;
+}
+
 /* 품목 저장 버튼 */
 .item-save-btn {
     margin-top: 14px;

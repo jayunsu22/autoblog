@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260720c">
+    <link rel="stylesheet" href="admin_style.css?v=20260720e">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -68,6 +68,7 @@
                 </div>
                 <div class="notice-quick-tags" id="detailNoticeQuickTags"></div>
                 <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 20.25px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
+                <div id="noticeSamplePhotos" style="margin-top: 4px;"></div>
                 <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
             </div>
 
@@ -291,6 +292,8 @@
                 <button onclick="addPhotoSlotModal()">+ 추가</button>
             </div>
 
+            <div id="itemEditSamplePhotos" style="margin-top: 14px;"></div>
+
             <div class="modal-footer-btns" style="margin-top: 20px;">
                 <button type="button" class="btn-cancel" onclick="closeItemEditModal()">닫기</button>
                 <button type="button" class="btn-submit" onclick="saveItemEditModal()">💾 이 품목 저장</button>
@@ -298,6 +301,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260720d"></script>
+    <script src="admin.js?v=20260720e"></script>
 </body>
 </html>

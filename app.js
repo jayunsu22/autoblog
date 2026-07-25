@@ -47,6 +47,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             .finally(() => clearTimeout(timer));
     }
 
+    // "구분|품목명|텍스트" 키로 샘플사진 URL 조회 (없으면 undefined)
+    function getSamplePhotoUrl(map, 구분, 품목명, 텍스트) {
+        if (!map) return undefined;
+        return map[`${구분}|${품목명 || ''}|${텍스트}`];
+    }
+
     function showToast(message, type = 'success') {
         toast.textContent = message;
         toast.className = `toast show ${type}`;
@@ -205,9 +211,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 item.classList.add('checked');
             }
 
+            const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, '공지사항', '', line.trim());
+            const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" alt="샘플사진">` : '';
+
             item.innerHTML = `
                 <div class="custom-checkbox"></div>
                 <div class="check-text">${line}</div>
+                ${sampleThumbHtml}
             `;
 
             item.addEventListener('click', () => {
@@ -426,13 +436,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="checklist-list">
             `;
 
+            const guidelineKind = stage === '밑작업' ? '밑작업지침' : '시공지침';
             lines.forEach((line, idx) => {
-                const isItemChecked = isCompleted || existingResults.includes(`[✓] ${line.trim()}`);
+                const cleanLine = line.trim();
+                const isItemChecked = isCompleted || existingResults.includes(`[✓] ${cleanLine}`);
+                const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, guidelineKind, fields.시공품목, cleanLine);
+                const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" alt="샘플사진">` : '';
 
                 checklistHtml += `
                     <div class="check-item ${isItemChecked ? 'checked' : ''} ${isCompleted ? 'disabled' : ''}" data-index="${idx}">
                         <div class="custom-checkbox"></div>
                         <div class="check-text">${line}</div>
+                        ${sampleThumbHtml}
                     </div>
                 `;
             });
@@ -475,10 +490,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             slots.forEach((slotName, slotIdx) => {
                 const photoData = existingPhotos[slotIdx];
                 const hasImage = !!photoData && photoData.url && !photoData.url.includes('1x1.png') && !(photoData.filename && photoData.filename.includes('1x1.png'));
+                const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, '사진슬롯', fields.시공품목, slotName);
 
                 photoHtml += `
-                    <div class="photo-slot ${hasImage ? 'has-image' : ''} ${isCompleted ? 'disabled' : ''}" 
-                         data-slot-index="${slotIdx}" 
+                    <div class="photo-slot ${hasImage ? 'has-image' : ''} ${isCompleted ? 'disabled' : ''}"
+                         data-slot-index="${slotIdx}"
                          data-slot-name="${slotName}"
                          data-record-id="${recordId}"
                          data-field-name="${photoField}">
@@ -488,6 +504,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ` : `
                             <div class="photo-slot-icon">📷</div>
                             <div class="photo-slot-label">${slotName}</div>
+                            ${sampleUrl ? `<img src="${sampleUrl}" class="photo-slot-sample-thumb" alt="이렇게 찍어주세요" title="이렇게 찍어주세요">` : ''}
                         `}
                     </div>
                 `;

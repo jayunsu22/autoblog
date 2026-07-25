@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_JOURNAL_CREATE_URL = `${n8nBase}/webhook/film-journal-create`;
     const API_JOURNAL_LIST_URL = `${n8nBase}/webhook/film-journal-list`;
     const API_JOURNAL_PHOTO_URL = `${n8nBase}/webhook/film-journal-photo-upload`;
+    const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
     const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타']; // 구역은 이 9개로 고정
 
@@ -188,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 5. 현장 목록 및 자주쓰는공지 불러오기
     let globalQuickNotices = [];
     let globalMasterItems = [];
+    let globalSamplePhotos = {}; // "구분|품목명|텍스트" -> 사진URL (품목설정 모달에서 사용)
 
     async function loadProjectList() {
         showLoading("현장 목록을 조회하는 중...");
@@ -210,6 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 시공품목 마스터 데이터 캐싱
             globalMasterItems = data.masterItems || [];
+            globalSamplePhotos = data.samplePhotos || {};
 
         } catch (error) {
             console.error(error);
@@ -467,6 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             noticeEl.value = p.공지사항 || "";
         }
         renderQuickTagsInto('detailNoticeQuickTags', 'detailProjectNotice');
+        renderNoticeSamplePhotos();
 
         // 1. 3분할 보드 - 1열 (시공기사 목록) 렌더링
         renderBoardWorkers();
@@ -900,10 +904,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="assign-checkbox-list">
             `;
 
+            const guidelineKind = stage === '밑작업' ? '밑작업지침' : '시공지침';
             linesList.forEach(line => {
                 const cleanLine = line.trim();
                 const isGuidelineActive = !existingResults || existingResults.includes(cleanLine);
                 const escapedLine = cleanLine.replace(/'/g, "\\'");
+                const sampleUrl = getSamplePhotoUrl(currentDetailData.samplePhotos, guidelineKind, fields.시공품목, cleanLine);
+                const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" title="샘플사진">` : '';
 
                 bodyHtml += `
                     <div class="assign-toggle-item ${isGuidelineActive ? 'active' : ''}">
@@ -911,6 +918,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <span class="toggle-dot"></span>
                             <span class="toggle-text">${cleanLine}</span>
                         </span>
+                        ${sampleThumbHtml}
                         <button type="button" class="btn-exclude-guideline" title="이 현장에서만 이 지침 제외" onclick="event.stopPropagation(); excludeGuidelineLine('${recordId}', '${escapedLine}')">×</button>
                     </div>
                 `;
@@ -1505,6 +1513,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // "구분|품목명|텍스트" 키로 샘플사진 URL 조회 (없으면 undefined)
+    function getSamplePhotoUrl(map, 구분, 품목명, 텍스트) {
+        if (!map) return undefined;
+        return map[`${구분}|${품목명 || ''}|${텍스트}`];
+    }
+
+    // 지침 한 줄 / 사진슬롯 / 공지 한 줄에 샘플사진을 첨부(신규 등록 또는 교체)
+    async function uploadSamplePhoto(구분, 품목명, 텍스트, file) {
+        const resizedFile = await resizeImageFile(file);
+        const formData = new FormData();
+        formData.append('image', resizedFile, resizedFile.name);
+        formData.append('구분', 구분);
+        formData.append('품목명', 품목명 || '');
+        formData.append('텍스트', 텍스트);
+
+        const res = await fetchWithTimeout(API_SAMPLE_PHOTO_URL, {
+            method: 'POST',
+            body: formData
+        }, 40000);
+        if (!res.ok) throw new Error("샘플사진 업로드 실패");
+    }
+
     async function uploadSingleJournalPhoto(journalId, file, fieldName) {
         const resizedFile = await resizeImageFile(file);
 
@@ -1706,6 +1736,129 @@ document.addEventListener('DOMContentLoaded', async () => {
     let editingItemIdx = null; // 편집 중인 globalMasterItems 인덱스, 신규 등록 중이면 null
     let editingItemSlots = []; // 현재 열린 팝업의 사진 슬롯 작업용 배열
 
+    // 사진 선택 → 리사이즈 → 업로드까지 처리하고, 끝나면 onDone 콜백으로 화면 갱신
+    function triggerSamplePhotoPick(구분, 품목명, 텍스트, onDone) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            showLoading('샘플사진 저장 중...');
+            try {
+                await uploadSamplePhoto(구분, 품목명, 텍스트, file);
+                const objectUrl = URL.createObjectURL(file);
+                const key = `${구분}|${품목명 || ''}|${텍스트}`;
+                globalSamplePhotos[key] = objectUrl;
+                if (currentDetailData && currentDetailData.samplePhotos) {
+                    currentDetailData.samplePhotos[key] = objectUrl;
+                }
+                showToast('샘플사진이 저장되었습니다.');
+                if (onDone) onDone();
+            } catch (error) {
+                console.error(error);
+                showToast('샘플사진 저장에 실패했습니다.', 'danger');
+            } finally {
+                hideLoading();
+            }
+        });
+        input.click();
+    }
+
+    // 지침 줄/사진슬롯 목록을 받아서, 줄마다 [텍스트 + 샘플사진 썸네일 or 추가버튼] 행을 만들어줌
+    function buildSampleLineRows(구분, 품목명, lines, map, onDone) {
+        const wrap = document.createElement('div');
+        wrap.className = 'sample-photo-line-list';
+
+        const cleanLines = (lines || []).map(l => l.trim()).filter(l => l !== '');
+        if (cleanLines.length === 0) {
+            wrap.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">등록된 항목이 없습니다.</span>';
+            return wrap;
+        }
+
+        cleanLines.forEach(line => {
+            const row = document.createElement('div');
+            row.className = 'sample-photo-line-row';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'sample-photo-line-text';
+            textSpan.textContent = line;
+            row.appendChild(textSpan);
+
+            const existingUrl = getSamplePhotoUrl(map, 구분, 품목명, line);
+            if (existingUrl) {
+                const img = document.createElement('img');
+                img.src = existingUrl;
+                img.className = 'sample-photo-thumb';
+                img.title = '클릭해서 교체';
+                img.addEventListener('click', () => triggerSamplePhotoPick(구분, 품목명, line, onDone));
+                row.appendChild(img);
+            } else {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn-sample-photo-add';
+                btn.textContent = '📷 샘플사진';
+                btn.addEventListener('click', () => triggerSamplePhotoPick(구분, 품목명, line, onDone));
+                row.appendChild(btn);
+            }
+
+            wrap.appendChild(row);
+        });
+
+        return wrap;
+    }
+
+    // 품목 편집 모달의 지침/사진슬롯 목록 옆에 샘플사진 관리 UI를 그려줌 (신규 등록 중일 땐 표시 안 함)
+    function renderItemEditSamplePhotos() {
+        const container = document.getElementById('itemEditSamplePhotos');
+        if (!container) return;
+        if (editingItemIdx === null) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const 품목명 = document.getElementById('itemEditNameInput').value.trim();
+        const prepLines = document.getElementById('itemEditPrepInput').value.split('\n');
+        const inspLines = document.getElementById('itemEditInspInput').value.split('\n');
+
+        container.innerHTML = '';
+
+        const prepSection = document.createElement('div');
+        prepSection.innerHTML = '<h4 class="sample-photo-section-title">📷 밑작업 지침 샘플사진</h4>';
+        prepSection.appendChild(buildSampleLineRows('밑작업지침', 품목명, prepLines, globalSamplePhotos, renderItemEditSamplePhotos));
+        container.appendChild(prepSection);
+
+        const inspSection = document.createElement('div');
+        inspSection.innerHTML = '<h4 class="sample-photo-section-title" style="margin-top:14px;">📷 시공 지침 샘플사진</h4>';
+        inspSection.appendChild(buildSampleLineRows('시공지침', 품목명, inspLines, globalSamplePhotos, renderItemEditSamplePhotos));
+        container.appendChild(inspSection);
+
+        const slotSection = document.createElement('div');
+        slotSection.innerHTML = '<h4 class="sample-photo-section-title" style="margin-top:14px;">📷 필수 사진 슬롯 샘플사진</h4>';
+        slotSection.appendChild(buildSampleLineRows('사진슬롯', 품목명, editingItemSlots, globalSamplePhotos, renderItemEditSamplePhotos));
+        container.appendChild(slotSection);
+    }
+
+    // 공지사항 줄마다 샘플사진 관리 UI를 그려줌 (현장 공지는 품목명 없이 텍스트만으로 매칭)
+    function renderNoticeSamplePhotos() {
+        const container = document.getElementById('noticeSamplePhotos');
+        if (!container) return;
+        const noticeEl = document.getElementById('detailProjectNotice');
+        const lines = noticeEl ? noticeEl.value.split('\n') : [];
+        const map = (currentDetailData && currentDetailData.samplePhotos) || {};
+        container.innerHTML = '';
+        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos));
+    }
+
+    const detailProjectNoticeEl = document.getElementById('detailProjectNotice');
+    if (detailProjectNoticeEl) detailProjectNoticeEl.addEventListener('input', renderNoticeSamplePhotos);
+
+    // 지침 텍스트를 고치는 도중에도 샘플사진 목록이 실시간으로 따라가도록 연결
+    const itemEditPrepInputEl = document.getElementById('itemEditPrepInput');
+    const itemEditInspInputEl = document.getElementById('itemEditInspInput');
+    if (itemEditPrepInputEl) itemEditPrepInputEl.addEventListener('input', renderItemEditSamplePhotos);
+    if (itemEditInspInputEl) itemEditInspInputEl.addEventListener('input', renderItemEditSamplePhotos);
+
     window.openItemEditModal = function(idx) {
         editingItemIdx = idx;
         const item = globalMasterItems[idx];
@@ -1745,6 +1898,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ).join('');
         document.getElementById('itemEditSlotTags').innerHTML =
             slotTagsHtml || '<span style="font-size:12px;color:var(--text-muted);">등록된 사진 슬롯이 없습니다.</span>';
+        renderItemEditSamplePhotos();
     }
 
     window.addPhotoSlotModal = function() {

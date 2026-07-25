@@ -409,6 +409,27 @@ body {
     object-fit: cover;
 }
 
+.photo-slot-sample-thumb {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1.5px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
+.sample-photo-thumb {
+    width: 30px;
+    height: 30px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1.5px solid #cbd5e1;
+    flex-shrink: 0;
+}
+
 .photo-slot-delete {
     position: absolute;
     top: 6px;
