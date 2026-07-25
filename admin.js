@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_JOURNAL_LIST_URL = `${n8nBase}/webhook/film-journal-list`;
     const API_JOURNAL_PHOTO_URL = `${n8nBase}/webhook/film-journal-photo-upload`;
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
+    const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
     const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타']; // 구역은 이 9개로 고정
 
@@ -1535,6 +1536,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!res.ok) throw new Error("샘플사진 업로드 실패");
     }
 
+    async function deleteSamplePhoto(구분, 품목명, 텍스트) {
+        const res = await fetchWithTimeout(API_SAMPLE_PHOTO_DELETE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 구분, 품목명: 품목명 || '', 텍스트 })
+        }, 25000);
+        if (!res.ok) throw new Error("샘플사진 삭제 실패");
+    }
+
     async function uploadSingleJournalPhoto(journalId, file, fieldName) {
         const resizedFile = await resizeImageFile(file);
 
@@ -1793,6 +1803,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 img.title = '클릭해서 교체';
                 img.addEventListener('click', () => triggerSamplePhotoPick(구분, 품목명, line, onDone));
                 row.appendChild(img);
+
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.className = 'btn-sample-photo-delete';
+                delBtn.title = '샘플사진 삭제';
+                delBtn.textContent = '×';
+                delBtn.addEventListener('click', async () => {
+                    if (!confirm('이 샘플사진을 삭제할까요?')) return;
+                    showLoading('샘플사진 삭제 중...');
+                    try {
+                        await deleteSamplePhoto(구분, 품목명, line);
+                        const key = `${구분}|${품목명 || ''}|${line}`;
+                        delete globalSamplePhotos[key];
+                        if (currentDetailData && currentDetailData.samplePhotos) {
+                            delete currentDetailData.samplePhotos[key];
+                        }
+                        showToast('샘플사진이 삭제되었습니다.');
+                        if (onDone) onDone();
+                    } catch (error) {
+                        console.error(error);
+                        showToast('샘플사진 삭제에 실패했습니다.', 'danger');
+                    } finally {
+                        hideLoading();
+                    }
+                });
+                row.appendChild(delBtn);
             } else {
                 const btn = document.createElement('button');
                 btn.type = 'button';

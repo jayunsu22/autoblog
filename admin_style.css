@@ -1470,6 +1470,24 @@ body {
     background: #f1f5f9;
 }
 
+.btn-sample-photo-delete {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 6px;
+    background: #fee2e2;
+    color: #dc2626;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.btn-sample-photo-delete:hover {
+    background: #fecaca;
+}
+
 /* 품목 저장 버튼 */
 .item-save-btn {
     margin-top: 14px;

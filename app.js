@@ -90,6 +90,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     modalConfirmBtn.addEventListener('click', () => closeModal(true));
 
+    // 샘플사진 확대보기
+    window.openImageLightbox = function(url) {
+        document.getElementById('lightboxImage').src = url;
+        document.getElementById('lightboxOverlay').style.display = 'flex';
+    };
+
+    window.closeImageLightbox = function() {
+        document.getElementById('lightboxOverlay').style.display = 'none';
+    };
+
     // 3. URL 파라미터 분석 및 초기화 데이터 로드
     const urlParams = new URLSearchParams(window.location.search);
     const projectRecordId = urlParams.get('code');
@@ -212,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, '공지사항', '', line.trim());
-            const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" alt="샘플사진">` : '';
+            const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" alt="샘플사진" onclick="event.stopPropagation(); openImageLightbox('${sampleUrl}')">` : '';
 
             item.innerHTML = `
                 <div class="custom-checkbox"></div>
@@ -441,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const cleanLine = line.trim();
                 const isItemChecked = isCompleted || existingResults.includes(`[✓] ${cleanLine}`);
                 const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, guidelineKind, fields.시공품목, cleanLine);
-                const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" alt="샘플사진">` : '';
+                const sampleThumbHtml = sampleUrl ? `<img src="${sampleUrl}" class="sample-photo-thumb" alt="샘플사진" onclick="event.stopPropagation(); openImageLightbox('${sampleUrl}')">` : '';
 
                 checklistHtml += `
                     <div class="check-item ${isItemChecked ? 'checked' : ''} ${isCompleted ? 'disabled' : ''}" data-index="${idx}">
@@ -504,7 +514,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ` : `
                             <div class="photo-slot-icon">📷</div>
                             <div class="photo-slot-label">${slotName}</div>
-                            ${sampleUrl ? `<img src="${sampleUrl}" class="photo-slot-sample-thumb" alt="이렇게 찍어주세요" title="이렇게 찍어주세요">` : ''}
+                            ${sampleUrl ? `<img src="${sampleUrl}" class="photo-slot-sample-thumb" alt="이렇게 찍어주세요" title="이렇게 찍어주세요" onclick="event.stopPropagation(); openImageLightbox('${sampleUrl}')">` : ''}
                         `}
                     </div>
                 `;
