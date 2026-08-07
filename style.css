@@ -493,6 +493,43 @@ body {
     white-space: nowrap;
 }
 
+/* "+사진 추가" 타일: 지정 슬롯을 넘어서 추가로 찍을 수 있는 빈 칸 */
+.photo-slot.add-tile {
+    background: #f1f5f9;
+}
+
+.photo-slot.add-tile .photo-slot-icon {
+    color: var(--primary-blue);
+}
+
+/* 지정 사진 슬롯 중 이번엔 필요 없는 항목을 생략하는 버튼 */
+.photo-slot-hide-btn {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+/* 생략했던 슬롯을 다시 불러오는 안내 타일 */
+.photo-slot-unhide-tile {
+    grid-column: 1 / -1;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--primary-blue);
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 6px 0;
+}
+
 /* 제출 영역 버튼 */
 .submit-btn-area {
     margin-top: 10px;
