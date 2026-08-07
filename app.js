@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let projectData = null;
     let currentWorker = "";
-    let activeUploadSlot = null; // 현재 업로드 중인 슬롯 엘리먼트 보관용
+    let pendingUploadCount = 0; // 백그라운드에서 병렬로 진행 중인 사진 업로드 개수 (제출 버튼 가드용)
     const expandedCardIds = new Set(); // 아코디언이 열려 있는 카드의 ID를 추적하기 위한 Set
     
     // UI Elements
@@ -500,17 +500,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             slots.forEach((slotName, slotIdx) => {
                 const photoData = existingPhotos[slotIdx];
                 const hasImage = !!photoData && photoData.url && !photoData.url.includes('1x1.png') && !(photoData.filename && photoData.filename.includes('1x1.png'));
+                const isUploading = !!(photoData && photoData.isUploading);
                 const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, '사진슬롯', fields.시공품목, slotName);
 
                 photoHtml += `
-                    <div class="photo-slot ${hasImage ? 'has-image' : ''} ${isCompleted ? 'disabled' : ''}"
+                    <div class="photo-slot ${hasImage ? 'has-image' : ''} ${isUploading ? 'uploading' : ''} ${isCompleted ? 'disabled' : ''}"
                          data-slot-index="${slotIdx}"
                          data-slot-name="${slotName}"
                          data-record-id="${recordId}"
                          data-field-name="${photoField}">
                         ${hasImage ? `
                             <img src="${photoData.url}" class="photo-slot-preview" alt="시공사진">
-                            ${!isCompleted ? `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '${photoField}', ${slotIdx})">×</button>` : ''}
+                            ${isUploading ? `<div class="photo-slot-uploading-badge">⏳ 업로드중</div>` : (!isCompleted ? `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '${photoField}', ${slotIdx})">×</button>` : '')}
                         ` : `
                             <div class="photo-slot-icon">📷</div>
                             <div class="photo-slot-label">${slotName}</div>
@@ -621,9 +622,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const completedChecks = cardElement.querySelectorAll('.checklist-list .check-item.checked').length;
         const allChecked = totalChecks === completedChecks;
 
-        // 모든 사진 업로드 여부
+        // 모든 사진 업로드 여부 (백그라운드 업로드 진행 중인 슬롯은 완료로 안 침)
         const totalPhotos = cardElement.querySelectorAll('.photo-slot').length;
-        const uploadedPhotos = cardElement.querySelectorAll('.photo-slot.has-image').length;
+        const uploadedPhotos = cardElement.querySelectorAll('.photo-slot.has-image:not(.uploading)').length;
         const allUploaded = totalPhotos === uploadedPhotos;
 
         if (allChecked && allUploaded) {
@@ -646,14 +647,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         input.id = 'tempFileInput';
         input.accept = 'image/*';
         input.className = 'file-input';
-        
-        activeUploadSlot = slotElement;
 
-        input.addEventListener('change', async (e) => {
+        input.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            await uploadImageToServer(file);
+            // 다음 슬롯을 바로 이어서 찍을 수 있도록 대기하지 않고, 업로드는 백그라운드로 병렬 진행
+            uploadImageToServer(file, slotElement);
         });
 
         document.body.appendChild(input);
@@ -692,16 +692,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // n8n 이미지 업로드 서버 호출
-    async function uploadImageToServer(file) {
-        if (!activeUploadSlot) return;
+    // n8n 이미지 업로드 서버 호출 - 대기하지 않고 백그라운드에서 병렬로 진행 (여러 슬롯 연속 촬영 가능)
+    async function uploadImageToServer(file, slotElement) {
+        if (!slotElement) return;
 
-        const recordId = activeUploadSlot.dataset.recordId;
-        const fieldName = activeUploadSlot.dataset.fieldName;
-        const slotIndex = Number(activeUploadSlot.dataset.slotIndex);
-        const slotName = activeUploadSlot.dataset.slotName;
+        const recordId = slotElement.dataset.recordId;
+        const fieldName = slotElement.dataset.fieldName;
+        const slotIndex = Number(slotElement.dataset.slotIndex);
+        const slotName = slotElement.dataset.slotName;
 
-        showLoading("사진 압축 및 업로드 중...");
+        // 1. 서버 응답을 기다리지 않고, 미리보기를 즉시 "업로드중" 상태로 반영
+        const task = projectData.tasks.find(t => t.id === recordId);
+        if (task) {
+            if (!task.fields[fieldName]) {
+                task.fields[fieldName] = [];
+            }
+            task.fields[fieldName][slotIndex] = {
+                url: URL.createObjectURL(file),
+                isLocal: true,
+                isUploading: true
+            };
+        }
+        pendingUploadCount++;
+        renderTasks();
 
         try {
             const resizedFile = await resizeImageFile(file);
@@ -724,28 +737,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const errText = await response.text();
                 throw new Error(errText || "업로드 실패");
             }
-            
-            // 로컬 메모리 상태에 이미지 미리보기를 즉시 적용하여 렌더링 (에어테이블 백그라운드 지연 우회)
-            const task = projectData.tasks.find(t => t.id === recordId);
-            if (task) {
-                if (!task.fields[fieldName]) {
-                    task.fields[fieldName] = [];
-                }
-                task.fields[fieldName][slotIndex] = {
-                    url: URL.createObjectURL(file),
-                    isLocal: true
-                };
-            }
 
-            showToast(`${slotName} 촬영 완료!`);
-            renderTasks();
+            // 2. 업로드 완료 - "업로드중" 표시만 해제 (미리보기는 그대로 유지)
+            if (task && task.fields[fieldName][slotIndex]) {
+                task.fields[fieldName][slotIndex].isUploading = false;
+            }
+            showToast(`${slotName} 업로드 완료!`);
 
         } catch (error) {
             console.error(error);
-            showToast(`사진 전송 실패: ${error.message}`, "danger");
+            showToast(`${slotName} 업로드 실패: ${error.message}`, "danger");
+            // 실패 시 슬롯을 다시 비워서 재촬영할 수 있게 함
+            if (task && task.fields[fieldName]) {
+                delete task.fields[fieldName][slotIndex];
+            }
         } finally {
-            hideLoading();
-            activeUploadSlot = null;
+            pendingUploadCount--;
+            renderTasks();
         }
     }
 

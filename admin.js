@@ -1596,21 +1596,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const journalId = d.journalId;
 
-        for (const file of d.scenePending) {
-            await uploadSingleJournalPhoto(journalId, file, '현장사진');
-            d.sceneSaved.push({ url: URL.createObjectURL(file), filename: file.name });
+        // 대기 중인 사진들을 카테고리 구분 없이 한꺼번에 병렬 업로드 (순차 업로드 대비 훨씬 빠름)
+        // 실패한 파일은 pending에 그대로 남겨둬서 다음 저장 시도 때 다시 올릴 수 있게 함
+        async function uploadPendingList(pendingList, fieldName, savedList) {
+            const remaining = [];
+            const results = await Promise.allSettled(
+                pendingList.map(file => uploadSingleJournalPhoto(journalId, file, fieldName))
+            );
+            results.forEach((r, i) => {
+                const file = pendingList[i];
+                if (r.status === 'fulfilled') {
+                    savedList.push({ url: URL.createObjectURL(file), filename: file.name });
+                } else {
+                    console.error(r.reason);
+                    remaining.push(file);
+                }
+            });
+            return remaining;
         }
-        d.scenePending = [];
-        for (const file of d.cleanupPending) {
-            await uploadSingleJournalPhoto(journalId, file, '정리정돈사진');
-            d.cleanupSaved.push({ url: URL.createObjectURL(file), filename: file.name });
+
+        const [sceneRemaining, cleanupRemaining, filmRemaining] = await Promise.all([
+            uploadPendingList(d.scenePending, '현장사진', d.sceneSaved),
+            uploadPendingList(d.cleanupPending, '정리정돈사진', d.cleanupSaved),
+            uploadPendingList(d.filmPending, '필름사진', d.filmSaved)
+        ]);
+        d.scenePending = sceneRemaining;
+        d.cleanupPending = cleanupRemaining;
+        d.filmPending = filmRemaining;
+
+        const totalFailed = sceneRemaining.length + cleanupRemaining.length + filmRemaining.length;
+        if (totalFailed > 0) {
+            throw new Error(`사진 ${totalFailed}장 업로드 실패 (다시 저장을 눌러 재시도해 주세요)`);
         }
-        d.cleanupPending = [];
-        for (const file of d.filmPending) {
-            await uploadSingleJournalPhoto(journalId, file, '필름사진');
-            d.filmSaved.push({ url: URL.createObjectURL(file), filename: file.name });
-        }
-        d.filmPending = [];
 
         return journalId;
     }
