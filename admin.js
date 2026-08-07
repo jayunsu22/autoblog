@@ -812,8 +812,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // 태스크들을 우선순위(또는 로컬 정렬 인덱스) 기준 정렬
         tasks.sort((a, b) => {
-            const pA = a.fields.우선순위 !== undefined ? a.fields.우선순위 : (savedOrder.indexOf(a.id) !== -1 ? savedOrder.indexOf(a.id) : 999);
-            const pB = b.fields.우선순위 !== undefined ? b.fields.우선순위 : (savedOrder.indexOf(b.id) !== -1 ? savedOrder.indexOf(b.id) : 999);
+            const pA = a.fields.작업우선순위 !== undefined ? a.fields.작업우선순위 : (savedOrder.indexOf(a.id) !== -1 ? savedOrder.indexOf(a.id) : 999);
+            const pB = b.fields.작업우선순위 !== undefined ? b.fields.작업우선순위 : (savedOrder.indexOf(b.id) !== -1 ? savedOrder.indexOf(b.id) : 999);
             return pA - pB;
         });
 
@@ -1021,7 +1021,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 3. 로컬 데이터에도 바로 반영해서, 같은 품목의 두 카드가 화면에서 즉시 붙어 보이게 함
         reorderTasks.forEach(({ id, priority }) => {
             const task = currentDetailData.tasks.find(t => t.id === id);
-            if (task) task.fields.우선순위 = priority;
+            if (task) task.fields.작업우선순위 = priority;
         });
 
         showLoading("우선순위 순서 저장 중...");
@@ -1038,7 +1038,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast("작업 우선순위 순서가 정상 저장되었습니다.");
         } catch (error) {
             console.warn(error);
-            showToast("순서 저장 성공 (에어테이블 '우선순위' 숫자 필드를 개설하시면 서버에 완벽 저장됩니다!)", "warning");
+            showToast("이 폰에는 순서가 반영됐지만, 서버 저장에 실패해서 다른 기기에는 안 보일 수 있습니다.", "danger");
         } finally {
             hideLoading();
             renderBoardAssignments();

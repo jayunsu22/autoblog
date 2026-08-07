@@ -362,8 +362,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const savedOrder = JSON.parse(localStorage.getItem(sortOrderKey) || "[]");
         
         filteredTasks.sort((a, b) => {
-            const pA = a.fields.우선순위 !== undefined ? a.fields.우선순위 : (savedOrder.indexOf(a.id) !== -1 ? savedOrder.indexOf(a.id) : 999);
-            const pB = b.fields.우선순위 !== undefined ? b.fields.우선순위 : (savedOrder.indexOf(b.id) !== -1 ? savedOrder.indexOf(b.id) : 999);
+            const pA = a.fields.작업우선순위 !== undefined ? a.fields.작업우선순위 : (savedOrder.indexOf(a.id) !== -1 ? savedOrder.indexOf(a.id) : 999);
+            const pB = b.fields.작업우선순위 !== undefined ? b.fields.작업우선순위 : (savedOrder.indexOf(b.id) !== -1 ? savedOrder.indexOf(b.id) : 999);
             return pA - pB;
         });
 
