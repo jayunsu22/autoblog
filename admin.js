@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.goHome = function() {
         activeProjectCode = "";
         currentDetailData = null;
+        localStorage.removeItem('lastActiveProjectCode');
         showSection('projectListSection');
         loadProjectList();
     };
@@ -183,8 +184,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 4. 초기화 실행: 현장 리스트 로딩
-    loadProjectList();
+    // 4. 초기화 실행: 현장 리스트 로딩 (마지막으로 보던 현장이 있으면 그 화면으로 바로 복귀)
+    loadProjectList().then(() => {
+        const lastProjectCode = localStorage.getItem('lastActiveProjectCode');
+        if (lastProjectCode) {
+            showProjectDetail(lastProjectCode);
+        }
+    });
 
 
     // 5. 현장 목록 및 자주쓰는공지 불러오기
@@ -444,9 +450,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             renderDetailSection();
             showSection('projectDetailSection');
+            // 마지막으로 보던 현장을 기억해뒀다가, 앱을 다시 열면 이 현장 화면으로 바로 복귀
+            localStorage.setItem('lastActiveProjectCode', recordId);
         } catch (error) {
             console.error(error);
             showToast("현장 데이터를 불러오지 못했습니다.", "danger");
+            localStorage.removeItem('lastActiveProjectCode');
         } finally {
             hideLoading();
         }
