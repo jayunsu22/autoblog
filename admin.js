@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
     let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명}]
     let galleryActiveZone = '전체'; // 사진 갤러리에서 현재 선택된 구역 탭
+    let galleryFilteredPhotos = []; // 현재 탭 필터링된 사진 목록 (라이트박스 이전/다음 탐색 기준)
+    let galleryLightboxIndex = -1; // 라이트박스에서 현재 보고 있는 사진의 인덱스
+    let galleryTouchStartX = null; // 스와이프 제스처 시작 X좌표
+    let galleryWasSwipe = false; // 방금 제스처가 스와이프였는지 (탭-닫기와 구분용)
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -187,6 +191,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     });
+
+    // 3.5. 사진 갤러리 라이트박스 스와이프/키보드 탐색 설정 (한 번만 등록)
+    (function setupGalleryLightboxGestures() {
+        const el = document.getElementById('galleryLightbox');
+        if (!el) return;
+        el.addEventListener('touchstart', (e) => {
+            galleryTouchStartX = e.touches[0].clientX;
+            galleryWasSwipe = false;
+        }, { passive: true });
+        el.addEventListener('touchend', (e) => {
+            if (galleryTouchStartX === null) return;
+            const deltaX = e.changedTouches[0].clientX - galleryTouchStartX;
+            galleryTouchStartX = null;
+            if (Math.abs(deltaX) > 40) {
+                galleryWasSwipe = true;
+                if (deltaX < 0) galleryLightboxNext(); else galleryLightboxPrev();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (el.style.display !== 'flex') return;
+            if (e.key === 'ArrowRight') galleryLightboxNext();
+            else if (e.key === 'ArrowLeft') galleryLightboxPrev();
+            else if (e.key === 'Escape') closeGalleryLightbox();
+        });
+    })();
 
     // 4. 초기화 실행: 현장 리스트 로딩 (마지막으로 보던 현장이 있으면 그 화면으로 바로 복귀)
     loadProjectList().then(() => {
@@ -517,26 +546,49 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? galleryAllPhotos
             : galleryAllPhotos.filter(p => p.구역 === galleryActiveZone);
 
+        galleryFilteredPhotos = photos; // 라이트박스 이전/다음 탐색은 지금 보이는(필터링된) 목록 기준
+
         if (photos.length === 0) {
             grid.innerHTML = `<div class="empty-state">시공 완료된 사진이 아직 없습니다.</div>`;
             return;
         }
 
         // 사진마다 어느 구역/품목인지 캡션으로 함께 표시 ("전체" 탭에서도 구분 가능하게)
-        grid.innerHTML = photos.map(p => `
-            <div class="gallery-photo-tile" onclick="openGalleryLightbox('${p.url}')">
+        grid.innerHTML = photos.map((p, idx) => `
+            <div class="gallery-photo-tile" onclick="openGalleryLightbox(${idx})">
                 <img src="${p.url}" alt="${p.품목명}" loading="lazy">
                 <div class="gallery-photo-caption">${p.구역} · ${p.품목명}</div>
             </div>
         `).join('');
     }
 
-    window.openGalleryLightbox = function(url) {
-        document.getElementById('galleryLightboxImg').src = url;
+    window.openGalleryLightbox = function(index) {
+        galleryLightboxIndex = index;
+        showGalleryLightboxPhoto();
         document.getElementById('galleryLightbox').style.display = 'flex';
     };
 
+    function showGalleryLightboxPhoto() {
+        const photo = galleryFilteredPhotos[galleryLightboxIndex];
+        if (!photo) return;
+        document.getElementById('galleryLightboxImg').src = photo.url;
+    }
+
+    window.galleryLightboxNext = function() {
+        if (galleryFilteredPhotos.length === 0) return;
+        galleryLightboxIndex = (galleryLightboxIndex + 1) % galleryFilteredPhotos.length;
+        showGalleryLightboxPhoto();
+    };
+
+    window.galleryLightboxPrev = function() {
+        if (galleryFilteredPhotos.length === 0) return;
+        galleryLightboxIndex = (galleryLightboxIndex - 1 + galleryFilteredPhotos.length) % galleryFilteredPhotos.length;
+        showGalleryLightboxPhoto();
+    };
+
     window.closeGalleryLightbox = function() {
+        // 스와이프 직후에 발생하는 클릭 이벤트로 바로 닫히지 않게 방지
+        if (galleryWasSwipe) { galleryWasSwipe = false; return; }
         document.getElementById('galleryLightbox').style.display = 'none';
     };
 
