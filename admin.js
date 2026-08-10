@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
+    const GALLERY_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/gallery.html"; // 외부 공유용 사진 갤러리(읽기 전용) 배포 주소
     const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타']; // 구역은 이 9개로 고정
 
 
@@ -34,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let galleryLightboxIndex = -1; // 라이트박스에서 현재 보고 있는 사진의 인덱스
     let galleryTouchStartX = null; // 스와이프 제스처 시작 X좌표
     let galleryWasSwipe = false; // 방금 제스처가 스와이프였는지 (탭-닫기와 구분용)
+    let galleryActiveRecordId = null; // 현재 갤러리 모달에 열려 있는 현장의 레코드ID (공유 링크 생성용)
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -472,6 +474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 현장 사진 갤러리: 시공 완료된 사진만 모아서 구역별로 훑어볼 수 있게 보여줌 (예전 현장 기억 안 날 때 용도)
     window.openProjectPhotoGallery = async function(recordId, projectName) {
+        galleryActiveRecordId = recordId;
         document.getElementById('galleryModalTitle').textContent = `📷 ${projectName || '현장'} 사진`;
         document.getElementById('photoGalleryModal').style.display = 'flex';
         document.getElementById('galleryZoneTabs').innerHTML = '';
@@ -520,6 +523,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.closePhotoGalleryModal = function() {
         document.getElementById('photoGalleryModal').style.display = 'none';
         galleryAllPhotos = [];
+        galleryActiveRecordId = null;
+    };
+
+    // 편집 기능 없이 사진만 보이는 외부 공유용 갤러리 링크 복사 (인테리어 업자 등에게 전달용)
+    window.copyGalleryShareLink = function() {
+        if (!galleryActiveRecordId) return;
+        copyLink(`${GALLERY_APP_BASE_URL}?code=${galleryActiveRecordId}`);
     };
 
     // 사진에 찍힌 구역들만, ZONE_ORDER 순서대로 탭으로 노출 ("전체" 탭이 항상 맨 앞)

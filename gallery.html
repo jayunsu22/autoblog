@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>시공사진 갤러리</title>
+<style>
+    :root {
+        --primary-blue: #1d4ed8;
+        --primary-light: #eff6ff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --accent-gray: #f1f5f9;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+        background: #f8fafc;
+        color: var(--text-main);
+        padding: 20px 16px 60px;
+    }
+    header {
+        margin-bottom: 16px;
+    }
+    header h1 {
+        font-size: 19px;
+        font-weight: 800;
+        margin: 0 0 4px;
+    }
+    header .sub-text {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+    .zone-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 6px;
+        margin-bottom: 16px;
+        padding-bottom: 4px;
+    }
+    .zone-tab {
+        flex-shrink: 0;
+        padding: 8px 14px;
+        font-size: 12.5px;
+        font-weight: 800;
+        border-radius: 20px;
+        border: 1.5px solid var(--border-color);
+        background: #fff;
+        color: var(--text-muted);
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .zone-tab.active {
+        background: var(--primary-blue);
+        border-color: var(--primary-blue);
+        color: white;
+    }
+    .photo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 8px;
+    }
+    .photo-tile {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: zoom-in;
+        background: var(--accent-gray);
+    }
+    .photo-tile img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .photo-caption {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        background: linear-gradient(transparent, rgba(15, 23, 42, 0.78));
+        color: white;
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 14px 6px 5px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .lightbox-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        cursor: zoom-out;
+    }
+    .lightbox-overlay img {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 8px;
+        object-fit: contain;
+    }
+    .nav-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        border: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1;
+    }
+    .nav-btn:hover { background: rgba(255, 255, 255, 0.3); }
+    .nav-prev { left: 12px; }
+    .nav-next { right: 12px; }
+    @media (max-width: 600px) {
+        .nav-btn { width: 38px; height: 38px; font-size: 22px; }
+    }
+</style>
+</head>
+<body>
+    <header>
+        <h1 id="pageTitle">📷 시공사진</h1>
+        <div class="sub-text" id="pageSubText">불러오는 중...</div>
+    </header>
+
+    <div class="zone-tabs" id="zoneTabs"></div>
+    <div class="photo-grid" id="photoGrid">
+        <div class="empty-state">사진을 불러오는 중...</div>
+    </div>
+
+    <div id="lightbox" class="lightbox-overlay">
+        <button type="button" class="nav-btn nav-prev" id="lightboxPrevBtn">‹</button>
+        <img id="lightboxImg" src="" alt="사진 확대보기">
+        <button type="button" class="nav-btn nav-next" id="lightboxNextBtn">›</button>
+    </div>
+
+<script>
+(function () {
+    const n8nBase = "https://primary-production-a6fa.up.railway.app";
+    const API_DETAIL_URL = `${n8nBase}/webhook/film-quality-get`;
+    const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타'];
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+
+    let allPhotos = [];
+    let filteredPhotos = [];
+    let activeZone = '전체';
+    let lightboxIndex = -1;
+    let touchStartX = null;
+    let wasSwipe = false;
+
+    const pageTitleEl = document.getElementById('pageTitle');
+    const pageSubTextEl = document.getElementById('pageSubText');
+    const zoneTabsEl = document.getElementById('zoneTabs');
+    const photoGridEl = document.getElementById('photoGrid');
+    const lightboxEl = document.getElementById('lightbox');
+    const lightboxImgEl = document.getElementById('lightboxImg');
+
+    async function load() {
+        if (!code) {
+            pageSubTextEl.textContent = "";
+            photoGridEl.innerHTML = `<div class="empty-state">잘못된 링크입니다. 링크를 다시 확인해 주세요.</div>`;
+            return;
+        }
+        try {
+            const res = await fetch(`${API_DETAIL_URL}?code=${encodeURIComponent(code)}`);
+            if (!res.ok) throw new Error("조회 실패");
+            const result = await res.json();
+            const data = Array.isArray(result) ? result[0] : result;
+            const projectName = (data.project && data.project.현장명) || "현장";
+
+            document.title = `${projectName} 시공사진`;
+            pageTitleEl.textContent = `📷 ${projectName} 시공사진`;
+
+            // 품목명 -> 구역 매핑
+            const zoneByItem = {};
+            (data.masterItems || []).forEach(item => {
+                zoneByItem[item.품목명] = item.구역 || '기타';
+            });
+
+            const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
+
+            const photos = [];
+            (data.tasks || []).forEach(task => {
+                const fields = task.fields || {};
+                if (!fields.시공완료) return; // 시공 완료된 작업의 사진만 (밑작업 사진 제외)
+                const zone = zoneByItem[fields.시공품목] || '기타';
+                (fields.시공후사진 || []).forEach(photo => {
+                    if (isValidPhoto(photo)) {
+                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '' });
+                    }
+                });
+            });
+
+            allPhotos = photos;
+            pageSubTextEl.textContent = `총 ${photos.length}장`;
+            renderZoneTabs();
+            renderPhotoGrid();
+        } catch (e) {
+            console.error(e);
+            pageSubTextEl.textContent = "";
+            photoGridEl.innerHTML = `<div class="empty-state">사진을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>`;
+        }
+    }
+
+    function renderZoneTabs() {
+        const zonesPresent = ZONE_ORDER.filter(zone => allPhotos.some(p => p.구역 === zone));
+        const tabs = ['전체', ...zonesPresent];
+
+        zoneTabsEl.innerHTML = tabs.map(zone => {
+            const count = zone === '전체' ? allPhotos.length : allPhotos.filter(p => p.구역 === zone).length;
+            return `<button type="button" class="zone-tab ${zone === activeZone ? 'active' : ''}" data-zone="${zone}">${zone} (${count})</button>`;
+        }).join('');
+
+        zoneTabsEl.querySelectorAll('.zone-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                activeZone = btn.dataset.zone;
+                renderZoneTabs();
+                renderPhotoGrid();
+            });
+        });
+    }
+
+    function renderPhotoGrid() {
+        const photos = activeZone === '전체' ? allPhotos : allPhotos.filter(p => p.구역 === activeZone);
+        filteredPhotos = photos;
+
+        if (photos.length === 0) {
+            photoGridEl.innerHTML = `<div class="empty-state">아직 등록된 시공사진이 없습니다.</div>`;
+            return;
+        }
+
+        photoGridEl.innerHTML = photos.map((p, idx) => `
+            <div class="photo-tile" data-idx="${idx}">
+                <img src="${p.url}" alt="${p.품목명}" loading="lazy">
+                <div class="photo-caption">${p.구역} · ${p.품목명}</div>
+            </div>
+        `).join('');
+
+        photoGridEl.querySelectorAll('.photo-tile').forEach(tile => {
+            tile.addEventListener('click', () => openLightbox(Number(tile.dataset.idx)));
+        });
+    }
+
+    function openLightbox(idx) {
+        lightboxIndex = idx;
+        showLightboxPhoto();
+        lightboxEl.style.display = 'flex';
+    }
+
+    function showLightboxPhoto() {
+        const photo = filteredPhotos[lightboxIndex];
+        if (!photo) return;
+        lightboxImgEl.src = photo.url;
+    }
+
+    function nextPhoto() {
+        if (filteredPhotos.length === 0) return;
+        lightboxIndex = (lightboxIndex + 1) % filteredPhotos.length;
+        showLightboxPhoto();
+    }
+
+    function prevPhoto() {
+        if (filteredPhotos.length === 0) return;
+        lightboxIndex = (lightboxIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
+        showLightboxPhoto();
+    }
+
+    function closeLightbox() {
+        // 스와이프 직후 발생하는 클릭으로 바로 닫히지 않게 방지
+        if (wasSwipe) { wasSwipe = false; return; }
+        lightboxEl.style.display = 'none';
+    }
+
+    lightboxEl.addEventListener('click', closeLightbox);
+    document.getElementById('lightboxPrevBtn').addEventListener('click', (e) => { e.stopPropagation(); prevPhoto(); });
+    document.getElementById('lightboxNextBtn').addEventListener('click', (e) => { e.stopPropagation(); nextPhoto(); });
+
+    lightboxEl.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        wasSwipe = false;
+    }, { passive: true });
+
+    lightboxEl.addEventListener('touchend', (e) => {
+        if (touchStartX === null) return;
+        const deltaX = e.changedTouches[0].clientX - touchStartX;
+        touchStartX = null;
+        if (Math.abs(deltaX) > 40) {
+            wasSwipe = true;
+            if (deltaX < 0) nextPhoto(); else prevPhoto();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (lightboxEl.style.display !== 'flex') return;
+        if (e.key === 'ArrowRight') nextPhoto();
+        else if (e.key === 'ArrowLeft') prevPhoto();
+        else if (e.key === 'Escape') closeLightbox();
+    });
+
+    load();
+})();
+</script>
+</body>
+</html>
