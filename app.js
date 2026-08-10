@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentWorker = "";
     let pendingUploadCount = 0; // 백그라운드에서 병렬로 진행 중인 사진 업로드 개수 (제출 버튼 가드용)
     const expandedCardIds = new Set(); // 아코디언이 열려 있는 카드의 ID를 추적하기 위한 Set
-    const hiddenPhotoSlots = new Map(); // 카드별로 "생략" 처리한 지정 사진 슬롯 인덱스 Set (recordId-stage -> Set<number>)
     
     // UI Elements
     const loadingOverlay = document.getElementById('loadingOverlay');
@@ -478,10 +477,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             checklistHtml += `</div></div>`;
         }
 
-        // 사진 슬롯 파싱
-        // - 밑작업: 지정 라벨 없이 "시공전 원본사진"을 최소 1장, 최대 5장까지 반복 촬영/추가 가능
-        // - 시공: 지정 라벨 슬롯(문앞사진 등)을 기본 제공하되, 필요 없는 슬롯은 "생략" 가능,
-        //         지정 슬롯을 다 채운 뒤에도 라벨 없는 추가 사진을 최대 5장까지 더 찍을 수 있음
+        // 사진 슬롯 파싱 - 밑작업/시공 모두 "최소 1장" 원칙으로 단순화 (개별 슬롯 필수/생략 없음)
+        // - 밑작업: 지정 라벨 없이 "시공전 원본사진"을 최소 1장, 최대 5장까지 반복 촬영/추가
+        // - 시공: 문앞사진 등 지정 라벨 슬롯을 촬영 가이드(샘플사진 포함)로 보여주되 전부 선택사항이고,
+        //         그 외에 라벨 없는 추가 사진도 최대 5장까지 더 찍을 수 있음. 전체 통틀어 최소 1장만 있으면 됨
         let photoHtml = "";
         const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
         const existingPhotos = fields[photoField] || [];
@@ -489,14 +488,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const MAX_REPEAT_PHOTOS = 5; // 밑작업 반복 촬영 최대 장수
         const MAX_EXTRA_PHOTOS = 5;  // 시공 지정 슬롯 외 추가 촬영 최대 장수
 
-        const renderPhotoTile = (slotIdx, slotName, { required = true, allowHide = false } = {}) => {
+        const renderPhotoTile = (slotIdx, slotName) => {
             const photoData = existingPhotos[slotIdx];
             const hasImage = isValidPhoto(photoData);
             const isUploading = !!(photoData && photoData.isUploading);
             const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, '사진슬롯', fields.시공품목, slotName);
 
             return `
-                <div class="photo-slot ${required ? 'required' : ''} ${hasImage ? 'has-image' : ''} ${isUploading ? 'uploading' : ''}"
+                <div class="photo-slot ${hasImage ? 'has-image' : ''} ${isUploading ? 'uploading' : ''}"
                      data-slot-index="${slotIdx}"
                      data-slot-name="${slotName}"
                      data-record-id="${recordId}"
@@ -508,7 +507,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="photo-slot-icon">📷</div>
                         <div class="photo-slot-label">${slotName}</div>
                         ${sampleUrl ? `<img src="${sampleUrl}" class="photo-slot-sample-thumb" alt="이렇게 찍어주세요" title="이렇게 찍어주세요" onclick="event.stopPropagation(); openImageLightbox('${sampleUrl}')">` : ''}
-                        ${allowHide ? `<button class="photo-slot-hide-btn" onclick="event.stopPropagation(); hidePhotoSlot('${recordId}', '${stage}', ${slotIdx})">이 사진 생략</button>` : ''}
                     `}
                 </div>
             `;
@@ -526,32 +524,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
 
         let tilesHtml = "";
-        let headerCountText = "";
 
         if (stage === '밑작업') {
             for (let i = 0; i < existingPhotos.length; i++) {
                 const p = existingPhotos[i];
                 if (!isValidPhoto(p) && !(p && p.isUploading)) continue;
-                tilesHtml += renderPhotoTile(i, "시공전 원본사진", { required: true });
+                tilesHtml += renderPhotoTile(i, "시공전 원본사진");
             }
             if (validPhotosCount < MAX_REPEAT_PHOTOS) {
                 tilesHtml += renderAddTile(existingPhotos.length, "시공전 원본사진");
             }
-            headerCountText = `${validPhotosCount}장 촬영됨 · 최소 1장 필요`;
         } else {
             const namedSlots = (optionalSlotsText || "시공 완료사진").split(',').map(s => s.trim()).filter(s => s !== "");
-            const hiddenSet = hiddenPhotoSlots.get(cardKey) || new Set();
-            let requiredTotal = 0;
-            let requiredFilled = 0;
 
             namedSlots.forEach((slotName, idx) => {
-                const photoData = existingPhotos[idx];
-                const hasImg = isValidPhoto(photoData);
-                const uploading = !!(photoData && photoData.isUploading);
-                if (!hasImg && !uploading && hiddenSet.has(idx)) return; // 생략 처리된 슬롯은 렌더링하지 않음
-                requiredTotal++;
-                if (hasImg) requiredFilled++;
-                tilesHtml += renderPhotoTile(idx, slotName, { required: true, allowHide: !hasImg && !uploading });
+                tilesHtml += renderPhotoTile(idx, slotName);
             });
 
             const extraStart = namedSlots.length;
@@ -560,22 +547,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const p = existingPhotos[i];
                 if (!isValidPhoto(p) && !(p && p.isUploading)) continue;
                 extraCount++;
-                tilesHtml += renderPhotoTile(i, "추가사진", { required: false });
+                tilesHtml += renderPhotoTile(i, "추가사진");
             }
             if (extraCount < MAX_EXTRA_PHOTOS) {
                 tilesHtml += renderAddTile(Math.max(existingPhotos.length, namedSlots.length), "추가사진");
             }
-
-            if (hiddenSet.size > 0) {
-                tilesHtml += `
-                    <div class="photo-slot-unhide-tile" onclick="unhidePhotoSlots('${recordId}', '${stage}')">
-                        생략한 항목 ${hiddenSet.size}개 다시 보기
-                    </div>
-                `;
-            }
-
-            headerCountText = `${requiredFilled}/${requiredTotal}`;
         }
+
+        const headerCountText = `${validPhotosCount}장 촬영됨 · 최소 1장 필요`;
 
         photoHtml = `
             <div class="photo-slots-box">
@@ -687,18 +666,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const completedChecks = cardElement.querySelectorAll('.checklist-list .check-item.checked').length;
         const allChecked = totalChecks === completedChecks;
 
-        // 필수 사진 업로드 여부 (추가 촬영/+타일은 필수 집계에서 제외, 업로드 진행 중인 슬롯은 완료로 안 침)
+        // 사진은 최소 1장만 있으면 됨 (밑작업/시공 공통, 업로드 진행 중인 슬롯은 완료로 안 침)
         const anyUploading = cardElement.querySelectorAll('.photo-slot.uploading').length > 0;
-        const stage = cardElement.dataset.stage;
-        let allUploaded;
-        if (stage === '밑작업') {
-            const filledCount = cardElement.querySelectorAll('.photo-slot.required.has-image:not(.uploading)').length;
-            allUploaded = filledCount >= 1 && !anyUploading;
-        } else {
-            const requiredEmpty = cardElement.querySelectorAll('.photo-slot.required:not(.has-image):not(.uploading)').length;
-            const anyFilled = cardElement.querySelectorAll('.photo-slot.has-image:not(.uploading)').length > 0;
-            allUploaded = requiredEmpty === 0 && anyFilled && !anyUploading;
-        }
+        const filledCount = cardElement.querySelectorAll('.photo-slot.has-image:not(.uploading)').length;
+        const allUploaded = filledCount >= 1 && !anyUploading;
 
         if (allChecked && allUploaded) {
             submitBtn.classList.add('active');
@@ -829,20 +800,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderTasks();
         }
     }
-
-    // 지정 사진 슬롯을 이번 작업에서는 생략 처리 (해당 현장/작업에 필요 없는 각도일 때)
-    window.hidePhotoSlot = function(recordId, stage, slotIndex) {
-        const cardKey = `${recordId}-${stage}`;
-        if (!hiddenPhotoSlots.has(cardKey)) hiddenPhotoSlots.set(cardKey, new Set());
-        hiddenPhotoSlots.get(cardKey).add(slotIndex);
-        renderTasks();
-    };
-
-    // 생략 처리했던 슬롯들을 다시 표시
-    window.unhidePhotoSlots = function(recordId, stage) {
-        hiddenPhotoSlots.delete(`${recordId}-${stage}`);
-        renderTasks();
-    };
 
     // 사진 삭제 (Airtable에서 해당 인덱스의 이미지 링크 제거 요청)
     window.deletePhoto = async function(recordId, fieldName, slotIndex) {
