@@ -748,7 +748,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         workers.forEach(worker => {
             const card = document.createElement('div');
             card.className = `worker-card ${worker === activeWorkerName ? 'active' : ''}`;
-            card.textContent = worker;
+            card.innerHTML = `
+                <span class="worker-card-name">${worker}</span>
+                <button type="button" class="worker-card-edit-btn" title="이름 수정">✎</button>
+            `;
+
+            const editBtn = card.querySelector('.worker-card-edit-btn');
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                renameWorkerPrompt(worker);
+            });
 
             // HTML5 드롭존(Drop Zone) 이벤트 연결
             card.addEventListener('dragover', (e) => {
@@ -2117,6 +2126,69 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error(error);
             showToast("기사님 추가 중 문제가 발생했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // 기사님 이름 수정 (오타 수정 등). 현장 기사 명단뿐 아니라, 이미 이 기사님으로 배정된
+    // 작업 레코드들의 밑작업기사/시공기사 필드도 함께 새 이름으로 갱신해서 배정이 끊기지 않게 함
+    window.renameWorkerPrompt = async function(oldName) {
+        if (!activeProjectCode) return;
+        const name = prompt(`"${oldName}" 기사님의 새 이름을 입력해 주세요:`, oldName);
+        if (!name || !name.trim()) return;
+        const newName = name.trim();
+        if (newName === oldName) return;
+
+        const existingWorkers = currentDetailData.workers || [];
+        if (existingWorkers.includes(newName)) {
+            showToast("이미 등록된 기사님 이름입니다.", "warning");
+            return;
+        }
+        const updatedWorkers = existingWorkers.map(w => w === oldName ? newName : w);
+
+        // 이 기사님으로 이미 배정된 작업들의 담당자 필드도 함께 갱신 대상으로 수집
+        const affectedTasks = (currentDetailData.tasks || [])
+            .filter(t => t.fields.밑작업기사 === oldName || t.fields.시공기사 === oldName)
+            .map(t => {
+                const upd = { id: t.id };
+                if (t.fields.밑작업기사 === oldName) upd.밑작업기사 = newName;
+                if (t.fields.시공기사 === oldName) upd.시공기사 = newName;
+                return upd;
+            });
+
+        showLoading(`${oldName} → ${newName} 이름 수정 중...`);
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_workers',
+                    projectCode: activeProjectCode,
+                    workersText: updatedWorkers.join(',')
+                })
+            });
+            if (!response.ok) throw new Error("이름 수정 오류");
+
+            if (affectedTasks.length > 0) {
+                const response2 = await fetchWithTimeout(API_SAVE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'rename_worker',
+                        affectedTasks: affectedTasks
+                    })
+                });
+                if (!response2.ok) throw new Error("배정된 작업 갱신 오류");
+            }
+
+            if (activeWorkerName === oldName) activeWorkerName = newName;
+
+            showToast(`"${oldName}" → "${newName}"(으)로 이름이 수정되었습니다!`);
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("이름 수정 중 문제가 발생했습니다.", "danger");
         } finally {
             hideLoading();
         }

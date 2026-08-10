@@ -616,6 +616,7 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.01);
     transition: all 0.2s ease;
     cursor: pointer;
+    position: relative;
 }
 
 .worker-card.dragover {
@@ -628,6 +629,33 @@ body {
     background: var(--primary-blue);
     color: white;
     border-color: var(--primary-blue);
+}
+
+.worker-card-name {
+    padding-right: 4px;
+}
+
+.worker-card-edit-btn {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: none;
+    border: none;
+    font-size: 13px;
+    line-height: 1;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.worker-card.active .worker-card-edit-btn {
+    color: white;
+    opacity: 0.85;
+}
+
+.worker-card-edit-btn:hover {
+    opacity: 1;
 }
 
 /* 미배정 품목 카드 풀 (3열): 같은 품목(밑작업+시공)을 하나의 그룹으로 시각적 구분 */
