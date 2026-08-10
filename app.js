@@ -496,14 +496,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const sampleUrl = getSamplePhotoUrl(projectData.samplePhotos, '사진슬롯', fields.시공품목, slotName);
 
             return `
-                <div class="photo-slot ${required ? 'required' : ''} ${hasImage ? 'has-image' : ''} ${isUploading ? 'uploading' : ''} ${isCompleted ? 'disabled' : ''}"
+                <div class="photo-slot ${required ? 'required' : ''} ${hasImage ? 'has-image' : ''} ${isUploading ? 'uploading' : ''}"
                      data-slot-index="${slotIdx}"
                      data-slot-name="${slotName}"
                      data-record-id="${recordId}"
                      data-field-name="${photoField}">
                     ${hasImage ? `
                         <img src="${photoData.url}" class="photo-slot-preview" alt="시공사진">
-                        ${isUploading ? `<div class="photo-slot-uploading-badge">⏳ 업로드중</div>` : (!isCompleted ? `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '${photoField}', ${slotIdx})">×</button>` : '')}
+                        ${isUploading ? `<div class="photo-slot-uploading-badge">⏳ 업로드중</div>` : `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '${photoField}', ${slotIdx})">×</button>`}
                     ` : `
                         <div class="photo-slot-icon">📷</div>
                         <div class="photo-slot-label">${slotName}</div>
@@ -534,7 +534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!isValidPhoto(p) && !(p && p.isUploading)) continue;
                 tilesHtml += renderPhotoTile(i, "시공전 원본사진", { required: true });
             }
-            if (validPhotosCount < MAX_REPEAT_PHOTOS && !isCompleted) {
+            if (validPhotosCount < MAX_REPEAT_PHOTOS) {
                 tilesHtml += renderAddTile(existingPhotos.length, "시공전 원본사진");
             }
             headerCountText = `${validPhotosCount}장 촬영됨 · 최소 1장 필요`;
@@ -551,7 +551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!hasImg && !uploading && hiddenSet.has(idx)) return; // 생략 처리된 슬롯은 렌더링하지 않음
                 requiredTotal++;
                 if (hasImg) requiredFilled++;
-                tilesHtml += renderPhotoTile(idx, slotName, { required: true, allowHide: !hasImg && !uploading && !isCompleted });
+                tilesHtml += renderPhotoTile(idx, slotName, { required: true, allowHide: !hasImg && !uploading });
             });
 
             const extraStart = namedSlots.length;
@@ -562,11 +562,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 extraCount++;
                 tilesHtml += renderPhotoTile(i, "추가사진", { required: false });
             }
-            if (extraCount < MAX_EXTRA_PHOTOS && !isCompleted) {
+            if (extraCount < MAX_EXTRA_PHOTOS) {
                 tilesHtml += renderAddTile(Math.max(existingPhotos.length, namedSlots.length), "추가사진");
             }
 
-            if (hiddenSet.size > 0 && !isCompleted) {
+            if (hiddenSet.size > 0) {
                 tilesHtml += `
                     <div class="photo-slot-unhide-tile" onclick="unhidePhotoSlots('${recordId}', '${stage}')">
                         생략한 항목 ${hiddenSet.size}개 다시 보기
@@ -580,6 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         photoHtml = `
             <div class="photo-slots-box">
                 <h3>📸 필수 품질 사진 촬영 (${headerCountText})</h3>
+                ${isCompleted ? `<p class="photo-slots-note">✓ 제출은 완료됐지만, 사진은 계속 추가·삭제할 수 있어요.</p>` : ''}
                 <div class="photo-slots-grid">
                     ${tilesHtml}
                 </div>
@@ -636,13 +637,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // 이벤트 리스너 바인딩 (수정 불가능한 완료상태 제외)
+        // 이벤트 리스너 바인딩
+        // 체크리스트/제출버튼은 제출 완료 후 수정 불가하지만, 사진은 제출 완료 후에도
+        // 관리자/기사님이 더 찍거나 지울 수 있어야 해서(추가 확인 요청 대응) 별도로 항상 바인딩함
         if (!isCompleted) {
             // 1. 체크박스 클릭 이벤트
             card.querySelectorAll('.checklist-list .check-item').forEach(item => {
                 item.addEventListener('click', () => {
                     item.classList.toggle('checked');
-                    
+
                     // 로컬 메모리 상태에 체크 상태 즉시 기록하여 리렌더링 시 보존되게 함
                     const checkedTexts = [];
                     card.querySelectorAll('.checklist-list .check-item').forEach(ch => {
@@ -650,26 +653,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const isChk = ch.classList.contains('checked');
                         checkedTexts.push(`${isChk ? '[✓]' : '[ ]'} ${txt}`);
                     });
-                    
+
                     const t = projectData.tasks.find(x => x.id === recordId);
                     if (t) {
                         t.fields.점검결과 = checkedTexts.join('\n');
                     }
-                    
-                    validateCardSubmitButton(card);
-                });
-            });
 
-            // 2. 사진 슬롯 클릭 이벤트 (파일 선택기 연결)
-            card.querySelectorAll('.photo-slot:not(.has-image)').forEach(slot => {
-                slot.addEventListener('click', () => {
-                    triggerImageUpload(slot);
+                    validateCardSubmitButton(card);
                 });
             });
 
             // 최초 1회 버튼 활성화 검사
             validateCardSubmitButton(card);
         }
+
+        // 2. 사진 슬롯 클릭 이벤트 (파일 선택기 연결) - 완료 여부와 무관하게 항상 동작
+        card.querySelectorAll('.photo-slot:not(.has-image)').forEach(slot => {
+            slot.addEventListener('click', () => {
+                triggerImageUpload(slot);
+            });
+        });
     }
 
     // 6. 비즈니스 로직 및 이벤트 액션들

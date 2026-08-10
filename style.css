@@ -367,6 +367,13 @@ body {
     gap: 12px;
 }
 
+.photo-slots-note {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--success);
+    margin: -6px 0 10px;
+}
+
 .photo-slot {
     background: #f8fafc;
     border: 2px dashed #cbd5e1;
