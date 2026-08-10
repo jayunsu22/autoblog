@@ -102,44 +102,53 @@
     .lightbox-overlay {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0, 0, 0, 0.9);
+        background: #000;
         z-index: 1000;
         display: none;
         align-items: center;
         justify-content: center;
-        padding: 24px;
+        padding: 0;
         cursor: zoom-out;
     }
     .lightbox-overlay img {
-        max-width: 100%;
-        max-height: 100%;
-        border-radius: 8px;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
     }
-    .nav-btn {
+    .nav-btn, .lightbox-close-btn {
         position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
         background: rgba(255, 255, 255, 0.15);
         color: white;
         border: none;
-        width: 44px;
-        height: 44px;
         border-radius: 50%;
-        font-size: 26px;
         font-weight: 800;
         line-height: 1;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1;
+        z-index: 2;
     }
-    .nav-btn:hover { background: rgba(255, 255, 255, 0.3); }
+    .nav-btn {
+        top: 50%;
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        font-size: 26px;
+    }
+    .nav-btn:hover, .lightbox-close-btn:hover { background: rgba(255, 255, 255, 0.3); }
     .nav-prev { left: 12px; }
     .nav-next { right: 12px; }
+    .lightbox-close-btn {
+        top: 14px;
+        right: 14px;
+        width: 40px;
+        height: 40px;
+        font-size: 22px;
+    }
     @media (max-width: 600px) {
         .nav-btn { width: 38px; height: 38px; font-size: 22px; }
+        .lightbox-close-btn { width: 36px; height: 36px; font-size: 20px; top: 10px; right: 10px; }
     }
 </style>
 </head>
@@ -155,6 +164,7 @@
     </div>
 
     <div id="lightbox" class="lightbox-overlay">
+        <button type="button" class="lightbox-close-btn" id="lightboxCloseBtn">×</button>
         <button type="button" class="nav-btn nav-prev" id="lightboxPrevBtn">‹</button>
         <img id="lightboxImg" src="" alt="사진 확대보기">
         <button type="button" class="nav-btn nav-next" id="lightboxNextBtn">›</button>
@@ -302,6 +312,7 @@
     lightboxEl.addEventListener('click', closeLightbox);
     document.getElementById('lightboxPrevBtn').addEventListener('click', (e) => { e.stopPropagation(); prevPhoto(); });
     document.getElementById('lightboxNextBtn').addEventListener('click', (e) => { e.stopPropagation(); nextPhoto(); });
+    document.getElementById('lightboxCloseBtn').addEventListener('click', (e) => { e.stopPropagation(); closeLightbox(); });
 
     lightboxEl.addEventListener('touchstart', (e) => {
         touchStartX = e.touches[0].clientX;
