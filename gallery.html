@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>시공사진 갤러리</title>
+<title>사진 갤러리</title>
 <style>
     :root {
         --primary-blue: #1d4ed8;
@@ -145,7 +145,7 @@
 </head>
 <body>
     <header>
-        <h1 id="pageTitle">📷 시공사진</h1>
+        <h1 id="pageTitle">📷 사진 갤러리</h1>
         <div class="sub-text" id="pageSubText">불러오는 중...</div>
     </header>
 
@@ -196,8 +196,8 @@
             const data = Array.isArray(result) ? result[0] : result;
             const projectName = (data.project && data.project.현장명) || "현장";
 
-            document.title = `${projectName} 시공사진`;
-            pageTitleEl.textContent = `📷 ${projectName} 시공사진`;
+            document.title = `${projectName} 사진 갤러리`;
+            pageTitleEl.textContent = `📷 ${projectName} 사진 갤러리`;
 
             // 품목명 -> 구역 매핑
             const zoneByItem = {};

@@ -609,7 +609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         navigator.clipboard.writeText(url).then(() => {
-            showToast("기사님 접속 링크가 클립보드에 복사되었습니다!");
+            showToast("링크복사 완료");
         }).catch(err => {
             console.error(err);
             showToast("복사에 실패했습니다. 수동으로 복사해 주세요.", "danger");
