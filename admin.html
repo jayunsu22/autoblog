@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260807b">
+    <link rel="stylesheet" href="admin_style.css?v=20260807c">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -230,6 +230,27 @@
         </div>
     </div>
 
+    <!-- 모달 2.5: 현장 사진 갤러리 (시공 완료된 사진만 모아보기) -->
+    <div id="photoGalleryModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 900px; max-height: 88vh; max-height: 88dvh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="galleryModalTitle">📷 현장 사진</h2>
+                <button class="close-modal-btn" onclick="closePhotoGalleryModal()">×</button>
+            </div>
+            <div class="gallery-zone-tabs" id="galleryZoneTabs">
+                <!-- 구역 탭이 동적으로 렌더링됨 -->
+            </div>
+            <div class="gallery-photo-grid" id="galleryPhotoGrid">
+                <!-- 사진 썸네일이 동적으로 렌더링됨 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 사진 확대보기 라이트박스 -->
+    <div id="galleryLightbox" class="lightbox-overlay" style="display: none;" onclick="closeGalleryLightbox()">
+        <img id="galleryLightboxImg" src="" alt="사진 확대보기">
+    </div>
+
     <!-- 모달 3: 시공품목 설정 팝업 -->
     <div id="itemConfigModal" class="modal-overlay" style="display: none;">
         <div class="modal-content admin-modal" style="max-width: 780px; max-height: 85vh; max-height: 85dvh; overflow-y: auto;">
@@ -301,6 +322,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260807c"></script>
+    <script src="admin.js?v=20260807e"></script>
 </body>
 </html>

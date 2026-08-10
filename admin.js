@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeWorkerName = null; // 배정 보드에서 현재 선택된(활성화된) 기사님 이름, 새로고침에도 유지됨
     let globalProjectList = []; // 현장 목록 전체 캐시 (보관함 보기 토글 시 재요청 없이 필터링)
     let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
+    let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명}]
+    let galleryActiveZone = '전체'; // 사진 갤러리에서 현재 선택된 구역 탭
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -369,9 +371,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                      <div class="card-workers">👷 기사: ${workersText}</div>
                 </div>
                 <div class="card-footer-btns">
-                    <button class="card-btn secondary" onclick="event.stopPropagation(); copyLink('${WORKER_APP_BASE_URL}?code=${recordId}')">🔗 기사 링크 복사</button>
+                    <button class="card-btn secondary" onclick="event.stopPropagation(); openProjectPhotoGallery('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📷 사진</button>
                     ${archiveBtnHtml}
-                    ${showArchivedProjects ? '' : '<button class="card-btn primary">업무배정 ▶</button>'}
+                    ${showArchivedProjects ? '' : '<button class="card-btn primary">업무 ▶</button>'}
                 </div>
             `;
             projectGrid.appendChild(card);
@@ -437,6 +439,105 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             hideLoading();
         }
+    };
+
+    // 현장 사진 갤러리: 시공 완료된 사진만 모아서 구역별로 훑어볼 수 있게 보여줌 (예전 현장 기억 안 날 때 용도)
+    window.openProjectPhotoGallery = async function(recordId, projectName) {
+        document.getElementById('galleryModalTitle').textContent = `📷 ${projectName || '현장'} 사진`;
+        document.getElementById('photoGalleryModal').style.display = 'flex';
+        document.getElementById('galleryZoneTabs').innerHTML = '';
+        document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오는 중...</div>`;
+
+        showLoading("현장 사진을 불러오는 중...");
+        try {
+            const response = await fetchWithTimeout(`${API_DETAIL_URL}?code=${recordId}`);
+            if (!response.ok) throw new Error("사진 조회 실패");
+            const result = await response.json();
+            const data = Array.isArray(result) ? result[0] : result;
+
+            // 품목명 -> 구역 매핑 (시공품목 마스터 데이터 기준)
+            const zoneByItem = {};
+            (data.masterItems || []).forEach(item => {
+                zoneByItem[item.품목명] = item.구역 || '기타';
+            });
+
+            const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
+
+            const photos = [];
+            (data.tasks || []).forEach(task => {
+                const fields = task.fields || {};
+                if (!fields.시공완료) return; // 시공이 완료된 작업의 사진만 모음 (밑작업 사진은 제외)
+                const zone = zoneByItem[fields.시공품목] || '기타';
+                (fields.시공후사진 || []).forEach(photo => {
+                    if (isValidPhoto(photo)) {
+                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '' });
+                    }
+                });
+            });
+
+            galleryAllPhotos = photos;
+            galleryActiveZone = '전체';
+            renderGalleryZoneTabs();
+            renderGalleryPhotoGrid();
+        } catch (error) {
+            console.error(error);
+            document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오지 못했습니다.</div>`;
+            showToast("현장 사진을 불러오지 못했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
+    window.closePhotoGalleryModal = function() {
+        document.getElementById('photoGalleryModal').style.display = 'none';
+        galleryAllPhotos = [];
+    };
+
+    // 사진에 찍힌 구역들만, ZONE_ORDER 순서대로 탭으로 노출 ("전체" 탭이 항상 맨 앞)
+    function renderGalleryZoneTabs() {
+        const container = document.getElementById('galleryZoneTabs');
+        const zonesPresent = ZONE_ORDER.filter(zone => galleryAllPhotos.some(p => p.구역 === zone));
+        const tabs = ['전체', ...zonesPresent];
+
+        container.innerHTML = tabs.map(zone => {
+            const count = zone === '전체' ? galleryAllPhotos.length : galleryAllPhotos.filter(p => p.구역 === zone).length;
+            return `<button type="button" class="gallery-zone-tab ${zone === galleryActiveZone ? 'active' : ''}" onclick="filterGalleryByZone('${zone}')">${zone} (${count})</button>`;
+        }).join('');
+    }
+
+    window.filterGalleryByZone = function(zone) {
+        galleryActiveZone = zone;
+        renderGalleryZoneTabs();
+        renderGalleryPhotoGrid();
+    };
+
+    function renderGalleryPhotoGrid() {
+        const grid = document.getElementById('galleryPhotoGrid');
+        const photos = galleryActiveZone === '전체'
+            ? galleryAllPhotos
+            : galleryAllPhotos.filter(p => p.구역 === galleryActiveZone);
+
+        if (photos.length === 0) {
+            grid.innerHTML = `<div class="empty-state">시공 완료된 사진이 아직 없습니다.</div>`;
+            return;
+        }
+
+        // 사진마다 어느 구역/품목인지 캡션으로 함께 표시 ("전체" 탭에서도 구분 가능하게)
+        grid.innerHTML = photos.map(p => `
+            <div class="gallery-photo-tile" onclick="openGalleryLightbox('${p.url}')">
+                <img src="${p.url}" alt="${p.품목명}" loading="lazy">
+                <div class="gallery-photo-caption">${p.구역} · ${p.품목명}</div>
+            </div>
+        `).join('');
+    }
+
+    window.openGalleryLightbox = function(url) {
+        document.getElementById('galleryLightboxImg').src = url;
+        document.getElementById('galleryLightbox').style.display = 'flex';
+    };
+
+    window.closeGalleryLightbox = function() {
+        document.getElementById('galleryLightbox').style.display = 'none';
     };
 
     // 링크 복사 클립보드 기능
