@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeZoneTab = null; // 품목 배정 매트릭스에서 현재 선택된 구역 탭
     let zonePendingChanges = new Map(); // 매트릭스에서 저장 버튼을 누르기 전까지 쌓아두는 변경사항: 품목명 -> { active?, 밑작업?, 시공? }
     let activeWorkerName = null; // 배정 보드에서 현재 선택된(활성화된) 기사님 이름, 새로고침에도 유지됨
+    let globalProjectList = []; // 현장 목록 전체 캐시 (보관함 보기 토글 시 재요청 없이 필터링)
+    let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -211,8 +213,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 data = data[0] || {};
             }
 
-            // 프로젝트 카드 그리드 렌더링
-            renderProjectGrid(data.projects);
+            // 프로젝트 카드 그리드 렌더링 (보관함 보기 토글을 위해 전체 목록을 캐시해둠)
+            globalProjectList = data.projects || [];
+            renderProjectGrid();
             
             // 자주 쓰는 공지사항 칩 렌더링
             renderNoticeQuickTags(data.quickNotices);
@@ -316,11 +319,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
 
-    function renderProjectGrid(projects) {
+    function renderProjectGrid() {
         projectGrid.innerHTML = "";
 
+        const getFields = (p) => p.fields ? p.fields : p;
+        const activeList = globalProjectList.filter(p => !getFields(p).보관함);
+        const archivedList = globalProjectList.filter(p => getFields(p).보관함);
+
+        renderArchiveToggleBar(archivedList.length);
+
+        const projects = showArchivedProjects ? archivedList : activeList;
+
         if (!projects || projects.length === 0) {
-            projectGrid.innerHTML = `<div class="empty-state">진행 중인 현장이 없습니다. 새 현장을 개설해 주세요.</div>`;
+            projectGrid.innerHTML = showArchivedProjects
+                ? `<div class="empty-state">보관된 현장이 없습니다.</div>`
+                : `<div class="empty-state">진행 중인 현장이 없습니다. 새 현장을 개설해 주세요.</div>`;
             return;
         }
 
@@ -338,12 +351,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fields = project.fields ? project.fields : project;
             const recordId = project.id;
 
-            
+
             const card = document.createElement('div');
             card.className = 'project-card';
             card.addEventListener('click', () => showProjectDetail(recordId));
 
             const workersText = fields.시공기사 || "미정";
+            const archiveBtnHtml = showArchivedProjects
+                ? `<button class="card-btn secondary" onclick="event.stopPropagation(); toggleProjectArchive('${recordId}', false)">📤 보관 해제</button>`
+                : `<button class="card-btn secondary" onclick="event.stopPropagation(); toggleProjectArchive('${recordId}', true)">📦 보관</button>`;
 
             card.innerHTML = `
                 <div class="card-header-info">
@@ -354,12 +370,74 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <div class="card-footer-btns">
                     <button class="card-btn secondary" onclick="event.stopPropagation(); copyLink('${WORKER_APP_BASE_URL}?code=${recordId}')">🔗 기사 링크 복사</button>
-                    <button class="card-btn primary">업무배정 ▶</button>
+                    ${archiveBtnHtml}
+                    ${showArchivedProjects ? '' : '<button class="card-btn primary">업무배정 ▶</button>'}
                 </div>
             `;
             projectGrid.appendChild(card);
         });
     }
+
+    // 현장 목록 상단의 "보관함 보기" 토글 바 렌더링
+    function renderArchiveToggleBar(archivedCount) {
+        let bar = document.getElementById('archiveToggleBar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'archiveToggleBar';
+            bar.className = 'archive-toggle-bar';
+            projectGrid.parentElement.insertBefore(bar, projectGrid);
+        }
+        if (showArchivedProjects) {
+            bar.innerHTML = `<button type="button" class="archive-toggle-btn" onclick="toggleArchivedView()">← 활성 현장으로 돌아가기</button>`;
+        } else {
+            bar.innerHTML = archivedCount > 0
+                ? `<button type="button" class="archive-toggle-btn" onclick="toggleArchivedView()">📦 보관함 보기 (${archivedCount})</button>`
+                : '';
+        }
+    }
+
+    // 보관함 보기 <-> 활성 현장 보기 전환
+    window.toggleArchivedView = function() {
+        showArchivedProjects = !showArchivedProjects;
+        renderProjectGrid();
+    };
+
+    // 현장 보관/보관 해제
+    window.toggleProjectArchive = async function(recordId, archived) {
+        const project = globalProjectList.find(p => p.id === recordId);
+        const projectName = project ? (project.fields ? project.fields : project).현장명 : "이 현장";
+        const confirmMsg = archived
+            ? `"${projectName}"을(를) 보관하시겠습니까? 현장 목록에서 안 보이게 되며, 보관함에서 언제든 다시 꺼낼 수 있습니다.`
+            : `"${projectName}"을(를) 보관에서 해제하시겠습니까? 다시 활성 현장 목록에 표시됩니다.`;
+        if (!confirm(confirmMsg)) return;
+
+        showLoading(archived ? "현장을 보관하는 중..." : "보관을 해제하는 중...");
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'toggle_project_archive',
+                    projectCode: recordId,
+                    archived: archived
+                })
+            });
+            if (!response.ok) throw new Error("보관 상태 변경 오류");
+
+            // 로컬 캐시에도 즉시 반영해서 재조회 없이 바로 리렌더링
+            if (project) {
+                if (project.fields) project.fields.보관함 = archived;
+                else project.보관함 = archived;
+            }
+            renderProjectGrid();
+            showToast(archived ? "현장을 보관했습니다." : "보관을 해제했습니다.");
+        } catch (error) {
+            console.error(error);
+            showToast("보관 상태 변경에 실패했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
 
     // 링크 복사 클립보드 기능
     window.copyLink = function(url) {

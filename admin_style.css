@@ -234,6 +234,7 @@ body {
 
 .card-footer-btns {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 16px;
     border-top: 1px solid #f1f5f9;
@@ -241,7 +242,7 @@ body {
 }
 
 .card-btn {
-    flex: 1;
+    flex: 1 1 90px;
     padding: 10px;
     font-size: 13px;
     font-weight: 700;
@@ -251,6 +252,27 @@ body {
     background: white;
     transition: all 0.15s ease;
     text-align: center;
+}
+
+/* 현장 목록 상단 "보관함 보기" 토글 바 */
+.archive-toggle-bar {
+    margin-bottom: 16px;
+}
+
+.archive-toggle-btn {
+    background: var(--accent-gray);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.archive-toggle-btn:hover {
+    background: var(--primary-light);
+    color: var(--primary-blue);
 }
 
 .card-btn.primary {
