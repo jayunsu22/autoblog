@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
     let activeDayIndex = 0;
     let taskAssignment = {}; // taskId -> dayNumber
+    let taskOrder = {}; // taskId -> 그 일차 안에서의 순서(1부터 시작, 글에 들어가는 순서)
     let eligibleTasksCache = [];
 
     // UI Elements
@@ -1532,6 +1533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         dayDrafts = [1, 2, 3, 4, 5].map(createEmptyDayDraft);
         taskAssignment = {};
+        taskOrder = {};
         activeDayIndex = 0;
 
         // 기존에 저장된 (아직 발행 전이거나 이미 발행된) 일지가 있으면 해당 일차 슬롯에 병합
@@ -1558,6 +1560,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     cleanupSaved: (f.정리정돈사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename })),
                     filmSaved: (f.필름사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename }))
                 };
+
+                // 저장된 순서(포함작업목록)를 복원해서, 창을 닫았다 다시 열어도(다른 일차 작업 중에도)
+                // "이미 다른 일차에 배정/발행됨" 표시와 글 순서가 그대로 유지되게 함
+                (f.포함작업목록 || '').split(',').map(s => s.trim()).filter(Boolean).forEach((taskId, i) => {
+                    taskAssignment[taskId] = dayNum;
+                    taskOrder[taskId] = i + 1;
+                });
             });
         } catch (e) {
             console.error(e);
@@ -1690,10 +1699,68 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderTaskChecklist();
     }
 
+    // 같은 일차 안에서 taskOrder 값을 1부터 연속되게 다시 매김 (삭제로 생긴 빈 번호 정리)
+    function renumberDayOrder(dayNum) {
+        const ids = Object.keys(taskAssignment)
+            .filter(id => taskAssignment[id] === dayNum)
+            .sort((a, b) => (taskOrder[a] || 0) - (taskOrder[b] || 0));
+        ids.forEach((id, i) => { taskOrder[id] = i + 1; });
+    }
+
+    // 순서 목록에서 위/아래 버튼으로 인접한 항목과 순서를 맞바꿈
+    function moveTaskOrder(taskId, dir, dayNum) {
+        const ids = Object.keys(taskAssignment)
+            .filter(id => taskAssignment[id] === dayNum)
+            .sort((a, b) => (taskOrder[a] || 0) - (taskOrder[b] || 0));
+        const idx = ids.indexOf(taskId);
+        const swapIdx = idx + dir;
+        if (idx === -1 || swapIdx < 0 || swapIdx >= ids.length) return;
+        const otherId = ids[swapIdx];
+        const tmp = taskOrder[taskId];
+        taskOrder[taskId] = taskOrder[otherId];
+        taskOrder[otherId] = tmp;
+        renderTaskChecklist();
+    }
+
     function renderTaskChecklist() {
         publishTaskList.innerHTML = "";
         const currentDay = dayDrafts[activeDayIndex].dayNumber;
 
+        // 1. 글 작성 순서 요약 - 체크된 항목만 순서대로 나열, ▲▼로 순서 조정, ✕로 선택 해제
+        const selectedIds = Object.keys(taskAssignment)
+            .filter(id => taskAssignment[id] === currentDay)
+            .sort((a, b) => (taskOrder[a] || 0) - (taskOrder[b] || 0));
+
+        if (selectedIds.length > 0) {
+            const orderBox = document.createElement('div');
+            orderBox.className = 'publish-order-box';
+            orderBox.innerHTML = `<div class="publish-order-title">📝 글 작성 순서 (${selectedIds.length}개) · ▲▼로 순서 변경</div>`;
+            selectedIds.forEach((taskId, i) => {
+                const task = eligibleTasksCache.find(t => t.id === taskId);
+                if (!task) return;
+                const row = document.createElement('div');
+                row.className = 'publish-order-row';
+                row.innerHTML = `
+                    <span class="publish-order-num">${i + 1}</span>
+                    <span class="publish-order-name">${task.fields.시공품목}</span>
+                    <button type="button" class="publish-order-btn" data-action="up" ${i === 0 ? 'disabled' : ''}>▲</button>
+                    <button type="button" class="publish-order-btn" data-action="down" ${i === selectedIds.length - 1 ? 'disabled' : ''}>▼</button>
+                    <button type="button" class="publish-order-btn remove" data-action="remove">✕</button>
+                `;
+                row.querySelector('[data-action="up"]').addEventListener('click', () => moveTaskOrder(taskId, -1, currentDay));
+                row.querySelector('[data-action="down"]').addEventListener('click', () => moveTaskOrder(taskId, 1, currentDay));
+                row.querySelector('[data-action="remove"]').addEventListener('click', () => {
+                    delete taskAssignment[taskId];
+                    delete taskOrder[taskId];
+                    renumberDayOrder(currentDay);
+                    renderTaskChecklist();
+                });
+                orderBox.appendChild(row);
+            });
+            publishTaskList.appendChild(orderBox);
+        }
+
+        // 2. 전체 품목 체크리스트
         eligibleTasksCache.forEach(task => {
             const fields = task.fields;
             const assignedDay = taskAssignment[task.id];
@@ -1703,10 +1770,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (assignedDay && assignedDay !== currentDay) {
                 item.style.opacity = '0.4';
+                const otherDraft = dayDrafts.find(d => d.dayNumber === assignedDay);
+                const statusText = (otherDraft && otherDraft.published) ? `${assignedDay}일차에 발행됨` : `${assignedDay}일차에 배정됨`;
                 item.innerHTML = `
                     <input type="checkbox" disabled style="width: 16px; height: 16px; flex-shrink:0;">
                     <span style="font-size: 14px; font-weight:800; color:var(--text-main); margin-left: 8px;">
-                        ${fields.시공품목} (${assignedDay}일차에 배정됨)
+                        ${fields.시공품목} (${statusText})
                     </span>
                 `;
                 publishTaskList.appendChild(item);
@@ -1720,16 +1789,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <span style="font-size: 14px; font-weight:800; color:var(--text-main); margin-left: 8px;">
                     ${fields.시공품목}
                 </span>
+                ${isChecked ? `<span class="publish-item-order-badge">${taskOrder[task.id] || ''}</span>` : ''}
             `;
 
             const chk = item.querySelector('input');
             const applyToggle = () => {
                 if (chk.checked) {
                     taskAssignment[task.id] = currentDay;
+                    const currentMax = Math.max(0, ...Object.keys(taskAssignment)
+                        .filter(id => taskAssignment[id] === currentDay && id !== task.id)
+                        .map(id => taskOrder[id] || 0));
+                    taskOrder[task.id] = currentMax + 1;
                 } else {
                     delete taskAssignment[task.id];
+                    delete taskOrder[task.id];
+                    renumberDayOrder(currentDay);
                 }
-                item.classList.toggle('checked', chk.checked);
+                renderTaskChecklist(); // 순서 요약/배지 갱신을 위해 전체 다시 그림
             };
             chk.addEventListener('change', applyToggle);
             item.addEventListener('click', () => {
@@ -1825,6 +1901,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 일지제목/날씨/특징/에피소드를 Airtable에 저장하고, 아직 업로드 안 된 사진들을 업로드.
     // 임시저장과 실제 발행이 공통으로 쓰는 부분 - 이 함수가 끝나면 창을 닫고 다시 들어와도 내용/사진이 남아있음.
     async function persistJournalDayDraft(d) {
+        // 이 일차에 체크된 작업들을 관리자가 지정한 순서 그대로 콤마 구분 텍스트로 저장
+        // (Notion 발행 시 이 순서대로 품목이 나열됨)
+        const orderedTaskIds = Object.keys(taskAssignment)
+            .filter(id => taskAssignment[id] === d.dayNumber)
+            .sort((a, b) => (taskOrder[a] || 0) - (taskOrder[b] || 0));
+
         const res = await fetchWithTimeout(API_JOURNAL_CREATE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1835,7 +1917,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 일차: d.dayNumber,
                 오늘의날씨: d.weather,
                 현장의특징: d.feature,
-                오늘의에피소드: d.episode
+                오늘의에피소드: d.episode,
+                포함작업목록: orderedTaskIds.join(',')
             })
         });
         if (!res.ok) throw new Error("일지 저장 실패");
@@ -1916,7 +1999,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const taskIds = Object.keys(taskAssignment).filter(id => taskAssignment[id] === d.dayNumber);
+        const taskIds = Object.keys(taskAssignment)
+            .filter(id => taskAssignment[id] === d.dayNumber)
+            .sort((a, b) => (taskOrder[a] || 0) - (taskOrder[b] || 0));
         if (taskIds.length === 0) {
             showToast("포함할 시공 내역을 최소 1개 이상 선택해주세요.", "danger");
             return;

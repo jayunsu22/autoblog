@@ -1312,6 +1312,102 @@ body {
     border-color: #a7f3d0;
 }
 
+/* 블로그 발행 - 글 작성 순서 요약 박스 (체크된 품목을 순서대로 나열, ▲▼로 순서 변경) */
+.publish-order-box {
+    grid-column: 1 / -1;
+    background: var(--primary-light);
+    border: 1.5px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 16px;
+}
+
+.publish-order-title {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: var(--primary-blue);
+    margin-bottom: 8px;
+}
+
+.publish-order-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+}
+
+.publish-order-row:last-child {
+    margin-bottom: 0;
+}
+
+.publish-order-num {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--primary-blue);
+    color: white;
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.publish-order-name {
+    flex: 1;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.publish-order-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: #fff;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.publish-order-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.publish-order-btn:not(:disabled):hover {
+    background: var(--accent-gray);
+}
+
+.publish-order-btn.remove:not(:disabled):hover {
+    background: #fee2e2;
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+/* 전체 품목 체크리스트에서 선택된 항목 옆에 표시되는 순서 번호 배지 */
+.publish-item-order-badge {
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-blue);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* 토스트 팝업 */
 .toast {
     position: fixed;
