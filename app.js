@@ -772,6 +772,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             formData.append('slotName', slotName);
             formData.append('projectCode', projectRecordId);
             formData.append('itemName', task ? (task.fields.시공품목 || '') : ''); // 구글드라이브 백업 폴더를 카테고리별로 나누기 위해 품목명도 같이 전달
+            formData.append('projectName', (projectData.project && projectData.project.현장명) || ''); // 구글드라이브 백업 파일명에 현장명을 넣기 위해 전달
 
             const response = await fetchWithTimeout(API_UPLOAD_URL, {
                 method: 'POST',
