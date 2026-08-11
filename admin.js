@@ -5,6 +5,40 @@ window.onerror = function(message, source, lineno, colno, error) {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // 0. 관리자 암호 잠금 (간단한 접근 차단용 - 강력한 보안은 아니고, 평문 대신 해시로만 비교)
+    const ADMIN_PIN_HASH = '7e25b45addda2b4082938558981200dfe5a3cfb20ee4a81092510d26715c2049';
+    const ADMIN_UNLOCK_KEY = 'adminUnlocked';
+
+    async function sha256Hex(text) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    window.submitAdminPin = function(event) {
+        event.preventDefault();
+        const input = document.getElementById('pinLockInput');
+        const errorEl = document.getElementById('pinLockError');
+        const value = (input.value || '').trim();
+        sha256Hex(value).then(hash => {
+            if (hash === ADMIN_PIN_HASH) {
+                localStorage.setItem(ADMIN_UNLOCK_KEY, '1');
+                document.getElementById('pinLockOverlay').style.display = 'none';
+                errorEl.style.display = 'none';
+                runAdminInit();
+            } else {
+                errorEl.style.display = 'block';
+                input.value = '';
+                input.focus();
+            }
+        });
+        return false;
+    };
+
+    window.lockAdminApp = function() {
+        localStorage.removeItem(ADMIN_UNLOCK_KEY);
+        location.reload();
+    };
+
     // 1. 설정 및 글로벌 변수
     const n8nBase = "https://primary-production-a6fa.up.railway.app";
     const API_ADMIN_GET_URL = `${n8nBase}/webhook/film-admin-get`;
@@ -28,6 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let zonePendingChanges = new Map(); // 매트릭스에서 저장 버튼을 누르기 전까지 쌓아두는 변경사항: 품목명 -> { active?, 밑작업?, 시공? }
     let activeWorkerName = null; // 배정 보드에서 현재 선택된(활성화된) 기사님 이름, 새로고침에도 유지됨
     let globalProjectList = []; // 현장 목록 전체 캐시 (보관함 보기 토글 시 재요청 없이 필터링)
+    const projectProgressCache = new Map(); // recordId -> {done, total} | 'loading' | 'error' (카드별 진행률, 중복 조회 방지용 캐시)
     let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
     let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명}]
     let galleryActiveZone = '전체'; // 사진 갤러리에서 현재 선택된 구역 탭
@@ -221,12 +256,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     })();
 
     // 4. 초기화 실행: 현장 리스트 로딩 (마지막으로 보던 현장이 있으면 그 화면으로 바로 복귀)
-    loadProjectList().then(() => {
-        const lastProjectCode = localStorage.getItem('lastActiveProjectCode');
-        if (lastProjectCode) {
-            showProjectDetail(lastProjectCode);
-        }
-    });
+    function runAdminInit() {
+        loadProjectList().then(() => {
+            const lastProjectCode = localStorage.getItem('lastActiveProjectCode');
+            if (lastProjectCode) {
+                showProjectDetail(lastProjectCode);
+            }
+        });
+    }
+
+    // 암호로 이미 인증된 상태면 바로 시작, 아니면 암호 입력창을 띄우고 성공 시 시작
+    if (localStorage.getItem(ADMIN_UNLOCK_KEY) === '1') {
+        runAdminInit();
+    } else {
+        document.getElementById('pinLockOverlay').style.display = 'flex';
+    }
 
 
     // 5. 현장 목록 및 자주쓰는공지 불러오기
@@ -401,6 +445,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <h3 class="card-title">${fields.현장명 || '이름 없는 현장'}</h3>
                     <div class="card-address">📍 ${fields.주소 || '주소 미지정'}</div>
                      <div class="card-workers">👷 기사: ${workersText}</div>
+                    <div class="card-progress" id="progress-${recordId}"></div>
                 </div>
                 <div class="card-footer-btns">
                     <button class="card-btn secondary" onclick="event.stopPropagation(); openProjectPhotoGallery('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📷 사진</button>
@@ -409,7 +454,54 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
             projectGrid.appendChild(card);
+            renderProjectProgressBadge(recordId);
         });
+    }
+
+    // 카드의 진행률 배지 렌더링 - 캐시에 있으면 즉시 표시, 없으면 로딩 표시하고 백그라운드에서 조회
+    function renderProjectProgressBadge(recordId) {
+        const el = document.getElementById(`progress-${recordId}`);
+        if (!el) return;
+        const cached = projectProgressCache.get(recordId);
+
+        if (cached && cached !== 'loading' && cached !== 'error') {
+            const { done, total } = cached;
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            el.innerHTML = `
+                <div class="card-progress-bar"><div class="card-progress-fill" style="width:${pct}%;"></div></div>
+                <span class="card-progress-text">${done}/${total} 완료</span>
+            `;
+            return;
+        }
+
+        if (cached === 'error') {
+            el.innerHTML = `<span class="card-progress-text muted">진행률 확인 실패</span>`;
+            return;
+        }
+
+        el.innerHTML = `<span class="card-progress-text muted">진행률 확인 중...</span>`;
+        if (cached !== 'loading') {
+            loadProjectProgress(recordId);
+        }
+    }
+
+    // 현장 상세 API를 재사용해서 이 현장의 완료/전체 작업 개수를 백그라운드에서 조회
+    async function loadProjectProgress(recordId) {
+        projectProgressCache.set(recordId, 'loading');
+        try {
+            const response = await fetchWithTimeout(`${API_DETAIL_URL}?code=${recordId}`);
+            if (!response.ok) throw new Error("진행률 조회 실패");
+            const result = await response.json();
+            const data = Array.isArray(result) ? result[0] : result;
+            const tasks = data.tasks || [];
+            const done = tasks.filter(t => t.fields.밑작업완료 && t.fields.시공완료).length;
+            projectProgressCache.set(recordId, { done, total: tasks.length });
+        } catch (error) {
+            console.error(error);
+            projectProgressCache.set(recordId, 'error');
+        } finally {
+            renderProjectProgressBadge(recordId);
+        }
     }
 
     // 현장 목록 상단의 "보관함 보기" 토글 바 렌더링
@@ -684,7 +776,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const result = await response.json();
             // n8n은 데이터를 리턴할 때 항상 배열 [ { ... } ] 형태로 감싸서 주므로, 첫 번째 원소를 꺼내줍니다.
             currentDetailData = Array.isArray(result) ? result[0] : result;
-            
+
+            // 방금 받아온 최신 작업 현황으로 현장 목록 카드의 진행률 캐시도 같이 갱신
+            // (재조회 없이도 목록으로 돌아갔을 때 최신 숫자가 보이게)
+            const dtasks = currentDetailData.tasks || [];
+            projectProgressCache.set(recordId, {
+                done: dtasks.filter(t => t.fields.밑작업완료 && t.fields.시공완료).length,
+                total: dtasks.length
+            });
+
             // 상세 화면 첫 진입 시 첫 번째 기사님을 자동으로 선택하여 배정표가 바로 열리도록 설정
             if (!activeWorkerName && currentDetailData.workers && currentDetailData.workers.length > 0) {
                 activeWorkerName = currentDetailData.workers[0];

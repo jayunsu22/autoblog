@@ -232,6 +232,36 @@ body {
     margin-top: 6px;
 }
 
+.card-progress {
+    margin-top: 10px;
+}
+
+.card-progress-bar {
+    height: 6px;
+    border-radius: 4px;
+    background: var(--accent-gray);
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.card-progress-fill {
+    height: 100%;
+    background: var(--success);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.card-progress-text {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: var(--text-muted);
+}
+
+.card-progress-text.muted {
+    font-weight: 600;
+    opacity: 0.7;
+}
+
 .card-footer-btns {
     display: flex;
     flex-wrap: wrap;
@@ -1430,6 +1460,89 @@ body {
 .toast.show {
     transform: translate(-50%, 0);
     opacity: 1;
+}
+
+/* 관리자 암호 잠금 화면 */
+.pin-lock-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-page, #f8fafc);
+    z-index: 5000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.pin-lock-box {
+    background: white;
+    width: 100%;
+    max-width: 340px;
+    border-radius: 20px;
+    padding: 36px 28px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    text-align: center;
+}
+
+.pin-lock-icon {
+    font-size: 34px;
+    margin-bottom: 8px;
+}
+
+.pin-lock-box h2 {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.pin-lock-box p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+}
+
+.pin-lock-box input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 4px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    outline: none;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+}
+
+.pin-lock-box input:focus {
+    border-color: var(--primary-blue);
+}
+
+.pin-lock-box button {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    background: var(--primary-blue);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.pin-lock-box button:hover {
+    background: var(--primary-hover);
+}
+
+.pin-lock-error {
+    color: var(--danger);
+    font-size: 12.5px;
+    font-weight: 700;
+    margin: 10px 0 0;
 }
 
 /* 로딩 오버레이 */
