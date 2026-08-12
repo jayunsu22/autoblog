@@ -2018,7 +2018,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 오늘의날씨: d.weather,
                 현장의특징: d.feature,
                 오늘의에피소드: d.episode,
-                포함작업목록: orderedTaskIds.join(',')
+                포함작업목록: orderedTaskIds.join(','),
+                당일공지사항: (currentDetailData.project && currentDetailData.project.공지사항) || ''
             })
         });
         if (!res.ok) throw new Error("일지 저장 실패");
