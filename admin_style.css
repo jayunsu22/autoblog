@@ -725,13 +725,6 @@ body {
             "assignment";
     }
 
-    /* 기사 목록: 상단에 스크롤 시에도 계속 보이도록 고정 */
-    .workers-column {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
     .items-column,
     .assignment-column {
         min-height: 0;
