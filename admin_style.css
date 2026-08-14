@@ -838,27 +838,51 @@ body {
     padding-right: 4px;
 }
 
-.worker-card-edit-btn {
-    position: absolute;
-    top: 4px;
-    right: 6px;
+.worker-card-toolbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    margin-top: 6px;
+}
+
+.worker-card-edit-btn,
+.worker-card-delete-btn,
+.worker-card-move-btn {
     background: none;
     border: none;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1;
-    padding: 4px;
+    padding: 4px 5px;
     cursor: pointer;
     color: var(--text-muted);
     opacity: 0.7;
+    border-radius: 6px;
 }
 
-.worker-card.active .worker-card-edit-btn {
+.worker-card.active .worker-card-edit-btn,
+.worker-card.active .worker-card-delete-btn,
+.worker-card.active .worker-card-move-btn {
     color: white;
     opacity: 0.85;
 }
 
-.worker-card-edit-btn:hover {
+.worker-card-edit-btn:hover,
+.worker-card-delete-btn:hover,
+.worker-card-move-btn:not(:disabled):hover {
     opacity: 1;
+    background: rgba(0,0,0,0.06);
+}
+
+.worker-card.active .worker-card-edit-btn:hover,
+.worker-card.active .worker-card-delete-btn:hover,
+.worker-card.active .worker-card-move-btn:not(:disabled):hover {
+    background: rgba(255,255,255,0.15);
+}
+
+.worker-card-move-btn:disabled {
+    opacity: 0.2;
+    cursor: default;
 }
 
 /* 미배정 품목 카드 풀 (3열): 같은 품목(밑작업+시공)을 하나의 그룹으로 시각적 구분 */
@@ -2102,6 +2126,13 @@ body {
         font-size: 15px !important;
         padding: 12px 6px !important;
         font-weight: 800 !important;
+    }
+
+    .worker-card-edit-btn,
+    .worker-card-delete-btn,
+    .worker-card-move-btn {
+        font-size: 15px !important;
+        padding: 6px 8px !important;
     }
 
     /* 공지사항 입력란 및 모달 폼 요소 */

@@ -1087,18 +1087,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             activeWorkerName = null;
         }
 
-        workers.forEach(worker => {
+        workers.forEach((worker, idx) => {
             const card = document.createElement('div');
             card.className = `worker-card ${worker === activeWorkerName ? 'active' : ''}`;
             card.innerHTML = `
                 <span class="worker-card-name">${worker}</span>
-                <button type="button" class="worker-card-edit-btn" title="이름 수정">✎</button>
+                <div class="worker-card-toolbar">
+                    <button type="button" class="worker-card-move-btn" data-dir="-1" title="앞으로 이동" ${idx === 0 ? 'disabled' : ''}>◀</button>
+                    <button type="button" class="worker-card-edit-btn" title="이름 수정">✎</button>
+                    <button type="button" class="worker-card-delete-btn" title="삭제">🗑</button>
+                    <button type="button" class="worker-card-move-btn" data-dir="1" title="뒤로 이동" ${idx === workers.length - 1 ? 'disabled' : ''}>▶</button>
+                </div>
             `;
 
             const editBtn = card.querySelector('.worker-card-edit-btn');
             editBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 renameWorkerPrompt(worker);
+            });
+
+            const deleteBtn = card.querySelector('.worker-card-delete-btn');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteWorkerPrompt(worker);
+            });
+
+            card.querySelectorAll('.worker-card-move-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (btn.disabled) return;
+                    moveWorker(worker, parseInt(btn.dataset.dir, 10));
+                });
             });
 
             // HTML5 드롭존(Drop Zone) 이벤트 연결
@@ -2618,6 +2637,93 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast("이름 수정 중 문제가 발생했습니다.", "danger");
         } finally {
             hideLoading();
+        }
+    };
+
+    // 기사님 삭제. 이미 배정된 작업이 있으면 먼저 알리고, 삭제 시 그 배정도 함께 해제
+    window.deleteWorkerPrompt = async function(name) {
+        if (!activeProjectCode) return;
+        const existingWorkers = currentDetailData.workers || [];
+        const affectedTasks = (currentDetailData.tasks || [])
+            .filter(t => t.fields.밑작업기사 === name || t.fields.시공기사 === name);
+
+        const confirmMsg = affectedTasks.length > 0
+            ? `"${name}" 기사님으로 배정된 작업이 ${affectedTasks.length}건 있습니다.\n삭제하면 이 배정도 함께 해제됩니다. 계속할까요?`
+            : `"${name}" 기사님을 목록에서 삭제할까요?`;
+        if (!confirm(confirmMsg)) return;
+
+        const updatedWorkers = existingWorkers.filter(w => w !== name);
+
+        showLoading(`${name} 기사님 삭제 중...`);
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_workers',
+                    projectCode: activeProjectCode,
+                    workersText: updatedWorkers.join(',')
+                })
+            });
+            if (!response.ok) throw new Error("삭제 오류");
+
+            if (affectedTasks.length > 0) {
+                const clearedTasks = affectedTasks.map(t => {
+                    const upd = { id: t.id };
+                    if (t.fields.밑작업기사 === name) upd.밑작업기사 = '';
+                    if (t.fields.시공기사 === name) upd.시공기사 = '';
+                    return upd;
+                });
+                const response2 = await fetchWithTimeout(API_SAVE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'rename_worker',
+                        affectedTasks: clearedTasks
+                    })
+                });
+                if (!response2.ok) throw new Error("배정 해제 오류");
+            }
+
+            if (activeWorkerName === name) activeWorkerName = null;
+
+            showToast(`"${name}" 기사님이 삭제되었습니다.`);
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("삭제 중 문제가 발생했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // 기사님 순서 변경 (목록 내에서 앞/뒤로 한 칸씩 이동)
+    window.moveWorker = async function(name, dir) {
+        if (!activeProjectCode) return;
+        const existingWorkers = currentDetailData.workers || [];
+        const idx = existingWorkers.indexOf(name);
+        const newIdx = idx + dir;
+        if (idx === -1 || newIdx < 0 || newIdx >= existingWorkers.length) return;
+
+        const updatedWorkers = [...existingWorkers];
+        [updatedWorkers[idx], updatedWorkers[newIdx]] = [updatedWorkers[newIdx], updatedWorkers[idx]];
+
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_workers',
+                    projectCode: activeProjectCode,
+                    workersText: updatedWorkers.join(',')
+                })
+            });
+            if (!response.ok) throw new Error("순서 변경 오류");
+
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("순서 변경 중 문제가 발생했습니다.", "danger");
         }
     };
 });
