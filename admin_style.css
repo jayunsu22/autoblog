@@ -701,16 +701,16 @@ body {
     grid-area: assignment;
 }
 
-/* 기사 목록: 한 줄에 3명씩 격자로 배치 */
+/* 기사 목록: 한 줄에 한 명씩, 이름 왼쪽 + 버튼 오른쪽 */
 .workers-column .column-body {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .workers-column .worker-card {
-    padding: 10px 4px;
-    font-size: 12.5px;
+    padding: 12px 14px;
+    font-size: 14px;
     white-space: normal;
     word-break: keep-all;
     line-height: 1.3;
@@ -808,18 +808,22 @@ body {
     gap: 12px;
 }
 
-/* 기사 카드 (1열) */
+/* 기사 카드 (1열, 이름 왼쪽 + 버튼 오른쪽 가로 배치) */
 .worker-card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 16px;
     font-weight: 800;
-    text-align: center;
+    text-align: left;
     box-shadow: 0 2px 4px rgba(0,0,0,0.01);
     transition: all 0.2s ease;
     cursor: pointer;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .worker-card.dragover {
@@ -835,15 +839,18 @@ body {
 }
 
 .worker-card-name {
-    padding-right: 4px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .worker-card-toolbar {
     display: flex;
-    justify-content: center;
     align-items: center;
     gap: 2px;
-    margin-top: 6px;
+    flex-shrink: 0;
 }
 
 .worker-card-edit-btn,

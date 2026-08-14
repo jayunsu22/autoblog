@@ -1093,10 +1093,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.innerHTML = `
                 <span class="worker-card-name">${worker}</span>
                 <div class="worker-card-toolbar">
-                    <button type="button" class="worker-card-move-btn" data-dir="-1" title="앞으로 이동" ${idx === 0 ? 'disabled' : ''}>◀</button>
+                    <button type="button" class="worker-card-move-btn" data-dir="-1" title="위로 이동" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                    <button type="button" class="worker-card-move-btn" data-dir="1" title="아래로 이동" ${idx === workers.length - 1 ? 'disabled' : ''}>▼</button>
                     <button type="button" class="worker-card-edit-btn" title="이름 수정">✎</button>
                     <button type="button" class="worker-card-delete-btn" title="삭제">🗑</button>
-                    <button type="button" class="worker-card-move-btn" data-dir="1" title="뒤로 이동" ${idx === workers.length - 1 ? 'disabled' : ''}>▶</button>
                 </div>
             `;
 
