@@ -360,31 +360,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 우선순위 정렬 적용 (Airtable 우선순위 컬럼 및 로컬 순서 캐시 백업)
         const sortOrderKey = `task_sort_order_${projectRecordId}`;
         const savedOrder = JSON.parse(localStorage.getItem(sortOrderKey) || "[]");
-        
-        filteredTasks.sort((a, b) => {
-            const pA = a.fields.작업우선순위 !== undefined ? a.fields.작업우선순위 : (savedOrder.indexOf(a.id) !== -1 ? savedOrder.indexOf(a.id) : 999);
-            const pB = b.fields.작업우선순위 !== undefined ? b.fields.작업우선순위 : (savedOrder.indexOf(b.id) !== -1 ? savedOrder.indexOf(b.id) : 999);
-            return pA - pB;
-        });
-
 
         if (filteredTasks.length === 0) {
             taskListContainer.innerHTML = `<div class="empty-state">이 현장에 배정받으신 작업 내역이 없습니다.</div>`;
             return;
         }
 
-        // 품목 우선순위 순서는 유지하되, 밑작업/시공 각 단계를 독립된 카드로 나열
+        // 밑작업/시공을 완전히 독립된 카드로 나열 - 같은 품목이어도 각자의 우선순위 필드로 따로 정렬됨
+        // (밑작업을 몰아서 하고 시공은 나중에 하는 경우가 많아서, 관리자 배정표와 순서를 맞춤)
         const cardEntries = [];
         filteredTasks.forEach(task => {
             const fields = task.fields;
             if (fields.밑작업기사 === currentWorker) {
-                cardEntries.push({ task, stage: '밑작업', isCompleted: !!fields.밑작업완료 });
+                const priority = fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999);
+                cardEntries.push({ task, stage: '밑작업', isCompleted: !!fields.밑작업완료, priority });
             }
             if (fields.시공기사 === currentWorker) {
-                cardEntries.push({ task, stage: '시공', isCompleted: !!fields.시공완료 });
+                const priority = fields.시공우선순위 !== undefined ? fields.시공우선순위 : (fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999));
+                cardEntries.push({ task, stage: '시공', isCompleted: !!fields.시공완료, priority });
             }
         });
 
+        cardEntries.sort((a, b) => a.priority - b.priority);
         // 완료된 카드를 맨 아래로 - 완료 여부로만 재배치하고, 그 안에서는 원래 순서(우선순위) 유지
         cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
 

@@ -1189,28 +1189,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sortOrderKey = `task_sort_order_${activeProjectCode}`;
         const savedOrder = JSON.parse(localStorage.getItem(sortOrderKey) || "[]");
         
-        // 태스크들을 우선순위(또는 로컬 정렬 인덱스) 기준 정렬
-        tasks.sort((a, b) => {
-            const pA = a.fields.작업우선순위 !== undefined ? a.fields.작업우선순위 : (savedOrder.indexOf(a.id) !== -1 ? savedOrder.indexOf(a.id) : 999);
-            const pB = b.fields.작업우선순위 !== undefined ? b.fields.작업우선순위 : (savedOrder.indexOf(b.id) !== -1 ? savedOrder.indexOf(b.id) : 999);
-            return pA - pB;
-        });
-
-        // 우선순위 순서는 유지하되, 밑작업/시공을 독립된 카드로 나열한 뒤
-        // 완료된 카드를 맨 아래로 내려서 다음에 배정할 작업을 한눈에 보이게 함
+        // 밑작업/시공을 완전히 독립된 카드로 나열 - 같은 품목이어도 각자의 우선순위 필드로 따로 정렬됨
+        // (밑작업을 몰아서 하고 시공은 나중에 하는 경우가 많아서, 둘을 묶어서 같이 옮기지 않음)
         const cardEntries = [];
         tasks.forEach(task => {
             const fields = task.fields;
 
             if (fields.밑작업기사 && (!filterWorkerName || fields.밑작업기사 === filterWorkerName)) {
-                cardEntries.push({ task, stage: '밑작업', assignee: fields.밑작업기사, isCompleted: !!fields.밑작업완료 });
+                const priority = fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999);
+                cardEntries.push({ task, stage: '밑작업', assignee: fields.밑작업기사, isCompleted: !!fields.밑작업완료, priority });
             }
 
             if (fields.시공기사 && (!filterWorkerName || fields.시공기사 === filterWorkerName)) {
-                cardEntries.push({ task, stage: '시공', assignee: fields.시공기사, isCompleted: !!fields.시공완료 });
+                const priority = fields.시공우선순위 !== undefined ? fields.시공우선순위 : (fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999));
+                cardEntries.push({ task, stage: '시공', assignee: fields.시공기사, isCompleted: !!fields.시공완료, priority });
             }
         });
 
+        cardEntries.sort((a, b) => a.priority - b.priority);
         cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
 
         let count = 0;
@@ -1381,32 +1377,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 같은 품목의 밑작업/시공 카드는 (동일 기사에게 배정된 경우) 작업자 화면에서 항상 붙어서
     // 나오므로, 레코드당 우선순위를 하나로 통일해서 저장 - 먼저 나오는 카드의 위치를 기준으로 함
     async function persistAssignmentOrder() {
-        // 1. 배정표 내에 정렬된 카드들 순서 수집, 레코드 ID별로 첫 등장 위치만 채택
+        // 1. 배정표 내 카드 순서를 DOM 그대로 수집 - 밑작업/시공은 서로 독립된 카드라 각자 우선순위를 가짐
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
-        const priorityByRecordId = new Map();
-        cards.forEach((c) => {
-            const id = c.dataset.recordId;
-            if (!priorityByRecordId.has(id)) {
-                priorityByRecordId.set(id, priorityByRecordId.size + 1);
-            }
-        });
-        const orderIds = Array.from(priorityByRecordId.keys());
-        const allTasks = orderIds.map(id => ({ id, priority: priorityByRecordId.get(id) }));
+        const allEntries = cards.map((c, idx) => ({ id: c.dataset.recordId, stage: c.dataset.stage, priority: idx + 1 }));
 
         // 실제로 순위가 바뀐 작업만 서버로 전송 (전체를 매번 다시 보내면 목록이 길 때 느리고 실패하기 쉬움)
-        const reorderTasks = allTasks.filter(({ id, priority }) => {
+        const reorderTasks = allEntries.filter(({ id, stage, priority }) => {
             const task = currentDetailData.tasks.find(t => t.id === id);
-            return !task || task.fields.작업우선순위 !== priority;
+            if (!task) return true;
+            const currentVal = stage === '밑작업' ? task.fields.작업우선순위 : task.fields.시공우선순위;
+            return currentVal !== priority;
         });
 
         // 2. 임시 로컬 캐시에 정렬 순서 보관 (즉시 반영용)
         const sortOrderKey = `task_sort_order_${activeProjectCode}`;
-        localStorage.setItem(sortOrderKey, JSON.stringify(orderIds));
+        localStorage.setItem(sortOrderKey, JSON.stringify(allEntries.map(e => e.id)));
 
-        // 3. 로컬 데이터에도 바로 반영해서, 같은 품목의 두 카드가 화면에서 즉시 붙어 보이게 함
-        allTasks.forEach(({ id, priority }) => {
+        // 3. 로컬 데이터에도 바로 반영해서 즉시 화면에 순서가 보이게 함
+        allEntries.forEach(({ id, stage, priority }) => {
             const task = currentDetailData.tasks.find(t => t.id === id);
-            if (task) task.fields.작업우선순위 = priority;
+            if (!task) return;
+            if (stage === '밑작업') task.fields.작업우선순위 = priority;
+            else task.fields.시공우선순위 = priority;
         });
 
         if (reorderTasks.length === 0) {
@@ -1443,33 +1435,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         await persistAssignmentOrder();
     });
 
-    // ▲▼ 버튼으로 바로 위/아래 "품목 그룹"과 순서 교체
-    // 같은 품목의 밑작업/시공 카드는 항상 붙어 다녀야 하므로(작업자 화면과 순서를 맞추기 위해),
-    // 클릭한 카드 하나만 옮기지 않고 그 품목의 카드 전체를 한 덩어리로 이웃 품목과 맞바꿈
+    // ▲▼ 버튼으로 바로 위/아래 카드와 순서 교체
+    // 밑작업/시공은 완전히 독립적으로 움직임 (같은 품목이어도 서로 묶이지 않음)
     window.moveAssignmentCard = async function(recordId, stage, direction) {
-        const allCards = Array.from(boardAssignmentList.querySelectorAll('.assignment-card'));
-        const myCards = allCards.filter(c => c.dataset.recordId === recordId);
-        if (myCards.length === 0) return;
+        const myCard = boardAssignmentList.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"]`);
+        if (!myCard) return;
 
         if (direction === 'up') {
-            const firstIdx = allCards.indexOf(myCards[0]);
-            let neighbor = null;
-            for (let i = firstIdx - 1; i >= 0; i--) {
-                if (allCards[i].dataset.recordId !== recordId) { neighbor = allCards[i]; break; }
-            }
-            if (!neighbor) return;
-            const neighborGroup = allCards.filter(c => c.dataset.recordId === neighbor.dataset.recordId);
-            myCards.forEach(c => boardAssignmentList.insertBefore(c, neighborGroup[0]));
+            const prev = myCard.previousElementSibling;
+            if (!prev) return;
+            boardAssignmentList.insertBefore(myCard, prev);
         } else {
-            const lastIdx = allCards.lastIndexOf(myCards[myCards.length - 1]);
-            let neighbor = null;
-            for (let i = lastIdx + 1; i < allCards.length; i++) {
-                if (allCards[i].dataset.recordId !== recordId) { neighbor = allCards[i]; break; }
-            }
-            if (!neighbor) return;
-            const neighborGroup = allCards.filter(c => c.dataset.recordId === neighbor.dataset.recordId);
-            const anchorAfter = neighborGroup[neighborGroup.length - 1].nextElementSibling;
-            myCards.forEach(c => boardAssignmentList.insertBefore(c, anchorAfter));
+            const next = myCard.nextElementSibling;
+            if (!next) return;
+            boardAssignmentList.insertBefore(next, myCard);
         }
 
         await persistAssignmentOrder();
