@@ -39,6 +39,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         location.reload();
     };
 
+    // 모바일 브라우저가 예전 버전 페이지를 계속 들고 있는 경우가 있어서,
+    // 매번 새로운 쿼리스트링을 붙여 강제로 새 페이지처럼 다시 불러오게 함 (bfcache/디스크캐시 우회)
+    window.forceRefreshApp = function() {
+        window.location.href = window.location.pathname + '?_r=' + Date.now();
+    };
+
     // 1. 설정 및 글로벌 변수
     const n8nBase = "https://primary-production-a6fa.up.railway.app";
     const API_ADMIN_GET_URL = `${n8nBase}/webhook/film-admin-get`;
