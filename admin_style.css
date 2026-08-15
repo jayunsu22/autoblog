@@ -28,6 +28,8 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    /* 화면 맨 위에서 더 당겼을 때 브라우저 기본 "당겨서 새로고침" 동작 막기 - 상단 🔄 버튼으로만 새로고침하게 함 */
+    overscroll-behavior-y: contain;
 }
 
 /* 상단 헤더 */

@@ -41,7 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 모바일 브라우저가 예전 버전 페이지를 계속 들고 있는 경우가 있어서,
     // 매번 새로운 쿼리스트링을 붙여 강제로 새 페이지처럼 다시 불러오게 함 (bfcache/디스크캐시 우회)
+    // 현장목록 캐시도 같이 지워서, 다시 열렸을 때 무조건 서버에서 진짜 최신 데이터를 새로 받아오게 함
     window.forceRefreshApp = function() {
+        sessionStorage.removeItem('cachedAdminListData');
         window.location.href = window.location.pathname + '?_r=' + Date.now();
     };
 
@@ -284,7 +286,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     let globalMasterItems = [];
     let globalSamplePhotos = {}; // "구분|품목명|텍스트" -> 사진URL (품목설정 모달에서 사용)
 
-    async function loadProjectList() {
+    // 세션 안에서(탭을 완전히 닫기 전까지는) 현장목록을 다시 조회하지 않고 캐시로 즉시 복원 -
+    // 다른 앱 갔다 오거나 화면 전환할 때마다 매번 서버 재조회하며 지체되는 것 방지.
+    // 진짜 최신 데이터가 필요하면 상단 🔄 버튼으로 명시적으로 새로고침함
+    const ADMIN_LIST_CACHE_KEY = 'cachedAdminListData';
+
+    // forceRefresh: true면 캐시 무시하고 무조건 서버에서 새로 조회 (데이터가 실제로 바뀐 직후에만 사용)
+    async function loadProjectList(forceRefresh = false) {
+        if (!forceRefresh) {
+            const cached = sessionStorage.getItem(ADMIN_LIST_CACHE_KEY);
+            if (cached) {
+                try {
+                    applyProjectListData(JSON.parse(cached), false);
+                    return;
+                } catch (e) {
+                    // 캐시가 깨져있으면 무시하고 아래에서 정상적으로 새로 조회
+                }
+            }
+        }
+
         showLoading("현장 목록을 조회하는 중...");
         try {
             const response = await fetchWithTimeout(`${API_ADMIN_GET_URL}?_t=${Date.now()}`, {
@@ -297,20 +317,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 data = data[0] || {};
             }
 
-            // 프로젝트 카드 그리드 렌더링 (보관함 보기 토글을 위해 전체 목록을 캐시해둠)
-            globalProjectList = data.projects || [];
-
-            // 프로젝트별 진행률도 목록 조회 한 번에 서버에서 미리 계산해서 옴 (예전엔 카드마다 따로 상세조회 했었음)
-            Object.entries(data.progress || {}).forEach(([id, val]) => projectProgressCache.set(id, val));
-
-            renderProjectGrid();
-            
-            // 자주 쓰는 공지사항 칩 렌더링
-            renderNoticeQuickTags(data.quickNotices);
-
-            // 시공품목 마스터 데이터 캐싱
-            globalMasterItems = data.masterItems || [];
-            globalSamplePhotos = data.samplePhotos || {};
+            sessionStorage.setItem(ADMIN_LIST_CACHE_KEY, JSON.stringify(data));
+            applyProjectListData(data, true);
 
         } catch (error) {
             console.error(error);
@@ -318,6 +326,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             hideLoading();
         }
+    }
+
+    // isFresh: 방금 서버에서 받아온 진짜 최신 데이터인지 여부.
+    // 캐시로 복원하는 경우엔 이미 화면에서 실시간으로 갱신된 진행률(projectProgressCache)을
+    // 오래된 캐시값으로 덮어쓰지 않도록, 아직 값이 없는 항목만 채워넣음
+    function applyProjectListData(data, isFresh) {
+        globalProjectList = data.projects || [];
+
+        Object.entries(data.progress || {}).forEach(([id, val]) => {
+            if (isFresh || !projectProgressCache.has(id)) projectProgressCache.set(id, val);
+        });
+
+        renderProjectGrid();
+        renderNoticeQuickTags(data.quickNotices);
+        globalMasterItems = data.masterItems || [];
+        globalSamplePhotos = data.samplePhotos || {};
+    }
+
+    // 서버 재조회 없이 로컬 상태만 바꾼 경우(예: 보관 처리) 캐시도 같이 최신화해서,
+    // 다음에 캐시로 복원할 때 방금 바뀐 내용이 다시 원래대로 안 보이게 함
+    function refreshListCacheFromMemory() {
+        const progress = {};
+        projectProgressCache.forEach((val, id) => {
+            if (val && val !== 'error') progress[id] = val;
+        });
+        sessionStorage.setItem(ADMIN_LIST_CACHE_KEY, JSON.stringify({
+            projects: globalProjectList,
+            progress,
+            quickNotices: globalQuickNotices,
+            masterItems: globalMasterItems,
+            samplePhotos: globalSamplePhotos
+        }));
     }
 
     // 자주쓰는공지 칩 동적 렌더링 (신규 현장 등록 모달 + 기존 현장 상세 화면, 두 군데 모두에 반영)
@@ -541,6 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 else project.보관함 = archived;
             }
             renderProjectGrid();
+            refreshListCacheFromMemory();
             showToast(archived ? "현장을 보관했습니다." : "보관을 해제했습니다.");
         } catch (error) {
             console.error(error);
@@ -735,7 +776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             showToast("현장 등록이 성공적으로 완료되었습니다!");
             closeNewProjectModal();
-            loadProjectList(); // 목록 리로드
+            loadProjectList(true); // 방금 새로 생겼으니 캐시 말고 무조건 새로 조회
         } catch (error) {
             console.error(error);
             showToast("현장 등록에 실패했습니다. 다시 시도해 주세요.", "danger");
@@ -2501,7 +2542,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (isCreate) {
                 showToast(`${nameText} 품목이 성공적으로 등록되었습니다!`);
-                await loadProjectList();
+                await loadProjectList(true); // 방금 새로 생겼으니 캐시 말고 무조건 새로 조회
             } else {
                 const item = globalMasterItems[idx];
                 item.품목명 = nameText;
