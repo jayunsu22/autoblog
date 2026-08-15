@@ -2231,8 +2231,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         input.click();
     }
 
-    // 지침 줄/사진슬롯 목록을 받아서, 줄마다 [텍스트 + 샘플사진 썸네일 or 추가버튼] 행을 만들어줌
-    function buildSampleLineRows(구분, 품목명, lines, map, onDone) {
+    // 지침 줄/사진슬롯 목록을 받아서, 줄마다 [텍스트 + (핸들) + 샘플사진 썸네일 or 추가버튼] 행을 만들어줌
+    // onReorder(newLines)가 주어지면 ✋ 핸들을 잡고 드래그해서 순서변경도 가능해짐 (현재는 공지사항에만 사용)
+    function buildSampleLineRows(구분, 품목명, lines, map, onDone, onReorder) {
         const wrap = document.createElement('div');
         wrap.className = 'sample-photo-line-list';
 
@@ -2242,7 +2243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return wrap;
         }
 
-        cleanLines.forEach(line => {
+        cleanLines.forEach((line) => {
             const row = document.createElement('div');
             row.className = 'sample-photo-line-row';
 
@@ -2250,6 +2251,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             textSpan.className = 'sample-photo-line-text';
             textSpan.textContent = line;
             row.appendChild(textSpan);
+
+            if (onReorder) {
+                row.draggable = true;
+                row.addEventListener('dragstart', () => {
+                    row.classList.add('dragging');
+                });
+                row.addEventListener('dragend', () => {
+                    row.classList.remove('dragging');
+                    const newLines = Array.from(wrap.querySelectorAll('.sample-photo-line-row'))
+                        .map(r => r.querySelector('.sample-photo-line-text').textContent);
+                    onReorder(newLines);
+                });
+
+                const handle = document.createElement('span');
+                handle.className = 'sample-photo-line-handle';
+                handle.title = '여기를 잡고 위아래로 드래그해서 순서 이동';
+                handle.textContent = '✋';
+                row.appendChild(handle);
+            }
 
             const existingUrl = getSamplePhotoUrl(map, 구분, 품목명, line);
             if (existingUrl) {
@@ -2289,13 +2309,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'btn-sample-photo-add';
-                btn.textContent = '📷 샘플사진';
+                btn.textContent = '📷 사진';
                 btn.addEventListener('click', () => triggerSamplePhotoPick(구분, 품목명, line, onDone));
                 row.appendChild(btn);
             }
 
             wrap.appendChild(row);
         });
+
+        if (onReorder) {
+            wrap.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const draggingRow = wrap.querySelector('.sample-photo-line-row.dragging');
+                if (!draggingRow) return;
+                const siblings = [...wrap.querySelectorAll('.sample-photo-line-row:not(.dragging)')];
+                const nextSibling = siblings.find(sibling => {
+                    const box = sibling.getBoundingClientRect();
+                    return e.clientY <= box.top + box.height / 2;
+                });
+                wrap.insertBefore(draggingRow, nextSibling);
+            });
+        }
 
         return wrap;
     }
@@ -2339,7 +2373,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lines = noticeEl ? noticeEl.value.split('\n') : [];
         const map = (currentDetailData && currentDetailData.samplePhotos) || {};
         container.innerHTML = '';
-        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos));
+        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos, (newLines) => {
+            // 순서만 화면(텍스트박스)에 바로 반영 - 실제 저장은 기존 "공지사항 저장" 버튼을 눌러야 함(기존 수정 방식과 동일)
+            if (noticeEl) noticeEl.value = newLines.join('\n');
+            renderNoticeSamplePhotos();
+        }));
     }
 
     const detailProjectNoticeEl = document.getElementById('detailProjectNotice');

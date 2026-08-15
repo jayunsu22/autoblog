@@ -1886,6 +1886,18 @@ body {
     word-break: keep-all;
 }
 
+.sample-photo-line-row.dragging {
+    opacity: 0.4;
+}
+
+.sample-photo-line-handle {
+    flex-shrink: 0;
+    font-size: 15px;
+    cursor: grab;
+    padding: 2px 4px;
+    user-select: none;
+}
+
 .sample-photo-thumb {
     width: 34px;
     height: 34px;
