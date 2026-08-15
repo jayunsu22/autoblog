@@ -1391,17 +1391,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
         const orderIds = Array.from(priorityByRecordId.keys());
-        const reorderTasks = orderIds.map(id => ({ id, priority: priorityByRecordId.get(id) }));
+        const allTasks = orderIds.map(id => ({ id, priority: priorityByRecordId.get(id) }));
+
+        // 실제로 순위가 바뀐 작업만 서버로 전송 (전체를 매번 다시 보내면 목록이 길 때 느리고 실패하기 쉬움)
+        const reorderTasks = allTasks.filter(({ id, priority }) => {
+            const task = currentDetailData.tasks.find(t => t.id === id);
+            return !task || task.fields.작업우선순위 !== priority;
+        });
 
         // 2. 임시 로컬 캐시에 정렬 순서 보관 (즉시 반영용)
         const sortOrderKey = `task_sort_order_${activeProjectCode}`;
         localStorage.setItem(sortOrderKey, JSON.stringify(orderIds));
 
         // 3. 로컬 데이터에도 바로 반영해서, 같은 품목의 두 카드가 화면에서 즉시 붙어 보이게 함
-        reorderTasks.forEach(({ id, priority }) => {
+        allTasks.forEach(({ id, priority }) => {
             const task = currentDetailData.tasks.find(t => t.id === id);
             if (task) task.fields.작업우선순위 = priority;
         });
+
+        if (reorderTasks.length === 0) {
+            renderBoardAssignments();
+            return;
+        }
 
         showLoading("우선순위 순서 저장 중...");
         try {
