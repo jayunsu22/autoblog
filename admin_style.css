@@ -1101,7 +1101,7 @@ body {
 }
 
 .assignment-card.stage-construction .assigned-item-name {
-    color: var(--warning);
+    color: #c2410c;
 }
 
 .btn-unassign {
