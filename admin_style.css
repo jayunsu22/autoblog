@@ -1095,6 +1095,15 @@ body {
     font-weight: 800;
 }
 
+/* 밑작업/시공 구분이 한눈에 보이도록 품목명 색상을 다르게 */
+.assignment-card.stage-prep .assigned-item-name {
+    color: var(--primary-blue);
+}
+
+.assignment-card.stage-construction .assigned-item-name {
+    color: var(--warning);
+}
+
 .btn-unassign {
     background: #fee2e2;
     border: none;

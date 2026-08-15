@@ -1232,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isCompleted = !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
 
         const card = document.createElement('div');
-        card.className = `assignment-card${isCompleted ? ' completed' : ''}`;
+        card.className = `assignment-card${isCompleted ? ' completed' : ''} ${stage === '밑작업' ? 'stage-prep' : 'stage-construction'}`;
         card.dataset.recordId = recordId;
         card.dataset.stage = stage;
 
