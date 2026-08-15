@@ -299,6 +299,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 프로젝트 카드 그리드 렌더링 (보관함 보기 토글을 위해 전체 목록을 캐시해둠)
             globalProjectList = data.projects || [];
+
+            // 프로젝트별 진행률도 목록 조회 한 번에 서버에서 미리 계산해서 옴 (예전엔 카드마다 따로 상세조회 했었음)
+            Object.entries(data.progress || {}).forEach(([id, val]) => projectProgressCache.set(id, val));
+
             renderProjectGrid();
             
             // 자주 쓰는 공지사항 칩 렌더링
@@ -464,13 +468,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 카드의 진행률 배지 렌더링 - 캐시에 있으면 즉시 표시, 없으면 로딩 표시하고 백그라운드에서 조회
+    // 카드의 진행률 배지 렌더링 - 목록 조회 한 번에 서버에서 프로젝트별로 미리 계산해서 오기 때문에
+    // (예전처럼 카드마다 따로 상세조회를 안 해도 됨 - 진행률 배지 때문에 목록 열 때마다 실행이 여러 번 몰리던 문제 해결)
     function renderProjectProgressBadge(recordId) {
         const el = document.getElementById(`progress-${recordId}`);
         if (!el) return;
         const cached = projectProgressCache.get(recordId);
 
-        if (cached && cached !== 'loading' && cached !== 'error') {
+        if (cached && cached !== 'error') {
             const { done, total } = cached;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
             el.innerHTML = `
@@ -480,34 +485,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        if (cached === 'error') {
-            el.innerHTML = `<span class="card-progress-text muted">진행률 확인 실패</span>`;
-            return;
-        }
-
-        el.innerHTML = `<span class="card-progress-text muted">진행률 확인 중...</span>`;
-        if (cached !== 'loading') {
-            loadProjectProgress(recordId);
-        }
-    }
-
-    // 현장 상세 API를 재사용해서 이 현장의 완료/전체 작업 개수를 백그라운드에서 조회
-    async function loadProjectProgress(recordId) {
-        projectProgressCache.set(recordId, 'loading');
-        try {
-            const response = await fetchWithTimeout(`${API_DETAIL_URL}?code=${recordId}`);
-            if (!response.ok) throw new Error("진행률 조회 실패");
-            const result = await response.json();
-            const data = Array.isArray(result) ? result[0] : result;
-            const tasks = data.tasks || [];
-            const done = tasks.filter(t => t.fields.밑작업완료 && t.fields.시공완료).length;
-            projectProgressCache.set(recordId, { done, total: tasks.length });
-        } catch (error) {
-            console.error(error);
-            projectProgressCache.set(recordId, 'error');
-        } finally {
-            renderProjectProgressBadge(recordId);
-        }
+        // 작업이 아직 하나도 없는 신규 현장 등, 서버 집계에 없는 경우
+        el.innerHTML = `<span class="card-progress-text muted">0/0 완료</span>`;
     }
 
     // 현장 목록 상단의 "보관함 보기" 토글 바 렌더링
