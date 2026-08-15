@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260814g">
+    <link rel="stylesheet" href="admin_style.css?v=20260814h">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -39,12 +39,12 @@
             <div class="logo-area" onclick="goHome()">
                 <span class="logo-icon">🏢</span>
                 <h1>필름현장관리자</h1>
+                <button class="refresh-btn" onclick="event.stopPropagation(); forceRefreshApp()" title="최신 버전으로 새로고침">🔄</button>
             </div>
             <div class="header-nav">
                 <button class="nav-btn active" id="homeTabBtn" onclick="goHome()">현장 목록</button>
                 <button class="nav-btn" onclick="openItemConfigModal()">⚙️ 시공품목 설정</button>
                 <button class="nav-btn" id="newProjectBtn" onclick="openNewProjectModal()">➕ 새 현장 개설</button>
-                <button class="nav-btn" onclick="forceRefreshApp()" title="최신 버전으로 새로고침">🔄</button>
                 <button class="nav-btn" onclick="lockAdminApp()" title="잠금">🔒</button>
             </div>
         </header>
