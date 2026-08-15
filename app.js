@@ -680,8 +680,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 숨겨진 File Input을 만들어 카메라 업로드 실행
+    // 사진 슬롯 클릭 시: 촬영/앨범 선택 시트를 먼저 띄움
+    // (기기/안드로이드 버전에 따라 파일 선택창이 카메라 옵션 없이 곧장 사진첩만 뜨는 경우가 있어,
+    //  항상 선택지를 명시적으로 보여줘서 모든 기기에서 촬영이 가능하도록 함)
     function triggerImageUpload(slotElement) {
+        showPhotoSourceSheet((useCamera) => {
+            openFileInputForSlot(slotElement, useCamera);
+        });
+    }
+
+    // 숨겨진 File Input을 만들어 카메라 촬영 또는 앨범 선택 실행
+    function openFileInputForSlot(slotElement, useCamera) {
         // 이미 활성화된 input이 있다면 바디에서 지워줌
         const oldInput = document.getElementById('tempFileInput');
         if (oldInput) oldInput.remove();
@@ -690,6 +699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         input.type = 'file';
         input.id = 'tempFileInput';
         input.accept = 'image/*';
+        if (useCamera) input.capture = 'environment';
         input.className = 'file-input';
 
         input.addEventListener('change', (e) => {
@@ -702,6 +712,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.body.appendChild(input);
         input.click();
+    }
+
+    // 촬영/앨범 선택 하단 시트
+    function showPhotoSourceSheet(onChoice) {
+        const old = document.getElementById('photoSourceSheetOverlay');
+        if (old) old.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'photoSourceSheetOverlay';
+        overlay.className = 'photo-source-sheet-overlay';
+        overlay.innerHTML = `
+            <div class="photo-source-sheet">
+                <button type="button" class="photo-source-btn" data-source="camera">📷 사진 촬영</button>
+                <button type="button" class="photo-source-btn" data-source="gallery">🖼️ 앨범에서 선택</button>
+                <button type="button" class="photo-source-btn photo-source-cancel" data-source="cancel">취소</button>
+            </div>
+        `;
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                return;
+            }
+            const btn = e.target.closest('.photo-source-btn');
+            if (!btn) return;
+            const source = btn.dataset.source;
+            overlay.remove();
+            if (source === 'camera') onChoice(true);
+            else if (source === 'gallery') onChoice(false);
+        });
+
+        document.body.appendChild(overlay);
     }
 
     // 휴대폰 원본 사진(보통 3~8MB)을 블로그에 쓰기 충분한 해상도로 줄여서 업로드 속도 개선
