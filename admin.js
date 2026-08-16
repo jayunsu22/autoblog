@@ -297,8 +297,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cached = sessionStorage.getItem(ADMIN_LIST_CACHE_KEY);
             if (cached) {
                 try {
-                    applyProjectListData(JSON.parse(cached), false);
-                    return;
+                    const parsed = JSON.parse(cached);
+                    // 현장이 0개로 캐싱된 경우는 일시적인 조회 오류였을 가능성이 있어 못 믿고 다시 조회함
+                    // (한번 빈 값으로 캐싱되면 실제 데이터가 있어도 계속 빈 화면만 보이는 문제 방지)
+                    if ((parsed.projects || []).length > 0) {
+                        applyProjectListData(parsed, false);
+                        return;
+                    }
                 } catch (e) {
                     // 캐시가 깨져있으면 무시하고 아래에서 정상적으로 새로 조회
                 }
