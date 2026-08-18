@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260814i">
+    <link rel="stylesheet" href="admin_style.css?v=20260814j">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -76,17 +76,22 @@
                 </div>
             </div>
 
-            <!-- 현장 공지 및 주의사항 설정 바 -->
+            <!-- 현장 공지 및 주의사항 설정 바 (한번 설정해두면 자주 안 바뀌어서 기본은 접어둠) -->
             <div class="item-select-bar" style="display: flex; flex-direction: column; gap: 8px;">
-                <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 공지설정</h3>
-                <div class="add-notice-template-wrap" style="display: flex; gap: 8px;">
-                    <input type="text" id="detailCustomNoticeTagInput" placeholder="새로운 자주 쓰는 공지사항 추가..." style="flex: 1; padding: 8px 12px; font-size: 13px; border: 1.5px solid var(--border-color); border-radius: 8px; font-weight: 600; outline: none;">
-                    <button type="button" onclick="addNewNoticeTemplateTag('detailCustomNoticeTagInput', 'detailProjectNotice')" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
+                <div style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="toggleNoticeSection()">
+                    <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">📢 공지설정</h3>
+                    <span id="noticeSectionToggleArrow" style="font-size: 13px; color: var(--text-muted);">▶ 펼치기</span>
                 </div>
-                <div class="notice-quick-tags" id="detailNoticeQuickTags"></div>
-                <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 20.25px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
-                <div id="noticeSamplePhotos" style="margin-top: 4px;"></div>
-                <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
+                <div id="noticeSectionBody" style="display: none; flex-direction: column; gap: 8px;">
+                    <div class="add-notice-template-wrap" style="display: flex; gap: 8px;">
+                        <input type="text" id="detailCustomNoticeTagInput" placeholder="새로운 자주 쓰는 공지사항 추가..." style="flex: 1; padding: 8px 12px; font-size: 13px; border: 1.5px solid var(--border-color); border-radius: 8px; font-weight: 600; outline: none;">
+                        <button type="button" onclick="addNewNoticeTemplateTag('detailCustomNoticeTagInput', 'detailProjectNotice')" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
+                    </div>
+                    <div class="notice-quick-tags" id="detailNoticeQuickTags"></div>
+                    <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 20.25px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
+                    <div id="noticeSamplePhotos" style="margin-top: 4px;"></div>
+                    <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
+                </div>
             </div>
 
             <!-- ★ 사장님 기획: 드래그 앤 드롭 3분할 업무 배분판 ★ -->
@@ -345,6 +350,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260814k"></script>
+    <script src="admin.js?v=20260814l"></script>
 </body>
 </html>

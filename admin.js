@@ -34,6 +34,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         return false;
     };
 
+    // 공지설정 영역 접기/펼치기 - 한번 설정하면 자주 안 바뀌는 내용이라 기본은 접어둠
+    window.toggleNoticeSection = function() {
+        const body = document.getElementById('noticeSectionBody');
+        const arrow = document.getElementById('noticeSectionToggleArrow');
+        const isOpen = body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'flex';
+        arrow.textContent = isOpen ? '▶ 펼치기' : '▼ 접기';
+    };
+
     window.lockAdminApp = function() {
         localStorage.removeItem(ADMIN_UNLOCK_KEY);
         location.reload();
@@ -523,9 +532,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (cached && cached !== 'error') {
             const { done, total } = cached;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            // 미완료 품목이 있으면, 바로 그 품목만 골라서 보여주는 화면으로 점프하는 링크를 같이 표시
+            const incompleteLinkHtml = (total > 0 && done < total)
+                ? `<span class="card-progress-incomplete-link" onclick="event.stopPropagation(); openProjectIncompleteView('${recordId}')">⚠️ 미완료 보기</span>`
+                : '';
             el.innerHTML = `
                 <div class="card-progress-bar"><div class="card-progress-fill" style="width:${pct}%;"></div></div>
                 <span class="card-progress-text">${done}/${total} 완료</span>
+                ${incompleteLinkHtml}
             `;
             return;
         }
@@ -834,6 +848,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // 현장 목록 카드의 "⚠️ 미완료 보기" 링크 - 상세화면 들어가자마자 미완료 품목만 바로 보여줌
+    window.openProjectIncompleteView = async function(recordId) {
+        await showProjectDetail(recordId);
+        activeZoneTab = INCOMPLETE_TAB;
+        renderZoneAssignBoard();
+    };
+
     // 🔄 버튼 - 현재 보고 있는 현장 데이터를 다시 불러와서 배정표/완료 상태를 최신으로 갱신
     window.refreshBoardData = async function() {
         if (!activeProjectCode) return;
@@ -865,6 +886,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderBoardAssignments();
     }
 
+    const INCOMPLETE_TAB = '__INCOMPLETE__'; // 구역 탭 대신 "미완료만 보기"를 고른 상태를 나타내는 특수값
+
     // 구역별 품목 활성화 + 기사 배정 매트릭스 (구역 탭 + 탭 내 품목 행 리스트)
     function renderZoneAssignBoard() {
         const allItems = [...(currentDetailData.masterItems || [])];
@@ -881,11 +904,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const zoneNames = ZONE_ORDER;
 
-        if (!activeZoneTab || !zoneMap.has(activeZoneTab)) {
+        // 구역 상관없이 활성화됐지만 밑작업+시공이 둘 다 안 끝난 품목만 모음 - "미완료" 탭용
+        const incompleteEntries = [];
+        allItems.forEach(item => {
+            const zone = ZONE_ORDER.includes(item.구역) ? item.구역 : "기타";
+            const isActive = activeItems.includes(item.품목명);
+            if (!isActive) return;
+            const task = tasks.find(t => t.fields.시공품목 === item.품목명);
+            if (!task) return;
+            const isFullyCompleted = !!(task.fields.밑작업완료 && task.fields.시공완료);
+            if (!isFullyCompleted) incompleteEntries.push({ item, task, zone });
+        });
+
+        if (!activeZoneTab || (activeZoneTab !== INCOMPLETE_TAB && !zoneMap.has(activeZoneTab))) {
+            activeZoneTab = zoneNames[0] || null;
+        }
+        // 미완료 탭을 보다가 마지막 미완료 항목까지 끝내면 자동으로 첫 구역 탭으로 돌아감
+        if (activeZoneTab === INCOMPLETE_TAB && incompleteEntries.length === 0) {
             activeZoneTab = zoneNames[0] || null;
         }
 
         zoneAssignTabs.innerHTML = "";
+
+        if (incompleteEntries.length > 0) {
+            const incompleteTab = document.createElement('button');
+            incompleteTab.type = 'button';
+            incompleteTab.className = `item-category-tab incomplete-tab ${activeZoneTab === INCOMPLETE_TAB ? 'active' : ''}`;
+            incompleteTab.textContent = `⚠️ 미완료 (${incompleteEntries.length})`;
+            incompleteTab.addEventListener('click', () => {
+                activeZoneTab = INCOMPLETE_TAB;
+                renderZoneAssignBoard();
+            });
+            zoneAssignTabs.appendChild(incompleteTab);
+        }
+
         zoneNames.forEach(zone => {
             const tab = document.createElement('button');
             tab.type = 'button';
@@ -898,6 +950,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             zoneAssignTabs.appendChild(tab);
         });
 
+        zoneAssignItemList.innerHTML = "";
+
+        // "미완료" 탭: 구역 구분 없이 미완료 품목만 방 이름 붙여서 나열
+        if (activeZoneTab === INCOMPLETE_TAB) {
+            zoneItemCountBadge.textContent = `${incompleteEntries.length}개`;
+            incompleteEntries.forEach(({ item, task, zone }) => {
+                zoneAssignItemList.appendChild(createZoneItemRow(item, true, task, workers, zone));
+            });
+            return;
+        }
+
         const itemsInZone = [...(zoneMap.get(activeZoneTab) || [])];
         itemsInZone.sort((a, b) => {
             const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
@@ -908,7 +971,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         zoneItemCountBadge.textContent = `${itemsInZone.length}개`;
 
-        zoneAssignItemList.innerHTML = "";
         if (itemsInZone.length === 0) {
             zoneAssignItemList.innerHTML = `<div class="empty-state" style="padding: 20px;">이 구역에 등록된 품목이 없습니다.</div>`;
             return;
@@ -923,7 +985,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateZoneSaveToolbar();
     }
 
-    function createZoneItemRow(item, isActive, task, workers) {
+    function createZoneItemRow(item, isActive, task, workers, zoneLabel) {
         const itemName = item.품목명;
         const fields = task ? task.fields : {};
         const pending = zonePendingChanges.get(itemName) || {};
@@ -951,7 +1013,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'zone-item-name';
-        nameSpan.textContent = itemName;
+        nameSpan.textContent = zoneLabel ? `${itemName} · ${zoneLabel}` : itemName;
 
         const assignWrap = document.createElement('div');
         assignWrap.className = 'zone-item-assign';
