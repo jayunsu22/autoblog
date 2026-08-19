@@ -43,6 +43,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         arrow.textContent = isOpen ? '▶ 펼치기' : '▼ 접기';
     };
 
+    // 중점체크사항 영역 접기/펼치기 (공지설정과 동일한 패턴)
+    window.toggleCheckpointSection = function() {
+        const body = document.getElementById('checkpointSectionBody');
+        const arrow = document.getElementById('checkpointSectionToggleArrow');
+        const isOpen = body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'flex';
+        arrow.textContent = isOpen ? '▶ 펼치기' : '▼ 접기';
+    };
+
     window.lockAdminApp = function() {
         localStorage.removeItem(ADMIN_UNLOCK_KEY);
         location.reload();
@@ -354,6 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderProjectGrid();
         renderNoticeQuickTags(data.quickNotices);
+        renderCheckpointQuickTags(data.checkpointQuickList);
         globalMasterItems = data.masterItems || [];
         globalSamplePhotos = data.samplePhotos || {};
     }
@@ -369,6 +379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             projects: globalProjectList,
             progress,
             quickNotices: globalQuickNotices,
+            checkpointQuickList: globalCheckpointQuickList,
             masterItems: globalMasterItems,
             samplePhotos: globalSamplePhotos
         }));
@@ -875,6 +886,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         renderQuickTagsInto('detailNoticeQuickTags', 'detailProjectNotice');
         renderNoticeSamplePhotos();
+
+        // 중점체크사항 (사장님 전용 점검 메모장) 렌더링
+        renderCheckpointChecklist();
 
         // 1. 3분할 보드 - 1열 (시공기사 목록) 렌더링
         renderBoardWorkers();
@@ -2656,6 +2670,165 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error(error);
             showToast("공지사항 저장 중 문제가 발생했습니다.", "danger");
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // ===== 중점체크사항 (사장님이 관리자 화면에서 직접 체크하는 개인 점검 메모장 - 공지사항과 달리 노션 발행에는 안 들어감) =====
+    let globalCheckpointQuickList = [];
+
+    // 자주 쓰는 중점체크 템플릿 칩 렌더링 (누르면 현재 현장의 체크리스트에 미체크 상태로 추가됨)
+    function renderCheckpointQuickTags(list) {
+        globalCheckpointQuickList = list || globalCheckpointQuickList || [];
+        const container = document.getElementById('checkpointQuickTags');
+        if (!container) return;
+        container.innerHTML = "";
+
+        if (globalCheckpointQuickList.length === 0) {
+            container.innerHTML = `<span style="font-size: 12px; color: var(--text-muted); padding: 4px;">에어테이블에 등록된 중점체크 템플릿이 없습니다. 아래에서 새로 등록해 보세요!</span>`;
+            return;
+        }
+
+        globalCheckpointQuickList.forEach(text => {
+            const span = document.createElement('span');
+            span.className = 'notice-tag';
+            span.textContent = text;
+            span.onclick = function() {
+                addCheckpointItem(text);
+            };
+            container.appendChild(span);
+        });
+    }
+
+    // "[✓] 텍스트" / "[ ] 텍스트" 한 줄씩으로 저장된 텍스트를 {checked, text} 배열로 파싱
+    // (점검결과 필드 등 이 프로젝트 다른 곳에서도 쓰는 것과 같은 체크박스 표기 방식)
+    function parseCheckpointLines(raw) {
+        return (raw || "").split('\n').map(l => l.trim()).filter(l => l !== "").map(line => {
+            const checked = line.startsWith('[✓]');
+            const text = line.replace(/^\[[✓ ]\]\s*/, '');
+            return { checked, text };
+        });
+    }
+
+    function serializeCheckpointLines(lines) {
+        return lines.map(l => `[${l.checked ? '✓' : ' '}] ${l.text}`).join('\n');
+    }
+
+    // 템플릿 칩을 눌러 새 항목(미체크 상태)을 현재 현장 체크리스트에 추가
+    function addCheckpointItem(text) {
+        const lines = parseCheckpointLines((currentDetailData.project && currentDetailData.project.중점체크사항) || "");
+        if (lines.some(l => l.text === text)) {
+            showToast("이미 등록된 항목입니다.", "warning");
+            return;
+        }
+        lines.push({ checked: false, text });
+        persistCheckpointLines(lines);
+    }
+
+    // 현재 현장의 중점체크사항 목록을 체크박스 행으로 렌더링
+    function renderCheckpointChecklist() {
+        const container = document.getElementById('checkpointChecklist');
+        if (!container) return;
+        const lines = parseCheckpointLines((currentDetailData.project && currentDetailData.project.중점체크사항) || "");
+        container.innerHTML = "";
+
+        if (lines.length === 0) {
+            container.innerHTML = `<span style="font-size:12px;color:var(--text-muted);padding:4px;">등록된 중점체크사항이 없습니다. 위 템플릿을 누르거나 새로 등록해 보세요.</span>`;
+            return;
+        }
+
+        lines.forEach((line, idx) => {
+            const row = document.createElement('div');
+            row.className = `checkpoint-item-row ${line.checked ? 'checked' : ''}`;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'checkpoint-item-checkbox';
+            checkbox.checked = line.checked;
+            checkbox.addEventListener('change', () => {
+                const current = parseCheckpointLines((currentDetailData.project && currentDetailData.project.중점체크사항) || "");
+                current[idx].checked = checkbox.checked;
+                persistCheckpointLines(current);
+            });
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'checkpoint-item-text';
+            textSpan.textContent = line.text;
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'checkpoint-item-delete';
+            delBtn.title = '삭제';
+            delBtn.textContent = '×';
+            delBtn.addEventListener('click', () => {
+                const current = parseCheckpointLines((currentDetailData.project && currentDetailData.project.중점체크사항) || "");
+                current.splice(idx, 1);
+                persistCheckpointLines(current);
+            });
+
+            row.appendChild(checkbox);
+            row.appendChild(textSpan);
+            row.appendChild(delBtn);
+            container.appendChild(row);
+        });
+    }
+
+    // 체크/추가/삭제 즉시 자동 저장 (실제 체크리스트처럼 바로바로 반영되게 함 - 별도 저장 버튼 없음)
+    async function persistCheckpointLines(lines) {
+        const newText = serializeCheckpointLines(lines);
+        if (currentDetailData.project) currentDetailData.project.중점체크사항 = newText;
+        renderCheckpointChecklist();
+
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_checkpoint',
+                    projectCode: activeProjectCode,
+                    checklistText: newText
+                })
+            });
+            if (!response.ok) throw new Error("저장 실패");
+        } catch (error) {
+            console.error(error);
+            showToast("중점체크사항 저장에 실패했습니다.", "danger");
+        }
+    }
+
+    // 자주 쓰는 중점체크 템플릿을 에어테이블에 실시간 등록 (자주쓰는공지 등록과 동일한 패턴)
+    window.addNewCheckpointTemplateTag = async function() {
+        const input = document.getElementById('detailCustomCheckpointTagInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        if (globalCheckpointQuickList.includes(text)) {
+            showToast("이미 등록된 중점체크 템플릿입니다.", "warning");
+            input.value = "";
+            return;
+        }
+
+        showLoading("새 중점체크 템플릿을 등록하는 중...");
+        try {
+            const response = await fetchWithTimeout("https://primary-production-a6fa.up.railway.app/webhook/film-checkpoint-template-create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ checkText: text })
+            });
+
+            if (!response.ok) throw new Error("등록 실패");
+
+            globalCheckpointQuickList.push(text);
+            renderCheckpointQuickTags(globalCheckpointQuickList);
+            // 새로 등록한 템플릿은 지금 보고 있는 현장의 체크리스트에도 바로 추가
+            addCheckpointItem(text);
+
+            input.value = "";
+            showToast("중점체크 템플릿이 에어테이블에 실시간 등록되었습니다.", "success");
+        } catch (error) {
+            console.error(error);
+            showToast("중점체크 템플릿 등록에 실패했습니다.", "danger");
         } finally {
             hideLoading();
         }

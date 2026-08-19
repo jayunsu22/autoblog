@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260814j">
+    <link rel="stylesheet" href="admin_style.css?v=20260819a">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -91,6 +91,22 @@
                     <textarea id="detailProjectNotice" rows="9" style="width: 100%; padding: 12px; font-size: 20.25px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; resize: vertical;" placeholder="현장 공지사항을 입력해 주세요. (줄바꿈(엔터)으로 한 줄씩 공지사항을 입력)"></textarea>
                     <div id="noticeSamplePhotos" style="margin-top: 4px;"></div>
                     <button class="action-btn copy" onclick="saveProjectNotice()" style="padding: 10px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">공지사항 저장</button>
+                </div>
+            </div>
+
+            <!-- 현장 중점체크사항 (사장님이 이 화면에서 직접 체크하는 개인 점검 메모장 - 노션 발행에는 안 들어감) -->
+            <div class="item-select-bar" style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="toggleCheckpointSection()">
+                    <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">🔍 중점체크사항</h3>
+                    <span id="checkpointSectionToggleArrow" style="font-size: 13px; color: var(--text-muted);">▶ 펼치기</span>
+                </div>
+                <div id="checkpointSectionBody" style="display: none; flex-direction: column; gap: 8px;">
+                    <div class="add-notice-template-wrap" style="display: flex; gap: 8px;">
+                        <input type="text" id="detailCustomCheckpointTagInput" placeholder="새로운 자주 쓰는 중점체크사항 추가..." style="flex: 1; padding: 8px 12px; font-size: 13px; border: 1.5px solid var(--border-color); border-radius: 8px; font-weight: 600; outline: none;">
+                        <button type="button" onclick="addNewCheckpointTemplateTag()" style="padding: 8px 14px; font-size: 13px; font-weight: 800; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease;">+ 템플릿 등록</button>
+                    </div>
+                    <div class="notice-quick-tags" id="checkpointQuickTags"></div>
+                    <div id="checkpointChecklist" style="display: flex; flex-direction: column; gap: 6px;"></div>
                 </div>
             </div>
 
@@ -350,6 +366,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260814l"></script>
+    <script src="admin.js?v=20260819a"></script>
 </body>
 </html>
