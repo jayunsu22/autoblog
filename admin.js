@@ -773,7 +773,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.openWorkerLink = function() {
         if (activeProjectCode) {
-            window.open(`${WORKER_APP_BASE_URL}?code=${activeProjectCode}`, '_blank');
+            const url = `${WORKER_APP_BASE_URL}?code=${activeProjectCode}`;
+            // 모바일 브라우저/웹뷰에서는 window.open()이 새 탭 대신 현재 창을 덮어써버리는 경우가 있어,
+            // 실제 <a target="_blank"> 클릭을 흉내내는 방식이 더 안정적으로 새 탭을 연다.
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
     };
 
