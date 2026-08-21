@@ -506,6 +506,17 @@ body {
     color: white;
 }
 
+.checkpoint-unchecked-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 800;
+    color: white;
+    background: var(--danger);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
 /* 좁은 화면에서도 카테고리 탭 5개가 한 줄에 들어가도록 */
 @media (max-width: 900px) {
     .item-category-tabs {

@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260819a">
+    <link rel="stylesheet" href="admin_style.css?v=20260819b">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -97,7 +97,10 @@
             <!-- 현장 중점체크사항 (사장님이 이 화면에서 직접 체크하는 개인 점검 메모장 - 노션 발행에는 안 들어감) -->
             <div class="item-select-bar" style="display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="toggleCheckpointSection()">
-                    <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">🔍 중점체크사항</h3>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">🔍 중점체크사항</h3>
+                        <span id="checkpointUncheckedBadge"></span>
+                    </div>
                     <span id="checkpointSectionToggleArrow" style="font-size: 13px; color: var(--text-muted);">▶ 펼치기</span>
                 </div>
                 <div id="checkpointSectionBody" style="display: none; flex-direction: column; gap: 8px;">
@@ -366,6 +369,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260819a"></script>
+    <script src="admin.js?v=20260819b"></script>
 </body>
 </html>

@@ -2733,6 +2733,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lines = parseCheckpointLines((currentDetailData.project && currentDetailData.project.중점체크사항) || "");
         container.innerHTML = "";
 
+        // 섹션이 접혀있어도 미체크 개수가 바로 보이도록, 제목 옆에 배지로 표시
+        const badge = document.getElementById('checkpointUncheckedBadge');
+        if (badge) {
+            const uncheckedCount = lines.filter(l => !l.checked).length;
+            if (uncheckedCount > 0) {
+                badge.textContent = `⚠️ 미완료 ${uncheckedCount}`;
+                badge.className = 'checkpoint-unchecked-badge';
+            } else {
+                badge.textContent = '';
+                badge.className = '';
+            }
+        }
+
         if (lines.length === 0) {
             container.innerHTML = `<span style="font-size:12px;color:var(--text-muted);padding:4px;">등록된 중점체크사항이 없습니다. 위 템플릿을 누르거나 새로 등록해 보세요.</span>`;
             return;
