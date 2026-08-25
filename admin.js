@@ -1389,7 +1389,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         bodyHtml += `<div class="assignment-card-body" style="display: none; padding-top: 10px;">`;
 
         if (guidelinesText) {
-            const linesList = guidelinesText.split('\n').filter(l => l.trim() !== "" && !excludedLines.includes(l.trim()));
+            // 체크박스로 포함/제외를 표시해야 하므로, 이미 제외된 줄도 목록에서 지우지 않고
+            // 체크 해제된 상태로 그대로 보여줌 (예전 X버튼 방식은 제외되면 목록에서 사라졌음)
+            const linesList = guidelinesText.split('\n').filter(l => l.trim() !== "");
             const existingResults = fields.점검결과 || "";
 
             bodyHtml += `
@@ -1425,8 +1427,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         bodyHtml += `
             <div class="site-note-box" style="margin-top: 14px;">
                 <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">📝 이 현장의 이 품목만의 특이사항 (작업자에게 체크 항목으로 노출됨)</h4>
-                <textarea id="siteNoteInput-${recordId}" rows="2" placeholder="예: 이 문틀은 이미 파손 이력 있음, 더 조심히 다뤄주세요" style="width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 8px; resize: vertical; box-sizing: border-box;">${siteNoteValue}</textarea>
-                <button type="button" onclick="saveSiteNote('${recordId}')" style="margin-top: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">지침/특이사항 저장</button>
+                <textarea id="siteNoteInput-${recordId}-${stage}" rows="2" placeholder="예: 이 문틀은 이미 파손 이력 있음, 더 조심히 다뤄주세요" style="width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 8px; resize: vertical; box-sizing: border-box;">${siteNoteValue}</textarea>
+                <button type="button" onclick="saveSiteNote('${recordId}', '${stage}')" style="margin-top: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">지침/특이사항 저장</button>
             </div>
         `;
 
@@ -1672,8 +1674,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 지침 체크박스(포함/제외) + 특이사항 텍스트를 한 번에 일괄 저장 - 체크박스 클릭마다 서버로 안 보내고
     // 이 버튼을 눌렀을 때만 통신해서 지침이 여러 개여도 지연 없이 빠르게 체크할 수 있게 함
-    window.saveSiteNote = async function(recordId) {
-        const textarea = document.getElementById(`siteNoteInput-${recordId}`);
+    window.saveSiteNote = async function(recordId, stage) {
+        const textarea = document.getElementById(`siteNoteInput-${recordId}-${stage}`);
         const noteText = textarea ? textarea.value.trim() : "";
         const cardBody = textarea ? textarea.closest('.assignment-card-body') : null;
         const excludedLines = [];
