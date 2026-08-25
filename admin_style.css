@@ -1260,23 +1260,13 @@ body {
     font-weight: 800;
 }
 
-/* 지침 개별 제외(X) 버튼 */
-.btn-exclude-guideline {
+/* 지침 개별 포함/제외 체크박스 - 클릭 시 즉시저장 안 하고, 아래 저장 버튼으로 일괄 반영 */
+.guideline-include-input {
     flex-shrink: 0;
-    width: 22px;
-    height: 22px;
-    border: none;
-    border-radius: 6px;
-    background: #fee2e2;
-    color: #dc2626;
-    font-size: 14px;
-    font-weight: 800;
-    line-height: 1;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-blue);
     cursor: pointer;
-}
-
-.btn-exclude-guideline:hover {
-    background: #fecaca;
 }
 
 /* 현장 특이사항(1회성 코멘트) 입력 박스 */
