@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_JOURNAL_CREATE_URL = `${n8nBase}/webhook/film-journal-create`;
     const API_JOURNAL_LIST_URL = `${n8nBase}/webhook/film-journal-list`;
     const API_JOURNAL_PHOTO_URL = `${n8nBase}/webhook/film-journal-photo-upload`;
+    const API_JOURNAL_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-journal-photo-delete`;
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
@@ -1781,9 +1782,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     feature: f.현장의특징 || "",
                     episode: f.오늘의에피소드 || "",
                     published: !!f.발행완료,
-                    sceneSaved: (f.현장사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename })),
-                    cleanupSaved: (f.정리정돈사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename })),
-                    filmSaved: (f.필름사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ url: a.url, filename: a.filename }))
+                    sceneSaved: (f.현장사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ id: a.id, url: a.url, filename: a.filename })),
+                    cleanupSaved: (f.정리정돈사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ id: a.id, url: a.url, filename: a.filename })),
+                    filmSaved: (f.필름사진 || []).filter(a => a.url && !a.url.includes('1x1.png')).map(a => ({ id: a.id, url: a.url, filename: a.filename }))
                 };
 
                 // 저장된 순서(포함작업목록)를 복원해서, 창을 닫았다 다시 열어도(다른 일차 작업 중에도)
@@ -1839,7 +1840,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 현장일지 사진 타일 그리드 렌더링
-    // 1) 이미 저장된 사진(읽기 전용) 2) 아직 업로드 안 된 사진(삭제 가능) 3) "사진 추가" 타일
+    // 1) 이미 저장된 사진(삭제 가능, 서버 반영) 2) 아직 업로드 안 된 사진(삭제 가능, 로컬만) 3) "사진 추가" 타일
     function renderJournalPhotoGrid(gridId, kind) {
         const d = dayDrafts[activeDayIndex];
         const savedKey = { scene: 'sceneSaved', cleanup: 'cleanupSaved', film: 'filmSaved' }[kind];
@@ -1849,10 +1850,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const grid = document.getElementById(gridId);
         grid.innerHTML = "";
 
-        saved.forEach(photo => {
+        saved.forEach((photo, idx) => {
             const tile = document.createElement('div');
             tile.className = 'journal-photo-tile has-image';
             tile.innerHTML = `<img src="${photo.url}" class="journal-photo-preview" alt="사진">`;
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'journal-photo-delete';
+            delBtn.textContent = '×';
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteSavedJournalPhoto(kind, gridId, idx);
+            });
+            tile.appendChild(delBtn);
             grid.appendChild(tile);
         });
 
@@ -1881,7 +1891,92 @@ document.addEventListener('DOMContentLoaded', async () => {
         grid.appendChild(addTile);
     }
 
+    // 이미 서버(Airtable)에 저장된 현장일지 사진 삭제 - 낙관적으로 먼저 화면에서 지우고,
+    // 실패하면 원래대로 복구 + 에러 토스트 (샘플사진 삭제와 동일한 UX 패턴)
+    async function deleteSavedJournalPhoto(kind, gridId, idx) {
+        if (!confirm('이 사진을 삭제할까요?')) return;
+        const d = dayDrafts[activeDayIndex];
+        const savedKey = { scene: 'sceneSaved', cleanup: 'cleanupSaved', film: 'filmSaved' }[kind];
+        const fieldName = { scene: '현장사진', cleanup: '정리정돈사진', film: '필름사진' }[kind];
+        const saved = d[savedKey];
+        const removed = saved[idx];
+        if (!d.journalId || !removed) return;
+
+        // 남길 사진 중 하나라도 id가 없으면(예전 세션 데이터 등) 그대로 keepAttachmentIds에 넣으면
+        // 서버에서 그 사진까지 함께 지워질 수 있어 - 안전하게 새로고침을 유도하고 중단
+        const remainingAfterDelete = saved.filter((_, i) => i !== idx);
+        if (remainingAfterDelete.some(p => !p.id)) {
+            showToast('사진 정보를 다시 불러온 뒤 삭제해 주세요 (새로고침 필요).', 'danger');
+            return;
+        }
+
+        const backup = saved.slice();
+        saved.splice(idx, 1);
+        renderJournalPhotoGrid(gridId, kind);
+
+        showLoading('사진 삭제 중...');
+        try {
+            const res = await fetchWithTimeout(API_JOURNAL_PHOTO_DELETE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    journalId: d.journalId,
+                    fieldName: fieldName,
+                    keepAttachmentIds: saved.map(p => p.id)
+                })
+            });
+            if (!res.ok) throw new Error("사진 삭제 실패");
+            showToast('사진이 삭제되었습니다.');
+        } catch (error) {
+            console.error(error);
+            d[savedKey] = backup;
+            renderJournalPhotoGrid(gridId, kind);
+            showToast('사진 삭제에 실패했습니다.', 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
     function triggerJournalPhotoPick(kind, gridId) {
+        showPhotoSourceSheet((useCamera) => {
+            openJournalFileInput(kind, gridId, useCamera);
+        });
+    }
+
+    // 촬영/앨범 선택 하단 시트 - 기기/안드로이드 버전에 따라 파일 선택창이 카메라 옵션 없이
+    // 곧장 사진첩만 뜨는 경우가 있어, 항상 선택지를 명시적으로 보여줘서 모든 기기에서 촬영 가능하게 함
+    function showPhotoSourceSheet(onChoice) {
+        const old = document.getElementById('journalPhotoSourceSheetOverlay');
+        if (old) old.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'journalPhotoSourceSheetOverlay';
+        overlay.className = 'photo-source-sheet-overlay';
+        overlay.innerHTML = `
+            <div class="photo-source-sheet">
+                <button type="button" class="photo-source-btn" data-source="camera">📷 사진 촬영</button>
+                <button type="button" class="photo-source-btn" data-source="gallery">🖼️ 앨범에서 선택</button>
+                <button type="button" class="photo-source-btn photo-source-cancel" data-source="cancel">취소</button>
+            </div>
+        `;
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                return;
+            }
+            const btn = e.target.closest('.photo-source-btn');
+            if (!btn) return;
+            const source = btn.dataset.source;
+            overlay.remove();
+            if (source === 'camera') onChoice(true);
+            else if (source === 'gallery') onChoice(false);
+        });
+
+        document.body.appendChild(overlay);
+    }
+
+    function openJournalFileInput(kind, gridId, useCamera) {
         const oldInput = document.getElementById('tempJournalFileInput');
         if (oldInput) oldInput.remove();
 
@@ -1889,6 +1984,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         input.type = 'file';
         input.id = 'tempJournalFileInput';
         input.accept = 'image/*';
+        if (useCamera) input.capture = 'environment';
         input.style.display = 'none';
 
         input.addEventListener('change', (e) => {
@@ -2121,6 +2217,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             body: formData
         }, 40000);
         if (!res.ok) throw new Error("사진 업로드 실패: " + file.name);
+        // Airtable uploadAttachment 응답에 그 필드의 최신 첨부파일 전체 목록(각 id 포함)이 들어있음 -
+        // 방금 올린 파일을 filename으로 찾아서 attachment id를 확보해둬야 나중에 삭제 시 정확히 지정 가능
+        const data = await res.json();
+        const attachments = (data.fields && data.fields[fieldName]) || [];
+        const matches = attachments.filter(a => a.filename === resizedFile.name);
+        const newAttachment = matches[matches.length - 1];
+        return {
+            id: newAttachment && newAttachment.id,
+            url: (newAttachment && newAttachment.url) || undefined,
+            filename: resizedFile.name
+        };
     }
 
     // 일지제목/날씨/특징/에피소드를 Airtable에 저장하고, 아직 업로드 안 된 사진들을 업로드.
@@ -2165,7 +2272,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             results.forEach((r, i) => {
                 const file = pendingList[i];
                 if (r.status === 'fulfilled') {
-                    savedList.push({ url: URL.createObjectURL(file), filename: file.name });
+                    const uploaded = r.value || {};
+                    savedList.push({
+                        id: uploaded.id,
+                        url: uploaded.url || URL.createObjectURL(file),
+                        filename: uploaded.filename || file.name
+                    });
                 } else {
                     console.error(r.reason);
                     remaining.push(file);

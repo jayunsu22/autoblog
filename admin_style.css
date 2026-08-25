@@ -2139,6 +2139,53 @@ body {
     justify-content: center;
 }
 
+/* 현장일지 사진 촬영/앨범 선택 하단 시트 (모바일 카메라 접근용) */
+.photo-source-sheet-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 1300;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.photo-source-sheet {
+    background: var(--bg-card);
+    width: 100%;
+    max-width: 480px;
+    border-radius: 20px 20px 0 0;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.photo-source-btn {
+    background: var(--primary-light);
+    color: var(--primary-blue);
+    border: none;
+    border-radius: 14px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.photo-source-btn:active {
+    opacity: 0.8;
+}
+
+.photo-source-btn.photo-source-cancel {
+    background: #f1f5f9;
+    color: var(--text-main);
+    margin-top: 4px;
+}
+
 /* 모바일 화면에서 좌우 빈 공간 최소화 및 꽉 차는 레이아웃 최적화 */
 @media (max-width: 900px) {
     .admin-main {
