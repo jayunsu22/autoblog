@@ -1704,6 +1704,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             showToast("저장되었습니다.");
             await showProjectDetail(activeProjectCode);
+            reopenAssignmentCard(recordId, stage); // 저장 후 새로고침으로 접혀버리지 않고 보던 카드 그대로 열어둠
         } catch (error) {
             console.error(error);
             showToast("저장에 실패했습니다.", "danger");
@@ -1711,6 +1712,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             hideLoading();
         }
     };
+
+    // showProjectDetail()이 전체를 새로 그리면서 카드가 다시 접히므로, 저장 직후 방금 보던 카드를 다시 펼쳐줌
+    function reopenAssignmentCard(recordId, stage) {
+        const card = document.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"]`);
+        if (!card) return;
+        const body = card.querySelector('.assignment-card-body');
+        const arrow = card.querySelector('.toggle-arrow');
+        if (body) body.style.display = 'block';
+        if (arrow) arrow.textContent = '▲';
+    }
 
     // 9. 블로그 발행 모달 (일차별 탭 UI)
     function createEmptyDayDraft(dayNumber) {
@@ -2772,6 +2783,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast("현장 공지 및 주의사항이 성공적으로 저장되었습니다!");
             // 데이터 재조회 및 화면 갱신
             await showProjectDetail(activeProjectCode);
+            // 재조회로 전체가 다시 그려지면서 기본값(접힘)으로 돌아가므로, 저장 직후에는 다시 펼쳐서 보여줌
+            const noticeBody = document.getElementById('noticeSectionBody');
+            const noticeArrow = document.getElementById('noticeSectionToggleArrow');
+            if (noticeBody) noticeBody.style.display = 'flex';
+            if (noticeArrow) noticeArrow.textContent = '▼ 접기';
         } catch (error) {
             console.error(error);
             showToast("공지사항 저장 중 문제가 발생했습니다.", "danger");
