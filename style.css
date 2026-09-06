@@ -604,6 +604,7 @@ body {
     cursor: default;
     background: #f8fafc;
     border-style: dashed;
+    pointer-events: none; /* 시공 단계 전용 칸 - 밑작업 화면에서는 클릭 자체가 안 먹히게 완전히 막음 */
 }
 
 .photo-slot.damage-locked .photo-slot-label {
