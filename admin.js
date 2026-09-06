@@ -936,7 +936,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!isActive) return;
             const task = tasks.find(t => t.fields.시공품목 === item.품목명);
             if (!task) return;
-            const isFullyCompleted = !!(task.fields.밑작업완료 && task.fields.시공완료);
+            // 파손 비포는 찍었는데 애프터가 아직 없으면(순서상 개수가 안 맞으면), 밑작업/시공이 다 끝났어도 미완료로 취급
+            const isValidDamagePhoto = (p) => !!p && p.url && !p.url.includes('1x1.png');
+            const damageBeforeCount = (task.fields.파손비포사진 || []).filter(isValidDamagePhoto).length;
+            const damageAfterCount = (task.fields.파손애프터사진 || []).filter(isValidDamagePhoto).length;
+            const hasUnpairedDamagePhoto = damageBeforeCount > damageAfterCount;
+            const isFullyCompleted = !!(task.fields.밑작업완료 && task.fields.시공완료) && !hasUnpairedDamagePhoto;
             if (!isFullyCompleted) incompleteEntries.push({ item, task, zone });
         });
 
@@ -1017,7 +1022,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const effectivePrep = pending.밑작업 !== undefined ? pending.밑작업 : (fields.밑작업기사 || "");
         const effectiveWrap = pending.시공 !== undefined ? pending.시공 : (fields.시공기사 || "");
         const hasAnyAssignee = !!(effectivePrep || effectiveWrap);
-        const isFullyCompleted = !!(fields.밑작업완료 && fields.시공완료);
+        const isValidDamagePhotoRow = (p) => !!p && p.url && !p.url.includes('1x1.png');
+        const damageBeforeCountRow = (fields.파손비포사진 || []).filter(isValidDamagePhotoRow).length;
+        const damageAfterCountRow = (fields.파손애프터사진 || []).filter(isValidDamagePhotoRow).length;
+        const isFullyCompleted = !!(fields.밑작업완료 && fields.시공완료) && damageBeforeCountRow <= damageAfterCountRow;
 
         const row = document.createElement('div');
         row.className = `zone-item-row ${isFullyCompleted ? 'completed' : ''} ${zonePendingChanges.has(itemName) ? 'pending' : ''}`;

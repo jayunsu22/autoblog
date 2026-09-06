@@ -563,6 +563,78 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
 
+        // 파손 복구 비포/애프터 사진 (선택) - 밑작업 때 비포를 찍어두면 시공 때 같은 순번의 애프터 칸이 자동으로 생김.
+        // 여러 군데 파손이 있으면 비포를 여러 장 추가해서 순서대로(1번째↔1번째, 2번째↔2번째) 짝지음.
+        const damagePhotos = fields.파손비포사진 || [];
+        const damageAfterPhotos = fields.파손애프터사진 || [];
+        const damagePairCount = damagePhotos.filter(isValidPhoto).length;
+        const MAX_DAMAGE_PAIRS = 5;
+
+        let damageRowsHtml = "";
+        for (let i = 0; i < damagePairCount; i++) {
+            const beforeData = damagePhotos[i];
+            const beforeTile = `
+                <div class="photo-slot has-image damage-slot">
+                    <img src="${beforeData.url}" class="photo-slot-preview" alt="비포 ${i + 1}">
+                    <span class="damage-slot-badge">비포 ${i + 1}</span>
+                    ${stage === '밑작업' ? `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '파손비포사진', ${i})">×</button>` : ''}
+                </div>
+            `;
+
+            let afterTile;
+            if (stage === '밑작업') {
+                afterTile = `<div class="photo-slot damage-slot damage-locked"><div class="photo-slot-label">시공 단계에서<br>촬영</div></div>`;
+            } else {
+                const afterData = damageAfterPhotos[i];
+                const afterHasImage = isValidPhoto(afterData);
+                const afterUploading = !!(afterData && afterData.isUploading);
+                if (afterHasImage) {
+                    afterTile = `
+                        <div class="photo-slot has-image damage-slot ${afterUploading ? 'uploading' : ''}">
+                            <img src="${afterData.url}" class="photo-slot-preview" alt="애프터 ${i + 1}">
+                            <span class="damage-slot-badge">애프터 ${i + 1}</span>
+                            ${afterUploading ? `<div class="photo-slot-uploading-badge">⏳</div>` : `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '파손애프터사진', ${i})">×</button>`}
+                        </div>
+                    `;
+                } else {
+                    afterTile = `
+                        <div class="photo-slot add-tile damage-slot"
+                             data-slot-index="${i}" data-slot-name="애프터 ${i + 1}"
+                             data-record-id="${recordId}" data-field-name="파손애프터사진">
+                            <div class="photo-slot-icon">📷</div>
+                            <div class="photo-slot-label">애프터 ${i + 1}<br>촬영</div>
+                        </div>
+                    `;
+                }
+            }
+
+            damageRowsHtml += `<div class="damage-pair-row">${beforeTile}<span class="damage-arrow">→</span>${afterTile}</div>`;
+        }
+
+        let damageAddHtml = "";
+        if (stage === '밑작업' && damagePairCount < MAX_DAMAGE_PAIRS) {
+            damageAddHtml = `
+                <div class="photo-slot add-tile damage-add-tile"
+                     data-slot-index="${damagePairCount}" data-slot-name="비포 ${damagePairCount + 1}"
+                     data-record-id="${recordId}" data-field-name="파손비포사진">
+                    <div class="photo-slot-icon">➕</div>
+                    <div class="photo-slot-label">파손 부위 추가</div>
+                </div>
+            `;
+        }
+
+        let damageHtml = "";
+        if (damagePairCount > 0 || stage === '밑작업') {
+            damageHtml = `
+                <div class="damage-photos-box">
+                    <h3>🔧 파손 복구 사진${stage === '밑작업' ? ' (선택)' : ''}</h3>
+                    ${stage === '밑작업' ? `<p class="damage-hint">파손된 곳이 있으면 비포 사진을 찍어두세요. 시공 후 애프터 사진과 자동으로 짝지어집니다.</p>` : ''}
+                    ${damageRowsHtml}
+                    ${damageAddHtml}
+                </div>
+            `;
+        }
+
         // 제출 버튼 영역 (우측에 창닫기 버튼 배치)
         let buttonHtml = `
             <div class="submit-btn-area" style="margin-top: 24px;">
@@ -581,7 +653,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         card.innerHTML = `
             ${headerHtml}
             <div class="task-card-body" id="${cardBodyId}" style="display: ${isExpanded ? 'block' : 'none'};">
-                ${checklistHtml}${photoHtml}${buttonHtml}
+                ${checklistHtml}${photoHtml}${damageHtml}${buttonHtml}
             </div>
         `;
         taskListContainer.appendChild(card);

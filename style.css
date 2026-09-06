@@ -555,6 +555,70 @@ body {
     color: var(--primary-blue);
 }
 
+/* 파손 복구 비포/애프터 사진 (선택) */
+.damage-photos-box {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1.5px solid #f1f5f9;
+}
+
+.damage-hint {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: -4px 0 12px;
+}
+
+.damage-pair-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.damage-pair-row .photo-slot.damage-slot {
+    flex: 1;
+    aspect-ratio: 1.3;
+}
+
+.damage-arrow {
+    font-size: 15px;
+    font-weight: 800;
+    color: #cbd5e1;
+    flex-shrink: 0;
+}
+
+.damage-slot-badge {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    background: rgba(15, 23, 42, 0.65);
+    color: white;
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 20px;
+}
+
+.photo-slot.damage-locked {
+    cursor: default;
+    background: #f8fafc;
+    border-style: dashed;
+}
+
+.photo-slot.damage-locked .photo-slot-label {
+    text-align: center;
+    line-height: 1.4;
+}
+
+.damage-add-tile {
+    aspect-ratio: unset;
+    flex-direction: row;
+    gap: 6px;
+    padding: 10px;
+    border-style: dashed;
+}
+
 /* 제출 영역 버튼 */
 .submit-btn-area {
     margin-top: 10px;
