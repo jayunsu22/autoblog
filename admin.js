@@ -5,6 +5,12 @@ window.onerror = function(message, source, lineno, colno, error) {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // 현장소장용 개별 링크 (admin.html?code=현장ID) - 다른 팀장에게 이 링크만 전달하면
+    // 암호 없이 바로 그 현장 상세화면으로 들어가고, 다른 현장 목록/전역 설정은 안 보이게 잠가둠
+    const urlParams = new URLSearchParams(window.location.search);
+    const scopedProjectCode = urlParams.get('code');
+    const isScopedManagerView = !!scopedProjectCode;
+
     // 0. 관리자 암호 잠금 (간단한 접근 차단용 - 강력한 보안은 아니고, 평문 대신 해시로만 비교)
     const ADMIN_PIN_HASH = '7e25b45addda2b4082938558981200dfe5a3cfb20ee4a81092510d26715c2049';
     const ADMIN_UNLOCK_KEY = 'adminUnlocked';
@@ -173,6 +179,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 전역 함수 노출
     window.goHome = function() {
+        if (isScopedManagerView) return; // 현장소장 링크로 들어온 경우 다른 현장 목록으로 못 나가게 막음
         activeProjectCode = "";
         currentDetailData = null;
         localStorage.removeItem('lastActiveProjectCode');
@@ -284,17 +291,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 4. 초기화 실행: 현장 리스트 로딩 (마지막으로 보던 현장이 있으면 그 화면으로 바로 복귀)
     function runAdminInit() {
+        // 현장소장용 개별 링크로 들어온 경우 - 다른 현장 못 보게 상단 메뉴 숨기고, 그 현장 화면으로 바로 진입
+        if (isScopedManagerView) {
+            const headerNavEl = document.getElementById('headerNav');
+            if (headerNavEl) headerNavEl.style.display = 'none';
+        }
         loadProjectList().then(() => {
-            const lastProjectCode = localStorage.getItem('lastActiveProjectCode');
-            if (lastProjectCode) {
-                showProjectDetail(lastProjectCode);
+            const targetCode = scopedProjectCode || localStorage.getItem('lastActiveProjectCode');
+            if (targetCode) {
+                showProjectDetail(targetCode);
             }
         });
     }
 
-    // 암호로 이미 인증된 상태면 바로 시작, 아니면 암호 입력창을 띄우고 성공 시 시작
-    if (localStorage.getItem(ADMIN_UNLOCK_KEY) === '1') {
-        runAdminInit();
+    // 현장소장용 링크는 암호 없이 바로 시작, 그 외엔 암호로 이미 인증된 상태면 바로 시작,
+    // 아니면 암호 입력창을 띄우고 성공 시 시작.
+    // runAdminInit()을 마이크로태스크로 한 틱 미뤄서, 이 시점 이후에 선언되는 const(예: ADMIN_LIST_CACHE_KEY)들이
+    // 먼저 다 초기화되게 함 (안 그러면 "Cannot access ... before initialization" 오류 발생)
+    if (isScopedManagerView || localStorage.getItem(ADMIN_UNLOCK_KEY) === '1') {
+        Promise.resolve().then(runAdminInit);
     } else {
         document.getElementById('pinLockOverlay').style.display = 'flex';
     }
@@ -784,6 +799,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+        }
+    };
+
+    // 다른 팀장에게 전달할 현장별 개별 링크 - admin.html 자기 자신 주소에 ?code=현장ID만 붙임.
+    // 이 링크로 들어오면 암호 없이 바로 그 현장 화면으로 들어가고, 다른 현장 목록/전역 설정은 안 보임 (isScopedManagerView)
+    window.copyManagerLink = function() {
+        if (activeProjectCode) {
+            const baseUrl = window.location.origin + window.location.pathname;
+            copyLink(`${baseUrl}?code=${activeProjectCode}`);
         }
     };
 
