@@ -68,7 +68,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 현장목록 캐시도 같이 지워서, 다시 열렸을 때 무조건 서버에서 진짜 최신 데이터를 새로 받아오게 함
     window.forceRefreshApp = function() {
         sessionStorage.removeItem('cachedAdminListData');
-        window.location.href = window.location.pathname + '?_r=' + Date.now();
+        // 기존 쿼리스트링(예: 현장소장 링크의 ?code=...)은 그대로 유지한 채 캐시버스팅용 _r만 갱신 -
+        // 예전처럼 pathname만으로 새로 만들면 ?code=가 날아가서 현장소장 링크의 범위 제한이 풀려버림
+        const params = new URLSearchParams(window.location.search);
+        params.set('_r', Date.now());
+        window.location.href = window.location.pathname + '?' + params.toString();
     };
 
     // 1. 설정 및 글로벌 변수
