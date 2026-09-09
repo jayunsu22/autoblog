@@ -22,12 +22,19 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+/* 위/아래로 끝까지 스크롤했을 때 모바일 브라우저의 당겨서 새로고침 제스처가
+   실수로 발동되지 않게 막음 - 새로고침은 화면의 새로고침 버튼으로만 하게 함 */
+html {
+    overscroll-behavior-y: contain;
+}
+
 body {
     background-color: #1e293b; /* 모바일 컨테이너 주변 데스크톱 배경 */
     color: var(--text-main);
     display: flex;
     justify-content: center;
     min-height: 100vh;
+    overscroll-behavior-y: contain;
 }
 
 /* 모바일 전용 앱 컨테이너 */

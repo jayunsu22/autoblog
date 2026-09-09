@@ -671,23 +671,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
 
             const photos = [];
+            // 완료보고 여부와 상관없이, 찍혀서 이미 저장된 사진은 바로 갤러리에 보여줌
+            // (임시저장 단계에서 찍은 사진도 완료보고 전까지 안 보이던 문제 수정)
             (data.tasks || []).forEach(task => {
                 const fields = task.fields || {};
                 const zone = zoneByItem[fields.시공품목] || '기타';
-                if (fields.시공완료) {
-                    (fields.시공후사진 || []).forEach(photo => {
-                        if (isValidPhoto(photo)) {
-                            photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '시공' });
-                        }
-                    });
-                }
-                if (fields.밑작업완료) {
-                    (fields.시공전사진 || []).forEach(photo => {
-                        if (isValidPhoto(photo)) {
-                            photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업' });
-                        }
-                    });
-                }
+                (fields.시공후사진 || []).forEach(photo => {
+                    if (isValidPhoto(photo)) {
+                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '시공' });
+                    }
+                });
+                (fields.시공전사진 || []).forEach(photo => {
+                    if (isValidPhoto(photo)) {
+                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업' });
+                    }
+                });
             });
 
             galleryAllPhotos = photos;
