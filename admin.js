@@ -77,7 +77,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 1. 설정 및 글로벌 변수
     const n8nBase = "https://primary-production-a6fa.up.railway.app";
-    const API_ADMIN_GET_URL = `${n8nBase}/webhook/film-admin-get`;
+    // film-admin-get-v2: 기존 6개 순차조회(약 2.7~3.7초) 대신 6개 테이블을 동시조회(병렬)해서
+    // 약 1.5~2초로 줄인 버전. 기존 film-admin-get 웹훅/노드는 그대로 살려뒀고(즉시 롤백용),
+    // V1/V2 응답이 완전히 동일한지 꼼꼼히 검증(구조 비교, 신규 현장 생성/작업추가/완료 시나리오,
+    // 동시요청 스트레스 테스트, 실제 화면 렌더링)한 뒤에 이 한 줄만 바꿔서 전환함.
+    const API_ADMIN_GET_URL = `${n8nBase}/webhook/film-admin-get-v2`;
     const API_DETAIL_URL = `${n8nBase}/webhook/film-quality-get`;
     const API_SAVE_URL = `${n8nBase}/webhook/film-quality-save`;
     const API_PUBLISH_URL = `${n8nBase}/webhook/film-blog-publish`;
