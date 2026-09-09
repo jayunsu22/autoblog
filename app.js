@@ -635,13 +635,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
         }
 
-        // 제출 버튼 영역 (우측에 창닫기 버튼 배치)
+        // 제출 버튼 영역 (좌측에 임시저장, 우측에 창닫기 버튼 배치)
         let buttonHtml = `
             <div class="submit-btn-area" style="margin-top: 24px;">
-                <button class="task-submit-btn ${isCompleted ? 'completed' : ''}" 
-                        ${isCompleted ? 'disabled' : ''} 
+                ${!isCompleted ? `
+                <button class="task-draft-btn" onclick="saveTaskDraft('${recordId}', '${stage}')">
+                    💾 임시저장
+                </button>` : ''}
+                <button class="task-submit-btn ${isCompleted ? 'completed' : ''}"
+                        ${isCompleted ? 'disabled' : ''}
                         onclick="submitTask('${recordId}', '${stage}')">
-                    ${isCompleted ? '✓ 품질 보고서 제출 완료' : `제출 및 ${stage} 완료하기`}
+                    ${isCompleted ? '✓ 품질 보고서 제출 완료' : `${stage}완료보고`}
                 </button>
                 <button class="task-close-btn" onclick="closeTaskCard('${recordId}', '${stage}')">
                     창닫기
@@ -665,14 +669,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         headerEl.addEventListener('click', () => {
             const isOpen = bodyEl.style.display !== 'none';
             if (isOpen) {
-                // 제출하지 않은 상태에서 작성 중인 내용이 있는지 체크 (닫기 경고)
+                // 확인창을 띄우는 대신, 작성 중인 체크리스트 내용을 조용히 임시저장해두고 닫음
+                // (사진은 촬영 즉시 이미 서버에 저장되어 있어서 여기선 체크리스트만 저장하면 됨)
                 if (!isCompleted) {
                     const hasChecked = card.querySelectorAll('.checklist-list .check-item.checked').length > 0;
                     const hasImage = card.querySelectorAll('.photo-slot.has-image').length > 0;
                     if (hasChecked || hasImage) {
-                        if (!confirm("아직 완료 보고서를 제출하지 않았습니다. 정말로 창을 닫으시겠습니까?")) {
-                            return; // 닫기 취소
-                        }
+                        persistTaskChecklist(recordId, stage, card);
                     }
                 }
                 bodyEl.style.display = 'none';
@@ -954,6 +957,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // 체크리스트 상태만 서버에 저장 (완료 처리는 하지 않음, 사진은 촬영 즉시 이미 저장되어 있음)
+    // - 임시저장 버튼과, 카드를 확인창 없이 닫을 때(창닫기/헤더 접기) 공통으로 사용
+    function persistTaskChecklist(recordId, stage, card) {
+        const checkedTexts = [];
+        card.querySelectorAll('.checklist-list .check-item').forEach(item => {
+            const text = item.querySelector('.check-text').textContent.trim();
+            const isChecked = item.classList.contains('checked');
+            checkedTexts.push(`${isChecked ? '[✓]' : '[ ]'} ${text}`);
+        });
+
+        return fetchWithTimeout(API_SAVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectCode: projectRecordId,
+                recordId: recordId,
+                type: 'save_draft',
+                stage: stage,
+                resultsText: checkedTexts.join('\n')
+            })
+        });
+    }
+
+    // 임시저장 버튼: 로딩/토스트를 보여주며 명시적으로 저장
+    window.saveTaskDraft = function(recordId, stage) {
+        const card = document.querySelector(`.task-card[data-id="${recordId}"][data-stage="${stage}"]`);
+        if (!card) return;
+
+        showLoading("임시저장 중...");
+        persistTaskChecklist(recordId, stage, card)
+            .then(response => {
+                if (!response.ok) throw new Error("임시저장 오류");
+                showToast("💾 임시저장 완료!");
+            })
+            .catch(error => {
+                console.error(error);
+                showToast("임시저장에 실패했습니다. 네트워크 상태를 확인해 주세요.", "danger");
+            })
+            .finally(hideLoading);
+    };
+
     // 태스크 최종 제출하기
     window.submitTask = function(recordId, stage) {
         const card = document.querySelector(`.task-card[data-id="${recordId}"][data-stage="${stage}"]`);
@@ -1012,18 +1056,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const card = bodyEl.closest('.task-card');
         const iconEl = card.querySelector('.task-accordion-icon');
 
-        // 제출하지 않은 상태에서 작성 중인 내용이 있는지 체크 (닫기 경고)
+        // 확인창을 띄우는 대신, 작성 중인 체크리스트 내용을 조용히 임시저장해두고 닫음
+        // (사진은 촬영 즉시 이미 서버에 저장되어 있어서 여기선 체크리스트만 저장하면 됨)
         const isCompleted = card.classList.contains('completed');
         if (!isCompleted) {
             const hasChecked = card.querySelectorAll('.checklist-list .check-item.checked').length > 0;
             const hasImage = card.querySelectorAll('.photo-slot.has-image').length > 0;
             if (hasChecked || hasImage) {
-                if (!confirm("아직 완료 보고서를 제출하지 않았습니다. 정말로 창을 닫으시겠습니까?")) {
-                    return; // 닫기 취소
-                }
+                persistTaskChecklist(recordId, stage, card);
             }
         }
-        
+
         bodyEl.style.display = 'none';
         if (iconEl) iconEl.textContent = '▼';
         

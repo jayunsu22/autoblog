@@ -656,6 +656,23 @@ body {
     background: #e2e8f0;
 }
 
+.task-draft-btn {
+    flex-shrink: 0;
+    padding: 16px 14px;
+    background: #eff6ff;
+    color: var(--primary-blue);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.task-draft-btn:hover {
+    background: #dbeafe;
+}
+
 .task-submit-btn.active {
     background: var(--warning);
     color: var(--text-main);
