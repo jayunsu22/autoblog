@@ -203,10 +203,11 @@ body {
 
 .project-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-color);
+    /* 현장이 여러 개 세로로 쌓였을 때 카드끼리 구분이 잘 안 보인다는 피드백으로 테두리를 굵고 진하게, 그림자도 진하게 조정 */
+    border: 2px solid #cbd5e1;
     border-radius: 16px;
     padding: 24px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.08);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -216,8 +217,8 @@ body {
 
 .project-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 20px -3px rgba(0,0,0,0.04);
-    border-color: #cbd5e1;
+    box-shadow: 0 12px 20px -3px rgba(0,0,0,0.1);
+    border-color: #94a3b8;
 }
 
 .card-header-info {
