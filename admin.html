@@ -277,10 +277,16 @@
         <div class="modal-content admin-modal" style="max-width: 900px; max-height: 88vh; max-height: 88dvh; overflow-y: auto;">
             <div class="modal-header">
                 <h2 id="galleryModalTitle">📷 현장 사진</h2>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <button type="button" onclick="copyGalleryShareLink()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">🔗 공유 링크 복사</button>
-                    <button class="close-modal-btn" onclick="closePhotoGalleryModal()">×</button>
-                </div>
+                <button class="close-modal-btn" onclick="closePhotoGalleryModal()">×</button>
+            </div>
+            <div class="gallery-controls-row" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--text-main); cursor: pointer;">
+                    <input type="checkbox" id="galleryTypeConstruction" checked onchange="toggleGalleryTypeFilter('시공')"> 시공사진
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--text-main); cursor: pointer;">
+                    <input type="checkbox" id="galleryTypePrep" onchange="toggleGalleryTypeFilter('밑작업')"> 밑작업 사진
+                </label>
+                <button type="button" onclick="copyGalleryShareLink()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; margin-left: auto;">🔗 공유 링크 복사</button>
             </div>
             <div class="gallery-zone-tabs" id="galleryZoneTabs">
                 <!-- 구역 탭이 동적으로 렌더링됨 -->
@@ -370,6 +376,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260907c"></script>
+    <script src="admin.js?v=20260909a"></script>
 </body>
 </html>

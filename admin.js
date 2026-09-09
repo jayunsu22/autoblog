@@ -101,8 +101,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let globalProjectList = []; // 현장 목록 전체 캐시 (보관함 보기 토글 시 재요청 없이 필터링)
     const projectProgressCache = new Map(); // recordId -> {done, total} | 'loading' | 'error' (카드별 진행률, 중복 조회 방지용 캐시)
     let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
-    let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명}]
+    let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명, type: '시공'|'밑작업'}]
     let galleryActiveZone = '전체'; // 사진 갤러리에서 현재 선택된 구역 탭
+    let galleryTypeFilter = { 시공: true, 밑작업: false }; // 시공사진/밑작업 사진 체크박스 상태 (기본은 시공사진만)
     let galleryFilteredPhotos = []; // 현재 탭 필터링된 사진 목록 (라이트박스 이전/다음 탐색 기준)
     let galleryLightboxIndex = -1; // 라이트박스에서 현재 보고 있는 사진의 인덱스
     let galleryTouchStartX = null; // 스와이프 제스처 시작 X좌표
@@ -649,6 +650,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('galleryZoneTabs').innerHTML = '';
         document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오는 중...</div>`;
 
+        // 열 때마다 기본값(시공사진만 체크)으로 초기화
+        galleryTypeFilter = { 시공: true, 밑작업: false };
+        document.getElementById('galleryTypeConstruction').checked = true;
+        document.getElementById('galleryTypePrep').checked = false;
+
         showLoading("현장 사진을 불러오는 중...");
         try {
             const response = await fetchWithTimeout(`${API_DETAIL_URL}?code=${recordId}`);
@@ -667,13 +673,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             const photos = [];
             (data.tasks || []).forEach(task => {
                 const fields = task.fields || {};
-                if (!fields.시공완료) return; // 시공이 완료된 작업의 사진만 모음 (밑작업 사진은 제외)
                 const zone = zoneByItem[fields.시공품목] || '기타';
-                (fields.시공후사진 || []).forEach(photo => {
-                    if (isValidPhoto(photo)) {
-                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '' });
-                    }
-                });
+                if (fields.시공완료) {
+                    (fields.시공후사진 || []).forEach(photo => {
+                        if (isValidPhoto(photo)) {
+                            photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '시공' });
+                        }
+                    });
+                }
+                if (fields.밑작업완료) {
+                    (fields.시공전사진 || []).forEach(photo => {
+                        if (isValidPhoto(photo)) {
+                            photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업' });
+                        }
+                    });
+                }
             });
 
             galleryAllPhotos = photos;
@@ -701,14 +715,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         copyLink(`${GALLERY_APP_BASE_URL}?code=${galleryActiveRecordId}`);
     };
 
+    // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭/그리드가 공통으로 이 목록을 기준으로 삼음)
+    function getGalleryTypeFilteredPhotos() {
+        return galleryAllPhotos.filter(p => galleryTypeFilter[p.type]);
+    }
+
+    window.toggleGalleryTypeFilter = function(type) {
+        galleryTypeFilter[type] = !galleryTypeFilter[type];
+        galleryActiveZone = '전체'; // 필터 바뀌면 지금 보던 구역 탭이 비어있을 수 있어 전체로 되돌림
+        renderGalleryZoneTabs();
+        renderGalleryPhotoGrid();
+    };
+
     // 사진에 찍힌 구역들만, ZONE_ORDER 순서대로 탭으로 노출 ("전체" 탭이 항상 맨 앞)
     function renderGalleryZoneTabs() {
         const container = document.getElementById('galleryZoneTabs');
-        const zonesPresent = ZONE_ORDER.filter(zone => galleryAllPhotos.some(p => p.구역 === zone));
+        const visiblePhotos = getGalleryTypeFilteredPhotos();
+        const zonesPresent = ZONE_ORDER.filter(zone => visiblePhotos.some(p => p.구역 === zone));
         const tabs = ['전체', ...zonesPresent];
 
         container.innerHTML = tabs.map(zone => {
-            const count = zone === '전체' ? galleryAllPhotos.length : galleryAllPhotos.filter(p => p.구역 === zone).length;
+            const count = zone === '전체' ? visiblePhotos.length : visiblePhotos.filter(p => p.구역 === zone).length;
             return `<button type="button" class="gallery-zone-tab ${zone === galleryActiveZone ? 'active' : ''}" onclick="filterGalleryByZone('${zone}')">${zone} (${count})</button>`;
         }).join('');
     }
@@ -721,9 +748,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderGalleryPhotoGrid() {
         const grid = document.getElementById('galleryPhotoGrid');
+        const visiblePhotos = getGalleryTypeFilteredPhotos();
         const photos = galleryActiveZone === '전체'
-            ? galleryAllPhotos
-            : galleryAllPhotos.filter(p => p.구역 === galleryActiveZone);
+            ? visiblePhotos
+            : visiblePhotos.filter(p => p.구역 === galleryActiveZone);
 
         galleryFilteredPhotos = photos; // 라이트박스 이전/다음 탐색은 지금 보이는(필터링된) 목록 기준
 
@@ -732,11 +760,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // 사진마다 어느 구역/품목인지 캡션으로 함께 표시 ("전체" 탭에서도 구분 가능하게)
+        // 사진마다 어느 구역/품목인지 캡션으로 함께 표시 ("전체" 탭에서도 구분 가능하게).
+        // 시공사진/밑작업 사진을 둘 다 켜서 섞여 보일 때는 어느 쪽인지도 같이 표시
+        const showTypeLabel = galleryTypeFilter.시공 && galleryTypeFilter.밑작업;
         grid.innerHTML = photos.map((p, idx) => `
             <div class="gallery-photo-tile" onclick="openGalleryLightbox(${idx})">
                 <img src="${p.url}" alt="${p.품목명}" loading="lazy">
-                <div class="gallery-photo-caption">${p.구역} · ${p.품목명}</div>
+                <div class="gallery-photo-caption">${p.구역} · ${p.품목명}${showTypeLabel ? ` · ${p.type}` : ''}</div>
             </div>
         `).join('');
     }
