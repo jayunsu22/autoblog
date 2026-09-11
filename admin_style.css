@@ -244,10 +244,13 @@ body {
     margin-bottom: 6px;
 }
 
-.card-address {
-    font-size: 13.5px;
+/* 카드 제목의 동/호수 부분: 단지명과 줄바꿈해서 한 톤 옅게 표시 */
+.card-title-sub {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--text-muted);
-    font-weight: 500;
+    margin-top: 2px;
 }
 
 .card-workers {
@@ -2285,8 +2288,8 @@ body {
         margin-bottom: 8px !important;
     }
 
-    .card-address {
-        font-size: 15.5px !important;
+    .card-title-sub {
+        font-size: 16px !important;
         line-height: 1.4 !important;
     }
 

@@ -547,17 +547,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ? `<button class="card-btn secondary" onclick="event.stopPropagation(); toggleProjectArchive('${recordId}', false)">📤 보관 해제</button>`
                 : `<button class="card-btn secondary" onclick="event.stopPropagation(); toggleProjectArchive('${recordId}', true)">📦 보관</button>`;
 
+            const cardTitle = splitProjectTitle(fields.현장명);
             card.innerHTML = `
                 <div class="card-header-info">
                     <span class="card-date-badge">🗓️ ${fields.시공일자 || '미지정'}</span>
-                    <h3 class="card-title">${fields.현장명 || '이름 없는 현장'}</h3>
-                    <div class="card-address">📍 ${fields.주소 || '주소 미지정'}</div>
+                    <h3 class="card-title">${cardTitle.main}${cardTitle.sub ? `<span class="card-title-sub">${cardTitle.sub}</span>` : ''}</h3>
                      <div class="card-workers">👷 기사: ${workersText}</div>
                     <div class="card-progress" id="progress-${recordId}"></div>
                 </div>
                 <div class="card-footer-btns">
                     <button class="card-btn secondary" onclick="event.stopPropagation(); openProjectPhotoGallery('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📷 사진</button>
-                    <button class="card-btn secondary" onclick="event.stopPropagation(); openRawPhotoCapture('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📸 원본사진</button>
+                    <button class="card-btn secondary" onclick="event.stopPropagation(); openRawPhotoCapture('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📸 원본</button>
                     ${archiveBtnHtml}
                     ${showArchivedProjects ? '' : '<button class="card-btn primary">업무 ▶</button>'}
                 </div>
