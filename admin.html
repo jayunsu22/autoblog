@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260912b">
+    <link rel="stylesheet" href="admin_style.css?v=20260912c">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -67,12 +67,14 @@
             <div class="detail-header-card">
                 <div class="detail-title-wrap">
                     <h2 id="detailProjectTitle">현장명 로드 중...</h2>
+                    <button type="button" class="title-edit-btn" onclick="renameProjectPrompt()" title="현장명 수정">✏️</button>
                     <span class="detail-date" id="detailProjectDate">2026-07-04</span>
                 </div>
                 <div class="detail-action-wrap">
                     <button class="action-btn copy" onclick="copyWorkerLink()">🔗 기사접속링크 복사</button>
                     <button class="action-btn copy" onclick="openWorkerLink()">🔗 링크 열기</button>
                     <button class="action-btn copy" onclick="copyManagerLink()">👔 현장소장 링크 복사</button>
+                    <button class="action-btn copy" onclick="openRawPhotoCaptureForActiveProject()">📸 원본사진</button>
                     <button class="action-btn publish" onclick="requestBlogPublish()">✍️ 블로그 원고 발행</button>
                 </div>
             </div>
@@ -310,21 +312,34 @@
                 <h2 id="rawPhotoZoneModalTitle" style="font-size: 16px;">📸 원본사진 구역 선택</h2>
                 <button class="close-modal-btn" onclick="closeRawPhotoZoneModal()">×</button>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px 0 8px;">
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방1')">방1</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방2')">방2</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방3')">방3</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방4')">방4</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방5')">방5</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('거실')">거실</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('주방')">주방</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('현관')">현관</button>
-                <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('기타')">기타</button>
+            <!-- 1단계: 구역 선택 -->
+            <div id="rawPhotoZoneStep">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px 0 8px;">
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방1')">방1</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방2')">방2</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방3')">방3</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방4')">방4</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('방5')">방5</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('거실')">거실</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('주방')">주방</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('현관')">현관</button>
+                    <button type="button" class="card-btn secondary" onclick="selectRawPhotoZone('기타')">기타</button>
+                </div>
             </div>
-            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding-top: 4px;">구역을 고르면 바로 카메라/갤러리가 열립니다.</div>
+            <!-- 2단계: 구역을 고른 뒤 촬영/앨범 중 선택 -->
+            <div id="rawPhotoActionStep" style="display: none;">
+                <div id="rawPhotoActionZoneLabel" style="font-size: 14px; font-weight: 700; color: var(--text-main); text-align: center; margin-bottom: 12px;"></div>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button type="button" class="card-btn primary" style="padding: 14px;" onclick="triggerRawPhotoCamera()">📷 촬영하기</button>
+                    <button type="button" class="card-btn secondary" style="padding: 14px;" onclick="triggerRawPhotoGallery()">🖼️ 앨범에서 선택</button>
+                    <button type="button" class="card-btn secondary" onclick="backToRawPhotoZoneStep()">‹ 다른 구역 선택</button>
+                </div>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding-top: 4px;">구역을 고른 뒤 촬영하거나 앨범에서 골라 올릴 수 있습니다.</div>
         </div>
     </div>
-    <input type="file" id="rawPhotoFileInput" accept="image/*" multiple style="display: none;">
+    <input type="file" id="rawPhotoFileInputCamera" accept="image/*" capture="environment" style="display: none;">
+    <input type="file" id="rawPhotoFileInputGallery" accept="image/*" multiple style="display: none;">
 
     <!-- 사진 확대보기 라이트박스 (좌우 스와이프 또는 화살표 버튼으로 이전/다음 사진 탐색) -->
     <div id="galleryLightbox" class="lightbox-overlay" style="display: none;" onclick="closeGalleryLightbox()">
@@ -405,6 +420,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260912c"></script>
+    <script src="admin.js?v=20260912d"></script>
 </body>
 </html>

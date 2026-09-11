@@ -768,10 +768,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 원본사진 캡처: 밑작업 기사 지정/작업목록 진입 없이, 구역만 골라서 바로 찍어 올리는 팀 공지용 사진
     // (현장소장 링크로 들어온 팀장님도 로그인 없이 그대로 사용 가능)
+    // 2단계 구성: 1) 구역 선택 → 2) 촬영하기/앨범에서 선택 중 하나 고르기 (둘 다 명시적으로 지원)
     window.openRawPhotoCapture = function(recordId, projectName) {
         rawPhotoTargetProject = { id: recordId, name: projectName || '현장' };
-        document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${rawPhotoTargetProject.name} - 원본사진 구역 선택`;
+        document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${rawPhotoTargetProject.name} - 원본사진`;
+        showRawPhotoZoneStep();
         document.getElementById('rawPhotoZoneModal').style.display = 'flex';
+    };
+
+    // 현장 상세화면 상단 "📸 원본사진" 버튼용 - 현재 열려있는 현장 기준으로 캡처 팝업을 엶
+    window.openRawPhotoCaptureForActiveProject = function() {
+        if (!activeProjectCode) return;
+        const name = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
+        openRawPhotoCapture(activeProjectCode, name);
     };
 
     window.closeRawPhotoZoneModal = function() {
@@ -779,18 +788,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         rawPhotoTargetProject = null;
     };
 
-    // 구역 버튼을 고르면 바로 파일선택창(카메라/갤러리)이 뜨고, 고른 사진은 그 구역으로 즉시 업로드됨
+    function showRawPhotoZoneStep() {
+        document.getElementById('rawPhotoZoneStep').style.display = 'block';
+        document.getElementById('rawPhotoActionStep').style.display = 'none';
+    }
+
+    window.backToRawPhotoZoneStep = function() {
+        showRawPhotoZoneStep();
+    };
+
+    // 구역을 고르면 "촬영하기 / 앨범에서 선택" 2단계 화면으로 넘어감
     window.selectRawPhotoZone = function(zone) {
         if (!rawPhotoTargetProject) return;
         rawPhotoSelectedZone = zone;
-        document.getElementById('rawPhotoZoneModal').style.display = 'none';
-        const fileInput = document.getElementById('rawPhotoFileInput');
-        fileInput.value = ''; // 같은 파일을 연속으로 다시 선택해도 change 이벤트가 뜨도록 초기화
-        fileInput.click();
+        document.getElementById('rawPhotoActionZoneLabel').textContent = `📍 ${zone}`;
+        document.getElementById('rawPhotoZoneStep').style.display = 'none';
+        document.getElementById('rawPhotoActionStep').style.display = 'block';
     };
 
-    document.getElementById('rawPhotoFileInput').addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files || []);
+    window.triggerRawPhotoCamera = function() {
+        const input = document.getElementById('rawPhotoFileInputCamera');
+        input.value = ''; // 같은 파일을 연속으로 다시 찍어도 change 이벤트가 뜨도록 초기화
+        input.click();
+    };
+
+    window.triggerRawPhotoGallery = function() {
+        const input = document.getElementById('rawPhotoFileInputGallery');
+        input.value = '';
+        input.click();
+    };
+
+    // 촬영/앨범 두 입력 모두 같은 업로드 로직을 공유
+    async function uploadRawPhotoFiles(files) {
         const project = rawPhotoTargetProject;
         const zone = rawPhotoSelectedZone;
         if (files.length === 0 || !project || !zone) return;
@@ -819,10 +848,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast(`${successCount}/${files.length}장만 업로드되었습니다. 신호가 약한 곳인지 확인해 주세요.`, "danger");
         }
 
-        // 다른 구역 사진도 이어서 찍을 수 있게 구역 선택 팝업으로 바로 복귀 (닫고 싶으면 팝업의 닫기 버튼 사용)
+        // 같은 구역이나 다른 구역 사진을 이어서 올릴 수 있게 구역 선택 화면으로 복귀 (닫고 싶으면 팝업의 닫기 버튼 사용)
         rawPhotoTargetProject = project;
-        document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${project.name} - 원본사진 구역 선택`;
+        document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${project.name} - 원본사진`;
+        showRawPhotoZoneStep();
         document.getElementById('rawPhotoZoneModal').style.display = 'flex';
+    }
+
+    document.getElementById('rawPhotoFileInputCamera').addEventListener('change', (e) => {
+        uploadRawPhotoFiles(Array.from(e.target.files || []));
+    });
+    document.getElementById('rawPhotoFileInputGallery').addEventListener('change', (e) => {
+        uploadRawPhotoFiles(Array.from(e.target.files || []));
     });
 
     // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭/그리드가 공통으로 이 목록을 기준으로 삼음)
@@ -952,6 +989,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (activeProjectCode) {
             const baseUrl = window.location.origin + window.location.pathname;
             copyLink(`${baseUrl}?code=${activeProjectCode}`);
+        }
+    };
+
+    // 현장명 수정 (제목 옆 연필 아이콘) - 오타 정정이나 동/호수 추가 등 간단한 수정용
+    window.renameProjectPrompt = async function() {
+        if (!activeProjectCode) return;
+        const current = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
+        const name = prompt("현장명을 입력해 주세요:", current);
+        if (!name || !name.trim()) return;
+        const newName = name.trim();
+        if (newName === current) return;
+
+        showLoading("현장명 변경 중...");
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_project_name',
+                    projectCode: activeProjectCode,
+                    newName: newName
+                })
+            });
+            if (!response.ok) throw new Error("현장명 변경 오류");
+
+            // 현장 목록 캐시에도 즉시 반영해서, 뒤로 나갔을 때 재조회 없이 바로 새 이름이 보이게 함
+            const project = globalProjectList.find(p => p.id === activeProjectCode);
+            if (project) {
+                if (project.fields) project.fields.현장명 = newName;
+                else project.현장명 = newName;
+            }
+            refreshListCacheFromMemory();
+
+            showToast("현장명이 변경되었습니다!");
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("현장명 변경에 실패했습니다.", "danger");
+        } finally {
+            hideLoading();
         }
     };
 

@@ -378,6 +378,21 @@ body {
     gap: 16px;
 }
 
+.title-edit-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 2px 4px;
+    line-height: 1;
+    transition: opacity 0.15s ease;
+}
+
+.title-edit-btn:hover {
+    opacity: 1;
+}
+
 #detailProjectTitle {
     font-size: 20px;
     font-weight: 800;
