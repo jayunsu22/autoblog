@@ -712,9 +712,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // 편집 기능 없이 사진만 보이는 외부 공유용 갤러리 링크 복사 (인테리어 업자 등에게 전달용)
+    // 지금 보고 있는 시공사진/밑작업 사진 체크 상태를 링크에 같이 담아, 받는 쪽도 똑같은 사진을 본다
     window.copyGalleryShareLink = function() {
         if (!galleryActiveRecordId) return;
-        copyLink(`${GALLERY_APP_BASE_URL}?code=${galleryActiveRecordId}`);
+        const types = [];
+        if (galleryTypeFilter.시공) types.push('done');
+        if (galleryTypeFilter.밑작업) types.push('prep');
+        const typeParam = types.length ? `&types=${types.join(',')}` : '';
+        copyLink(`${GALLERY_APP_BASE_URL}?code=${galleryActiveRecordId}${typeParam}`);
     };
 
     // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭/그리드가 공통으로 이 목록을 기준으로 삼음)
