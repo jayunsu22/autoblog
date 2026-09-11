@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_JOURNAL_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-journal-photo-delete`;
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
+    const API_RAW_PHOTO_UPLOAD_URL = `${n8nBase}/webhook/raw-photo-upload`; // 원본사진(기사 배정 없이 구역만 골라 바로 업로드) 전용
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
     // 외부 공유용 사진 갤러리(읽기 전용) 주소. /g/<레코드ID> 형태.
     // 예전엔 github.io 정적 페이지였는데, 정적 호스팅은 서버에서 og 태그를 못 바꿔서
@@ -111,13 +112,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
     let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명, type: '시공'|'밑작업'}]
     let galleryActiveZone = '전체'; // 사진 갤러리에서 현재 선택된 구역 탭
-    let galleryTypeFilter = { 시공: true, 밑작업: false }; // 시공사진/밑작업 사진 체크박스 상태 (기본은 시공사진만)
+    let galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false }; // 시공사진/밑작업 사진/원본사진 체크박스 상태 (기본은 시공사진만)
     let galleryFilteredPhotos = []; // 현재 탭 필터링된 사진 목록 (라이트박스 이전/다음 탐색 기준)
     let galleryLightboxIndex = -1; // 라이트박스에서 현재 보고 있는 사진의 인덱스
     let galleryTouchStartX = null; // 스와이프 제스처 시작 X좌표
     let galleryWasSwipe = false; // 방금 제스처가 스와이프였는지 (탭-닫기와 구분용)
     let galleryActiveRecordId = null; // 현재 갤러리 모달에 열려 있는 현장의 레코드ID (공유 링크 생성용)
     let galleryActiveProjectName = ''; // 같은 현장의 현장명 (공유 링크 미리보기 카드 제목용)
+    let rawPhotoTargetProject = null; // 원본사진 캡처 팝업에서 현재 대상 현장 { id, name }
+    let rawPhotoSelectedZone = null; // 원본사진 캡처 팝업에서 방금 고른 구역
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -554,6 +557,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <div class="card-footer-btns">
                     <button class="card-btn secondary" onclick="event.stopPropagation(); openProjectPhotoGallery('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📷 사진</button>
+                    <button class="card-btn secondary" onclick="event.stopPropagation(); openRawPhotoCapture('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📸 원본사진</button>
                     ${archiveBtnHtml}
                     ${showArchivedProjects ? '' : '<button class="card-btn primary">업무 ▶</button>'}
                 </div>
@@ -661,9 +665,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오는 중...</div>`;
 
         // 열 때마다 기본값(시공사진만 체크)으로 초기화
-        galleryTypeFilter = { 시공: true, 밑작업: false };
+        galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false };
         document.getElementById('galleryTypeConstruction').checked = true;
         document.getElementById('galleryTypePrep').checked = false;
+        document.getElementById('galleryTypeRaw').checked = false;
 
         showLoading("현장 사진을 불러오는 중...");
         try {
@@ -696,6 +701,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업' });
                     }
                 });
+            });
+
+            // 원본사진: 기사 배정/작업목록과 무관하게 구역만 지정해서 바로 찍어둔 현장 사전상태 사진
+            (data.rawPhotos || []).forEach(rp => {
+                if (isValidPhoto(rp)) {
+                    photos.push({ url: rp.url, 구역: rp.구역 || '기타', 품목명: '', type: '원본' });
+                }
             });
 
             galleryAllPhotos = photos;
@@ -743,6 +755,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         return btoa(bin).split('+').join('-').split('/').join('_').split('=').join('');
     }
 
+    // 원본사진 캡처: 밑작업 기사 지정/작업목록 진입 없이, 구역만 골라서 바로 찍어 올리는 팀 공지용 사진
+    // (현장소장 링크로 들어온 팀장님도 로그인 없이 그대로 사용 가능)
+    window.openRawPhotoCapture = function(recordId, projectName) {
+        rawPhotoTargetProject = { id: recordId, name: projectName || '현장' };
+        document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${rawPhotoTargetProject.name} - 원본사진 구역 선택`;
+        document.getElementById('rawPhotoZoneModal').style.display = 'flex';
+    };
+
+    window.closeRawPhotoZoneModal = function() {
+        document.getElementById('rawPhotoZoneModal').style.display = 'none';
+        rawPhotoTargetProject = null;
+    };
+
+    // 구역 버튼을 고르면 바로 파일선택창(카메라/갤러리)이 뜨고, 고른 사진은 그 구역으로 즉시 업로드됨
+    window.selectRawPhotoZone = function(zone) {
+        if (!rawPhotoTargetProject) return;
+        rawPhotoSelectedZone = zone;
+        document.getElementById('rawPhotoZoneModal').style.display = 'none';
+        const fileInput = document.getElementById('rawPhotoFileInput');
+        fileInput.value = ''; // 같은 파일을 연속으로 다시 선택해도 change 이벤트가 뜨도록 초기화
+        fileInput.click();
+    };
+
+    document.getElementById('rawPhotoFileInput').addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files || []);
+        const project = rawPhotoTargetProject;
+        const zone = rawPhotoSelectedZone;
+        if (files.length === 0 || !project || !zone) return;
+
+        showLoading(`원본사진 업로드 중... (0/${files.length})`);
+        let successCount = 0;
+        for (let i = 0; i < files.length; i++) {
+            try {
+                const formData = new FormData();
+                formData.append('projectCode', project.id);
+                formData.append('구역', zone);
+                formData.append('image', files[i]);
+                const response = await fetchWithTimeout(API_RAW_PHOTO_UPLOAD_URL, { method: 'POST', body: formData }, 30000);
+                if (!response.ok) throw new Error('업로드 실패');
+                successCount++;
+                showLoading(`원본사진 업로드 중... (${successCount}/${files.length})`);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+        hideLoading();
+
+        if (successCount === files.length) {
+            showToast(`📸 ${zone} 원본사진 ${successCount}장 업로드 완료!`);
+        } else {
+            showToast(`${successCount}/${files.length}장만 업로드되었습니다. 신호가 약한 곳인지 확인해 주세요.`, "danger");
+        }
+
+        // 다른 구역 사진도 이어서 찍을 수 있게 구역 선택 팝업으로 바로 복귀 (닫고 싶으면 팝업의 닫기 버튼 사용)
+        rawPhotoTargetProject = project;
+        document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${project.name} - 원본사진 구역 선택`;
+        document.getElementById('rawPhotoZoneModal').style.display = 'flex';
+    });
+
     // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭/그리드가 공통으로 이 목록을 기준으로 삼음)
     function getGalleryTypeFilteredPhotos() {
         return galleryAllPhotos.filter(p => galleryTypeFilter[p.type]);
@@ -789,12 +860,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 사진마다 어느 구역/품목인지 캡션으로 함께 표시 ("전체" 탭에서도 구분 가능하게).
-        // 시공사진/밑작업 사진을 둘 다 켜서 섞여 보일 때는 어느 쪽인지도 같이 표시
-        const showTypeLabel = galleryTypeFilter.시공 && galleryTypeFilter.밑작업;
+        // 체크박스가 2개 이상 켜져서 섞여 보일 때는 어느 종류인지도 같이 표시. 원본사진은 품목명이 없음
+        const showTypeLabel = Object.values(galleryTypeFilter).filter(Boolean).length > 1;
         grid.innerHTML = photos.map((p, idx) => `
             <div class="gallery-photo-tile" onclick="openGalleryLightbox(${idx})">
-                <img src="${p.url}" alt="${p.품목명}" loading="lazy">
-                <div class="gallery-photo-caption">${p.구역} · ${p.품목명}${showTypeLabel ? ` · ${p.type}` : ''}</div>
+                <img src="${p.url}" alt="${p.품목명 || p.구역}" loading="lazy">
+                <div class="gallery-photo-caption">${p.구역}${p.품목명 ? ` · ${p.품목명}` : ''}${showTypeLabel ? ` · ${p.type}` : ''}</div>
             </div>
         `).join('');
     }
