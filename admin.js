@@ -655,11 +655,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // "아파트명 + 동호수" 형태의 현장명을 갤러리 제목 2줄(단지명 / 동호수)로 나눠줌.
+    // 끝에 붙는 "OOO동" 또는 "OOO동 OOO호"만 둘째 줄로 떼어내고, 그 패턴이 없으면 한 줄로만 표시
+    function splitProjectTitle(name) {
+        const str = (name || '').trim();
+        const m = str.match(/^(.*?)\s+(\d+\s*동(?:\s*\d+\s*호)?)$/);
+        if (m) return { main: m[1].trim(), sub: m[2].trim() };
+        return { main: str || '현장', sub: '' };
+    }
+
     // 현장 사진 갤러리: 시공 완료된 사진만 모아서 구역별로 훑어볼 수 있게 보여줌 (예전 현장 기억 안 날 때 용도)
     window.openProjectPhotoGallery = async function(recordId, projectName) {
         galleryActiveRecordId = recordId;
         galleryActiveProjectName = projectName || '';
-        document.getElementById('galleryModalTitle').textContent = `📷 ${projectName || '현장'} 사진`;
+        const title = splitProjectTitle(projectName);
+        document.getElementById('galleryModalTitleMain').textContent = title.main;
+        document.getElementById('galleryModalTitleSub').textContent = title.sub;
         document.getElementById('photoGalleryModal').style.display = 'flex';
         document.getElementById('galleryZoneTabs').innerHTML = '';
         document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오는 중...</div>`;

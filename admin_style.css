@@ -1333,6 +1333,32 @@ body {
     font-weight: 800;
 }
 
+/* 사진 갤러리 모달 제목: 단지명(1줄) / 동호수(2줄)로 나눠서 깔끔하게 표시 */
+.gallery-modal-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.gallery-modal-title-main {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1.3;
+}
+
+.gallery-modal-title-sub {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+.gallery-modal-title-sub:empty {
+    display: none;
+}
+
 .close-modal-btn {
     background: none;
     border: none;
