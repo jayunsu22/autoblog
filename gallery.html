@@ -4,393 +4,51 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>사진 갤러리</title>
+<!--
+  예전 공유 링크(jayunsu22.github.io/autoblog/gallery.html?code=...) 를 위한 이사 안내 페이지.
+
+  갤러리 실물은 songil.netlify.app/g/<코드> (songil 저장소의 photo_gallery.html) 로 옮겼다.
+  github.io 는 정적 호스팅이라 서버에서 og 태그를 못 바꿔서, 카톡 미리보기 카드 제목이
+  현장명 없이 늘 "사진 갤러리"로만 떴기 때문이다. 이미 카톡으로 보낸 링크가 살아 있어야
+  하므로 지우지 않고, 받은 코드와 필터를 그대로 넘겨 새 주소로 보낸다.
+-->
 <style>
-    :root {
-        --primary-blue: #1d4ed8;
-        --primary-light: #eff6ff;
-        --text-main: #0f172a;
-        --text-muted: #64748b;
-        --border-color: #e2e8f0;
-        --accent-gray: #f1f5f9;
-    }
-    * { box-sizing: border-box; }
     body {
         margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
         background: #f8fafc;
-        color: var(--text-main);
-        padding: 20px 16px 60px;
-    }
-    header {
-        margin-bottom: 16px;
-    }
-    header h1 {
-        font-size: 19px;
-        font-weight: 800;
-        margin: 0 0 4px;
-    }
-    header .sub-text {
-        font-size: 13px;
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-    .type-filters {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-    }
-    .type-filters label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 13.5px;
-        font-weight: 700;
-        color: var(--text-main);
-        cursor: pointer;
-    }
-    .zone-tabs {
-        display: flex;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        gap: 6px;
-        margin-bottom: 16px;
-        padding-bottom: 4px;
-    }
-    .zone-tab {
-        flex-shrink: 0;
-        padding: 8px 14px;
-        font-size: 12.5px;
-        font-weight: 800;
-        border-radius: 20px;
-        border: 1.5px solid var(--border-color);
-        background: #fff;
-        color: var(--text-muted);
-        cursor: pointer;
-        white-space: nowrap;
-    }
-    .zone-tab.active {
-        background: var(--primary-blue);
-        border-color: var(--primary-blue);
-        color: white;
-    }
-    .photo-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-        gap: 8px;
-    }
-    .photo-tile {
-        position: relative;
-        aspect-ratio: 1;
-        border-radius: 10px;
-        overflow: hidden;
-        cursor: zoom-in;
-        background: var(--accent-gray);
-    }
-    .photo-tile img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-    }
-    .photo-caption {
-        position: absolute;
-        left: 0; right: 0; bottom: 0;
-        background: linear-gradient(transparent, rgba(15, 23, 42, 0.78));
-        color: white;
-        font-size: 10.5px;
-        font-weight: 700;
-        padding: 14px 6px 5px;
-        text-align: center;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .empty-state {
-        grid-column: 1 / -1;
-        text-align: center;
-        padding: 60px 20px;
-        color: var(--text-muted);
-        font-weight: 600;
+        color: #64748b;
         font-size: 14px;
+        font-weight: 600;
+        text-align: center;
+        padding: 20px;
     }
-    .lightbox-overlay {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: #000;
-        z-index: 1000;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 0;
-        cursor: zoom-out;
-    }
-    .lightbox-overlay img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
-    .nav-btn, .lightbox-close-btn {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.15);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        font-weight: 800;
-        line-height: 1;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2;
-    }
-    .nav-btn {
-        top: 50%;
-        transform: translateY(-50%);
-        width: 44px;
-        height: 44px;
-        font-size: 26px;
-    }
-    .nav-btn:hover, .lightbox-close-btn:hover { background: rgba(255, 255, 255, 0.3); }
-    .nav-prev { left: 12px; }
-    .nav-next { right: 12px; }
-    .lightbox-close-btn {
-        top: 14px;
-        right: 14px;
-        width: 40px;
-        height: 40px;
-        font-size: 22px;
-    }
-    @media (max-width: 600px) {
-        .nav-btn { width: 38px; height: 38px; font-size: 22px; }
-        .lightbox-close-btn { width: 36px; height: 36px; font-size: 20px; top: 10px; right: 10px; }
-    }
+    a { color: #1d4ed8; }
 </style>
 </head>
 <body>
-    <header>
-        <h1 id="pageTitle">📷 사진 갤러리</h1>
-        <div class="sub-text" id="pageSubText">불러오는 중...</div>
-    </header>
-
-    <div class="type-filters">
-        <label><input type="checkbox" id="typeDone" checked> 시공사진</label>
-        <label><input type="checkbox" id="typePrep"> 밑작업 사진</label>
-    </div>
-
-    <div class="zone-tabs" id="zoneTabs"></div>
-    <div class="photo-grid" id="photoGrid">
-        <div class="empty-state">사진을 불러오는 중...</div>
-    </div>
-
-    <div id="lightbox" class="lightbox-overlay">
-        <button type="button" class="lightbox-close-btn" id="lightboxCloseBtn">×</button>
-        <button type="button" class="nav-btn nav-prev" id="lightboxPrevBtn">‹</button>
-        <img id="lightboxImg" src="" alt="사진 확대보기">
-        <button type="button" class="nav-btn nav-next" id="lightboxNextBtn">›</button>
-    </div>
-
+    <div id="message">사진 갤러리로 이동하는 중...</div>
 <script>
 (function () {
-    const n8nBase = "https://primary-production-a6fa.up.railway.app";
-    const API_DETAIL_URL = `${n8nBase}/webhook/film-quality-get`;
-    const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타'];
-
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-
-    // 공유한 사람이 보던 체크 상태를 링크(types=done,prep)로 그대로 물려받는다. 없으면 시공사진만.
-    const sharedTypes = (params.get('types') || 'done').split(',').map(t => t.trim()).filter(Boolean);
-    let typeFilter = { 시공: sharedTypes.includes('done'), 밑작업: sharedTypes.includes('prep') };
-
-    let allPhotos = [];
-    let filteredPhotos = [];
-    let activeZone = '전체';
-    let lightboxIndex = -1;
-    let touchStartX = null;
-    let wasSwipe = false;
-
-    const pageTitleEl = document.getElementById('pageTitle');
-    const pageSubTextEl = document.getElementById('pageSubText');
-    const zoneTabsEl = document.getElementById('zoneTabs');
-    const photoGridEl = document.getElementById('photoGrid');
-    const lightboxEl = document.getElementById('lightbox');
-    const lightboxImgEl = document.getElementById('lightboxImg');
-    const typeDoneEl = document.getElementById('typeDone');
-    const typePrepEl = document.getElementById('typePrep');
-
-    async function load() {
-        if (!code) {
-            pageSubTextEl.textContent = "";
-            photoGridEl.innerHTML = `<div class="empty-state">잘못된 링크입니다. 링크를 다시 확인해 주세요.</div>`;
-            return;
-        }
-        try {
-            const res = await fetch(`${API_DETAIL_URL}?code=${encodeURIComponent(code)}`);
-            if (!res.ok) throw new Error("조회 실패");
-            const result = await res.json();
-            const data = Array.isArray(result) ? result[0] : result;
-            const projectName = (data.project && data.project.현장명) || "현장";
-
-            document.title = `${projectName} 사진 갤러리`;
-            pageTitleEl.textContent = `📷 ${projectName} 사진 갤러리`;
-
-            // 품목명 -> 구역 매핑
-            const zoneByItem = {};
-            (data.masterItems || []).forEach(item => {
-                zoneByItem[item.품목명] = item.구역 || '기타';
-            });
-
-            const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
-
-            // 관리자 갤러리와 똑같이, 찍혀서 저장된 사진은 완료보고 여부와 상관없이 시공/밑작업 모두 보여준다
-            const photos = [];
-            (data.tasks || []).forEach(task => {
-                const fields = task.fields || {};
-                const zone = zoneByItem[fields.시공품목] || '기타';
-                (fields.시공후사진 || []).forEach(photo => {
-                    if (isValidPhoto(photo)) {
-                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '시공' });
-                    }
-                });
-                (fields.시공전사진 || []).forEach(photo => {
-                    if (isValidPhoto(photo)) {
-                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업' });
-                    }
-                });
-            });
-
-            allPhotos = photos;
-            render();
-        } catch (e) {
-            console.error(e);
-            pageSubTextEl.textContent = "";
-            photoGridEl.innerHTML = `<div class="empty-state">사진을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>`;
-        }
+    if (!code) {
+        document.getElementById('message').textContent = '잘못된 링크입니다. 링크를 다시 확인해 주세요.';
+        return;
     }
-
-    // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭·그리드·장수가 모두 이 목록 기준)
-    function getTypeFilteredPhotos() {
-        return allPhotos.filter(p => typeFilter[p.type]);
-    }
-
-    function render() {
-        const visiblePhotos = getTypeFilteredPhotos();
-        pageSubTextEl.textContent = `총 ${visiblePhotos.length}장`;
-        renderZoneTabs(visiblePhotos);
-        renderPhotoGrid(visiblePhotos);
-    }
-
-    function renderZoneTabs(visiblePhotos) {
-        const zonesPresent = ZONE_ORDER.filter(zone => visiblePhotos.some(p => p.구역 === zone));
-        const tabs = ['전체', ...zonesPresent];
-
-        zoneTabsEl.innerHTML = tabs.map(zone => {
-            const count = zone === '전체' ? visiblePhotos.length : visiblePhotos.filter(p => p.구역 === zone).length;
-            return `<button type="button" class="zone-tab ${zone === activeZone ? 'active' : ''}" data-zone="${zone}">${zone} (${count})</button>`;
-        }).join('');
-
-        zoneTabsEl.querySelectorAll('.zone-tab').forEach(btn => {
-            btn.addEventListener('click', () => {
-                activeZone = btn.dataset.zone;
-                render();
-            });
-        });
-    }
-
-    function renderPhotoGrid(visiblePhotos) {
-        const photos = activeZone === '전체' ? visiblePhotos : visiblePhotos.filter(p => p.구역 === activeZone);
-        filteredPhotos = photos;
-
-        if (photos.length === 0) {
-            photoGridEl.innerHTML = `<div class="empty-state">아직 등록된 사진이 없습니다.</div>`;
-            return;
-        }
-
-        // 시공사진과 밑작업 사진을 둘 다 켜서 섞여 보일 때는 어느 쪽인지도 같이 표시
-        const showTypeLabel = typeFilter.시공 && typeFilter.밑작업;
-        photoGridEl.innerHTML = photos.map((p, idx) => `
-            <div class="photo-tile" data-idx="${idx}">
-                <img src="${p.url}" alt="${p.품목명}" loading="lazy">
-                <div class="photo-caption">${p.구역} · ${p.품목명}${showTypeLabel ? ` · ${p.type}` : ''}</div>
-            </div>
-        `).join('');
-
-        photoGridEl.querySelectorAll('.photo-tile').forEach(tile => {
-            tile.addEventListener('click', () => openLightbox(Number(tile.dataset.idx)));
-        });
-    }
-
-    function openLightbox(idx) {
-        lightboxIndex = idx;
-        showLightboxPhoto();
-        lightboxEl.style.display = 'flex';
-    }
-
-    function showLightboxPhoto() {
-        const photo = filteredPhotos[lightboxIndex];
-        if (!photo) return;
-        lightboxImgEl.src = photo.url;
-    }
-
-    function nextPhoto() {
-        if (filteredPhotos.length === 0) return;
-        lightboxIndex = (lightboxIndex + 1) % filteredPhotos.length;
-        showLightboxPhoto();
-    }
-
-    function prevPhoto() {
-        if (filteredPhotos.length === 0) return;
-        lightboxIndex = (lightboxIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
-        showLightboxPhoto();
-    }
-
-    function closeLightbox() {
-        // 스와이프 직후 발생하는 클릭으로 바로 닫히지 않게 방지
-        if (wasSwipe) { wasSwipe = false; return; }
-        lightboxEl.style.display = 'none';
-    }
-
-    lightboxEl.addEventListener('click', closeLightbox);
-    document.getElementById('lightboxPrevBtn').addEventListener('click', (e) => { e.stopPropagation(); prevPhoto(); });
-    document.getElementById('lightboxNextBtn').addEventListener('click', (e) => { e.stopPropagation(); nextPhoto(); });
-    document.getElementById('lightboxCloseBtn').addEventListener('click', (e) => { e.stopPropagation(); closeLightbox(); });
-
-    lightboxEl.addEventListener('touchstart', (e) => {
-        touchStartX = e.touches[0].clientX;
-        wasSwipe = false;
-    }, { passive: true });
-
-    lightboxEl.addEventListener('touchend', (e) => {
-        if (touchStartX === null) return;
-        const deltaX = e.changedTouches[0].clientX - touchStartX;
-        touchStartX = null;
-        if (Math.abs(deltaX) > 40) {
-            wasSwipe = true;
-            if (deltaX < 0) nextPhoto(); else prevPhoto();
-        }
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (lightboxEl.style.display !== 'flex') return;
-        if (e.key === 'ArrowRight') nextPhoto();
-        else if (e.key === 'ArrowLeft') prevPhoto();
-        else if (e.key === 'Escape') closeLightbox();
-    });
-
-    typeDoneEl.checked = typeFilter.시공;
-    typePrepEl.checked = typeFilter.밑작업;
-
-    [[typeDoneEl, '시공'], [typePrepEl, '밑작업']].forEach(([el, type]) => {
-        el.addEventListener('change', () => {
-            typeFilter[type] = el.checked;
-            activeZone = '전체'; // 필터가 바뀌면 지금 보던 구역 탭이 비어있을 수 있어 전체로 되돌림
-            render();
-        });
-    });
-
-    load();
+    const next = new URLSearchParams();
+    // 시공사진/밑작업 사진 체크 상태도 그대로 들고 간다 (없으면 새 페이지 기본값)
+    const types = params.get('types');
+    if (types) next.set('types', types);
+    const query = next.toString();
+    const url = `https://songil.netlify.app/g/${encodeURIComponent(code)}${query ? `?${query}` : ''}`;
+    document.getElementById('message').innerHTML =
+        `사진 갤러리로 이동하는 중...<br><br><a href="${url}">바로 열기</a>`;
+    window.location.replace(url);
 })();
 </script>
 </body>

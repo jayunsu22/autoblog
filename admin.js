@@ -92,7 +92,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
     const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
-    const GALLERY_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/gallery.html"; // 외부 공유용 사진 갤러리(읽기 전용) 배포 주소
+    // 외부 공유용 사진 갤러리(읽기 전용) 주소. /g/<레코드ID> 형태.
+    // 예전엔 github.io 정적 페이지였는데, 정적 호스팅은 서버에서 og 태그를 못 바꿔서
+    // 카톡 미리보기 카드가 늘 "사진 갤러리"로만 떴다. 견적서 링크(/q/)와 같은
+    // Netlify 사이트로 옮겨 Edge Function 이 카드 제목에 현장명을 넣게 했다.
+    const GALLERY_APP_BASE_URL = "https://songil.netlify.app/g";
     const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타']; // 구역은 이 9개로 고정
 
 
@@ -113,6 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let galleryTouchStartX = null; // 스와이프 제스처 시작 X좌표
     let galleryWasSwipe = false; // 방금 제스처가 스와이프였는지 (탭-닫기와 구분용)
     let galleryActiveRecordId = null; // 현재 갤러리 모달에 열려 있는 현장의 레코드ID (공유 링크 생성용)
+    let galleryActiveProjectName = ''; // 같은 현장의 현장명 (공유 링크 미리보기 카드 제목용)
 
     // 현장일지 탭 상태
     let dayDrafts = []; // { dayNumber, journalId, published, title, feature, episode, sceneFiles[], cleanupFiles[] }
@@ -649,6 +654,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 현장 사진 갤러리: 시공 완료된 사진만 모아서 구역별로 훑어볼 수 있게 보여줌 (예전 현장 기억 안 날 때 용도)
     window.openProjectPhotoGallery = async function(recordId, projectName) {
         galleryActiveRecordId = recordId;
+        galleryActiveProjectName = projectName || '';
         document.getElementById('galleryModalTitle').textContent = `📷 ${projectName || '현장'} 사진`;
         document.getElementById('photoGalleryModal').style.display = 'flex';
         document.getElementById('galleryZoneTabs').innerHTML = '';
@@ -709,18 +715,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('photoGalleryModal').style.display = 'none';
         galleryAllPhotos = [];
         galleryActiveRecordId = null;
+        galleryActiveProjectName = '';
     };
 
     // 편집 기능 없이 사진만 보이는 외부 공유용 갤러리 링크 복사 (인테리어 업자 등에게 전달용)
-    // 지금 보고 있는 시공사진/밑작업 사진 체크 상태를 링크에 같이 담아, 받는 쪽도 똑같은 사진을 본다
+    // - types: 지금 보고 있는 시공사진/밑작업 사진 체크 상태. 받는 쪽도 똑같은 사진을 본다.
+    // - n: 현장명(base64url). 카톡 미리보기 카드 제목에 쓴다. 미리보기 봇은 JS를 실행하지 않아서
+    //      페이지가 열린 뒤 제목을 바꿔봐야 소용없고, 링크에 실어 보내야 서버가 카드 제목을 만든다.
+    //      (견적서 링크가 쓰는 방식과 같다. 한글을 그대로 넣으면 주소가 3~4배로 길어져 base64url 사용)
     window.copyGalleryShareLink = function() {
         if (!galleryActiveRecordId) return;
+        const params = new URLSearchParams();
+        if (galleryActiveProjectName) params.set('n', toBase64Url(galleryActiveProjectName));
         const types = [];
         if (galleryTypeFilter.시공) types.push('done');
         if (galleryTypeFilter.밑작업) types.push('prep');
-        const typeParam = types.length ? `&types=${types.join(',')}` : '';
-        copyLink(`${GALLERY_APP_BASE_URL}?code=${galleryActiveRecordId}${typeParam}`);
+        if (types.length) params.set('types', types.join(','));
+        const query = params.toString();
+        copyLink(`${GALLERY_APP_BASE_URL}/${galleryActiveRecordId}${query ? `?${query}` : ''}`);
     };
+
+    // 한글을 base64url 로. URLSearchParams 가 다시 % 로 감싸지 않도록 +, /, = 를 빼고 -, _ 만 쓴다.
+    function toBase64Url(text) {
+        const bytes = new TextEncoder().encode(text);
+        let bin = '';
+        bytes.forEach(b => { bin += String.fromCharCode(b); });
+        return btoa(bin).split('+').join('-').split('/').join('_').split('=').join('');
+    }
 
     // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭/그리드가 공통으로 이 목록을 기준으로 삼음)
     function getGalleryTypeFilteredPhotos() {
