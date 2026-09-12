@@ -98,7 +98,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 카톡 미리보기 카드가 늘 "사진 갤러리"로만 떴다. 견적서 링크(/q/)와 같은
     // Netlify 사이트로 옮겨 Edge Function 이 카드 제목에 현장명을 넣게 했다.
     const GALLERY_APP_BASE_URL = "https://songil.netlify.app/g";
-    const ZONE_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타']; // 구역은 이 9개로 고정
+
+    // 한 "층" 안에서의 방 이름 순서 (탭/버튼을 이 순서로 정렬할 때 기준으로만 쓰임 - 목록을 제한하지 않음)
+    const ROOM_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타'];
+
+    // "2층 거실" 같은 구역 문자열을 {floor, room}으로 분해. 층 표기가 없으면 1층으로 취급해서
+    // 기존 데이터(층 구분 없던 시절)와 100% 호환되게 함
+    function parseZoneFloor(zoneStr) {
+        const str = String(zoneStr || '').trim();
+        const m = str.match(/^(\d+)층\s+(.*)$/);
+        if (m) return { floor: parseInt(m[1], 10), room: m[2] };
+        return { floor: 1, room: str || '기타' };
+    }
+
+    // 층+방이름을 하나의 구역 문자열로 합침. 1층은 접두어를 안 붙여서 기존 데이터 형태 그대로 유지
+    function composeZone(floor, room) {
+        const f = parseInt(floor, 10) || 1;
+        return f <= 1 ? room : `${f}층 ${room}`;
+    }
+
+    // 구역 문자열 목록을 층(오름차순) → 방 순서 기준으로 정렬. 등록 안 된 층/방 이름이 나와도
+    // (예: 3층, 다락방 등) 에러 없이 맨 뒤쪽에 자연스럽게 배치됨 - 코드 수정 없이 새 구역에 대응하기 위함
+    function sortZones(zones) {
+        return [...zones].sort((a, b) => {
+            const pa = parseZoneFloor(a);
+            const pb = parseZoneFloor(b);
+            if (pa.floor !== pb.floor) return pa.floor - pb.floor;
+            const ia = ROOM_ORDER.indexOf(pa.room);
+            const ib = ROOM_ORDER.indexOf(pb.room);
+            const oa = ia === -1 ? ROOM_ORDER.length : ia;
+            const ob = ib === -1 ? ROOM_ORDER.length : ib;
+            if (oa !== ob) return oa - ob;
+            return pa.room.localeCompare(pb.room);
+        });
+    }
 
 
     let activeProjectCode = "";
@@ -772,6 +805,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.openRawPhotoCapture = function(recordId, projectName) {
         rawPhotoTargetProject = { id: recordId, name: projectName || '현장' };
         document.getElementById('rawPhotoZoneModalTitle').textContent = `📸 ${rawPhotoTargetProject.name} - 원본사진`;
+        document.getElementById('rawPhotoFloorInput').value = '1'; // 열 때마다 1층으로 초기화
         showRawPhotoZoneStep();
         document.getElementById('rawPhotoZoneModal').style.display = 'flex';
     };
@@ -797,9 +831,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         showRawPhotoZoneStep();
     };
 
-    // 구역을 고르면 "촬영하기 / 앨범에서 선택" 2단계 화면으로 넘어감
-    window.selectRawPhotoZone = function(zone) {
+    // 방을 고르면 (층 선택값과 합쳐서) "촬영하기 / 앨범에서 선택" 2단계 화면으로 넘어감
+    window.selectRawPhotoRoom = function(room) {
         if (!rawPhotoTargetProject) return;
+        const floor = document.getElementById('rawPhotoFloorInput').value;
+        const zone = composeZone(floor, room);
         rawPhotoSelectedZone = zone;
         document.getElementById('rawPhotoActionZoneLabel').textContent = `📍 ${zone}`;
         document.getElementById('rawPhotoZoneStep').style.display = 'none';
@@ -874,11 +910,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderGalleryPhotoGrid();
     };
 
-    // 사진에 찍힌 구역들만, ZONE_ORDER 순서대로 탭으로 노출 ("전체" 탭이 항상 맨 앞)
+    // 사진에 실제로 찍힌 구역들만, 층→방 순서로 정렬해서 탭으로 노출 ("전체" 탭이 항상 맨 앞)
+    // 2층, 3층 등 새 구역이 나와도 고정 목록에 없다고 누락되지 않고 자동으로 탭이 생김
     function renderGalleryZoneTabs() {
         const container = document.getElementById('galleryZoneTabs');
         const visiblePhotos = getGalleryTypeFilteredPhotos();
-        const zonesPresent = ZONE_ORDER.filter(zone => visiblePhotos.some(p => p.구역 === zone));
+        const zonesPresent = sortZones([...new Set(visiblePhotos.map(p => p.구역).filter(Boolean))]);
         const tabs = ['전체', ...zonesPresent];
 
         container.innerHTML = tabs.map(zone => {
@@ -1164,19 +1201,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tasks = currentDetailData.tasks || [];
         const workers = currentDetailData.workers || [];
 
+        // 구역 탭은 실제 등록된 품목들의 구역 값 기준으로 동적으로 만듦 (2층/3층 등 새 구역이 나와도
+        // 코드 수정 없이 자동으로 탭이 생김). 값이 비어있는 품목만 "기타"로 묶음
         const zoneMap = new Map();
-        ZONE_ORDER.forEach(zone => zoneMap.set(zone, []));
         allItems.forEach(item => {
-            const zone = ZONE_ORDER.includes(item.구역) ? item.구역 : "기타";
+            const zone = item.구역 || "기타";
+            if (!zoneMap.has(zone)) zoneMap.set(zone, []);
             zoneMap.get(zone).push(item);
         });
 
-        const zoneNames = ZONE_ORDER;
+        const zoneNames = sortZones([...zoneMap.keys()]);
 
         // 구역 상관없이 활성화됐지만 밑작업+시공이 둘 다 안 끝난 품목만 모음 - "미완료" 탭용
         const incompleteEntries = [];
         allItems.forEach(item => {
-            const zone = ZONE_ORDER.includes(item.구역) ? item.구역 : "기타";
+            const zone = item.구역 || "기타";
             const isActive = activeItems.includes(item.품목명);
             if (!isActive) return;
             const task = tasks.find(t => t.fields.시공품목 === item.품목명);
@@ -2886,7 +2925,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditModalTitle').textContent = '📦 시공품목 편집';
         document.getElementById('itemEditNameInput').value = item.품목명 || '';
         document.getElementById('itemEditCategoryInput').value = item.카테고리 || '문+틀';
-        document.getElementById('itemEditZoneInput').value = ZONE_ORDER.includes(item.구역) ? item.구역 : '기타';
+        const parsedZone = parseZoneFloor(item.구역);
+        document.getElementById('itemEditFloorInput').value = String(parsedZone.floor);
+        document.getElementById('itemEditRoomInput').value = ROOM_ORDER.includes(parsedZone.room) ? parsedZone.room : '기타';
         document.getElementById('itemEditPrepInput').value = item.밑작업지침 || '';
         document.getElementById('itemEditInspInput').value = item.시공후점검지침 || '';
         editingItemSlots = (item.필수사진슬롯 || '').split(',').map(s => s.trim()).filter(s => s !== '');
@@ -2899,7 +2940,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditModalTitle').textContent = '➕ 새 시공품목 추가';
         document.getElementById('itemEditNameInput').value = '';
         document.getElementById('itemEditCategoryInput').value = '문+틀';
-        document.getElementById('itemEditZoneInput').value = '기타';
+        document.getElementById('itemEditFloorInput').value = '1';
+        document.getElementById('itemEditRoomInput').value = '기타';
         document.getElementById('itemEditPrepInput').value = '';
         document.getElementById('itemEditInspInput').value = '';
         editingItemSlots = [];
@@ -2946,7 +2988,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isCreate = (idx === null);
         const nameText = document.getElementById('itemEditNameInput').value.trim();
         const categoryText = document.getElementById('itemEditCategoryInput').value;
-        const zoneText = document.getElementById('itemEditZoneInput').value.trim();
+        const zoneText = composeZone(document.getElementById('itemEditFloorInput').value, document.getElementById('itemEditRoomInput').value);
         const prepText = document.getElementById('itemEditPrepInput').value;
         const inspText = document.getElementById('itemEditInspInput').value;
         const slotsText = editingItemSlots.join(',');
