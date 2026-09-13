@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_GET_URL = `${n8nBase}/webhook/film-quality-get`;
     const API_SAVE_URL = `${n8nBase}/webhook/film-quality-save`;
     const API_UPLOAD_URL = `${n8nBase}/webhook/film-image-upload`;
+    const API_DRIVE_BACKUP_URL = `${n8nBase}/webhook/film-image-drive-backup`; // 구글드라이브 백업은 응답을 기다리지 않고 별도로 발사 (업로드 체감속도 개선용)
 
     let projectData = null;
     let currentWorker = "";
@@ -887,6 +888,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             formData.append('projectCode', projectRecordId);
             formData.append('itemName', task ? (task.fields.시공품목 || '') : ''); // 구글드라이브 백업 폴더를 카테고리별로 나누기 위해 품목명도 같이 전달
             formData.append('projectName', (projectData.project && projectData.project.현장명) || ''); // 구글드라이브 백업 파일명에 현장명을 넣기 위해 전달
+
+            // 구글드라이브 백업은 별도 웹훅으로 분리 발사 (응답을 기다리지 않음 — 업로드 체감속도 개선)
+            const driveBackupFormData = new FormData();
+            driveBackupFormData.append('image', resizedFile);
+            driveBackupFormData.append('recordId', recordId);
+            driveBackupFormData.append('fieldName', fieldName);
+            driveBackupFormData.append('slotIndex', slotIndex);
+            driveBackupFormData.append('slotName', slotName);
+            driveBackupFormData.append('projectCode', projectRecordId);
+            driveBackupFormData.append('itemName', task ? (task.fields.시공품목 || '') : '');
+            driveBackupFormData.append('projectName', (projectData.project && projectData.project.현장명) || '');
+            fetch(API_DRIVE_BACKUP_URL, { method: 'POST', body: driveBackupFormData }).catch((err) => {
+                console.warn('구글드라이브 백업 실패(무시하고 계속 진행):', err);
+            });
 
             const response = await fetchWithTimeout(API_UPLOAD_URL, {
                 method: 'POST',
