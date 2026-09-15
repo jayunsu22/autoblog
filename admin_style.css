@@ -649,7 +649,8 @@ body {
 }
 
 .lightbox-nav-btn,
-.lightbox-close-btn {
+.lightbox-close-btn,
+.lightbox-delete-btn {
     position: absolute;
     background: rgba(255, 255, 255, 0.15);
     color: white;
@@ -675,6 +676,20 @@ body {
 .lightbox-nav-btn:hover,
 .lightbox-close-btn:hover {
     background: rgba(255, 255, 255, 0.3);
+}
+
+/* 확대보기 사진 삭제 버튼 (관리자 전용, × 버튼 왼쪽) - 실수 방지용으로 붉은 톤 */
+.lightbox-delete-btn {
+    top: 14px;
+    right: 64px;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    background: rgba(220, 38, 38, 0.55);
+}
+
+.lightbox-delete-btn:hover {
+    background: rgba(220, 38, 38, 0.85);
 }
 
 .lightbox-prev {
@@ -706,6 +721,14 @@ body {
         font-size: 20px;
         top: 10px;
         right: 10px;
+    }
+
+    .lightbox-delete-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+        top: 10px;
+        right: 54px;
     }
 }
 

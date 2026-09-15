@@ -735,14 +735,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             (data.tasks || []).forEach(task => {
                 const fields = task.fields || {};
                 const zone = zoneByItem[fields.시공품목] || '기타';
-                (fields.시공후사진 || []).forEach(photo => {
+                // taskId/fieldName/slotIndex: 확대보기에서 삭제할 때 기사님 앱과 동일한 delete_photo 페이로드를 만들기 위한 좌표.
+                // slotIndex는 Airtable 첨부 배열의 원래 인덱스(placeholder 슬롯 포함) = 기사님 앱의 슬롯 번호와 같음
+                (fields.시공후사진 || []).forEach((photo, idx) => {
                     if (isValidPhoto(photo)) {
-                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '시공' });
+                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '시공', taskId: task.id, fieldName: '시공후사진', slotIndex: idx });
                     }
                 });
-                (fields.시공전사진 || []).forEach(photo => {
+                (fields.시공전사진 || []).forEach((photo, idx) => {
                     if (isValidPhoto(photo)) {
-                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업' });
+                        photos.push({ url: photo.url, 구역: zone, 품목명: fields.시공품목 || '', type: '밑작업', taskId: task.id, fieldName: '시공전사진', slotIndex: idx });
                     }
                 });
             });
@@ -750,7 +752,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 원본사진: 기사 배정/작업목록과 무관하게 구역만 지정해서 바로 찍어둔 현장 사전상태 사진
             (data.rawPhotos || []).forEach(rp => {
                 if (isValidPhoto(rp)) {
-                    photos.push({ url: rp.url, 구역: rp.구역 || '기타', 품목명: '', type: '원본' });
+                    photos.push({ url: rp.url, 구역: rp.구역 || '기타', 품목명: '', type: '원본', rawId: rp.id || null }); // rawId: 원본사진 레코드ID (삭제용)
                 }
             });
 
@@ -958,7 +960,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.openGalleryLightbox = function(index) {
         galleryLightboxIndex = index;
         showGalleryLightboxPhoto();
+        // 사진 삭제는 관리자만. 현장소장 링크(?code=)로 들어온 팀장님에게는 🗑 버튼을 아예 안 보여줌
+        document.getElementById('galleryLightboxDeleteBtn').style.display = isScopedManagerView ? 'none' : 'flex';
         document.getElementById('galleryLightbox').style.display = 'flex';
+    };
+
+    // 확대보기에서 지금 보고 있는 사진 삭제 (잘못 올린 사진을 기사님 앱에 들어가지 않고 바로 지우기 위한 용도)
+    // - 시공/밑작업: 기사님 앱의 deletePhoto와 완전히 같은 delete_photo 페이로드 → 해당 슬롯만 비워져서 다른 슬롯 위치가 안 밀림
+    // - 원본: 원본사진 테이블은 레코드 1건 = 사진 1장이라 delete_raw_photo로 레코드 자체를 삭제
+    window.deleteGalleryPhoto = async function() {
+        if (isScopedManagerView) return;
+        const photo = galleryFilteredPhotos[galleryLightboxIndex];
+        if (!photo) return;
+        if (photo.type === '원본' && !photo.rawId) {
+            showToast('원본사진 정보를 다시 불러온 뒤 삭제해 주세요 (새로고침 필요).', 'danger');
+            return;
+        }
+        if (!confirm('이 사진을 삭제할까요?')) return;
+
+        const payload = photo.type === '원본'
+            ? { type: 'delete_raw_photo', projectCode: galleryActiveRecordId, recordId: photo.rawId }
+            : { type: 'delete_photo', projectCode: galleryActiveRecordId, recordId: photo.taskId, fieldName: photo.fieldName, slotIndex: photo.slotIndex };
+
+        showLoading('사진 삭제 중...');
+        try {
+            const res = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('사진 삭제 실패');
+
+            // 전체 목록에서 빼고 탭/그리드를 다시 그리면 galleryFilteredPhotos도 같이 갱신됨
+            galleryAllPhotos = galleryAllPhotos.filter(p => p !== photo);
+            renderGalleryZoneTabs();
+            renderGalleryPhotoGrid();
+
+            if (galleryFilteredPhotos.length === 0) {
+                document.getElementById('galleryLightbox').style.display = 'none';
+            } else {
+                galleryLightboxIndex = Math.min(galleryLightboxIndex, galleryFilteredPhotos.length - 1);
+                showGalleryLightboxPhoto();
+            }
+            showToast('사진이 삭제되었습니다.');
+        } catch (error) {
+            console.error(error);
+            showToast('사진 삭제에 실패했습니다.', 'danger');
+        } finally {
+            hideLoading();
+        }
     };
 
     function showGalleryLightboxPhoto() {
