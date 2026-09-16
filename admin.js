@@ -95,7 +95,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
     const API_RAW_PHOTO_UPLOAD_URL = `${n8nBase}/webhook/raw-photo-upload`; // 원본사진(기사 배정 없이 구역만 골라 바로 업로드) 전용
-    const WORKER_APP_BASE_URL = "https://jayunsu22.github.io/autoblog/index.html"; // 기사님용 워커 앱 배포 주소
+    // 기사님용 워커 앱 주소. /w/<레코드ID> 형태.
+    // 예전엔 github.io 정적 페이지(index.html?code=...)였는데, 정적 호스팅은 서버에서 og 태그를
+    // 못 바꿔서 카톡 미리보기 카드가 어느 현장이든 늘 "현장 품질 관리 시스템"으로만 떴다.
+    // 기사님이 링크만 보고는 어느 현장인지 알 수 없어서, 갤러리(/g/)·견적서(/q/)와 같은
+    // Netlify 사이트로 옮겨 Edge Function 이 카드 제목에 현장명을 넣게 했다.
+    const WORKER_APP_BASE_URL = "https://songil.netlify.app/w";
     // 외부 공유용 사진 갤러리(읽기 전용) 주소. /g/<레코드ID> 형태.
     // 예전엔 github.io 정적 페이지였는데, 정적 호스팅은 서버에서 og 태그를 못 바꿔서
     // 카톡 미리보기 카드가 늘 "사진 갤러리"로만 떴다. 견적서 링크(/q/)와 같은
@@ -1053,15 +1058,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
+    // 기사님에게 카톡으로 보낼 현장별 접속 링크.
+    // n = 현장명(base64url). 카톡 미리보기 카드 제목에 쓴다. 미리보기 봇은 JS를 실행하지 않아서
+    // 페이지가 열린 뒤 제목을 바꿔봐야 소용없고, 링크에 실어 보내야 서버가 카드 제목을 만든다.
+    // (갤러리 공유 링크와 같은 방식)
+    function buildWorkerLink() {
+        const name = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
+        const query = name ? `?n=${toBase64Url(name)}` : '';
+        return `${WORKER_APP_BASE_URL}/${activeProjectCode}${query}`;
+    }
+
     window.copyWorkerLink = function() {
         if (activeProjectCode) {
-            copyLink(`${WORKER_APP_BASE_URL}?code=${activeProjectCode}`);
+            copyLink(buildWorkerLink());
         }
     };
 
     window.openWorkerLink = function() {
         if (activeProjectCode) {
-            const url = `${WORKER_APP_BASE_URL}?code=${activeProjectCode}`;
+            const url = buildWorkerLink();
             // 모바일 브라우저/웹뷰에서는 window.open()이 새 탭 대신 현재 창을 덮어써버리는 경우가 있어,
             // 실제 <a target="_blank"> 클릭을 흉내내는 방식이 더 안정적으로 새 탭을 연다.
             const a = document.createElement('a');
