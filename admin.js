@@ -83,7 +83,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // V1/V2 응답이 완전히 동일한지 꼼꼼히 검증(구조 비교, 신규 현장 생성/작업추가/완료 시나리오,
     // 동시요청 스트레스 테스트, 실제 화면 렌더링)한 뒤에 이 한 줄만 바꿔서 전환함.
     const API_ADMIN_GET_URL = `${n8nBase}/webhook/film-admin-get-v2`;
-    const API_DETAIL_URL = `${n8nBase}/webhook/film-quality-get`;
+    // film-quality-get-v2: Airtable 조회를 동시에 보내도록 바꾼 버전 (2.2~2.4초 -> 약 1.3초).
+    // 응답 모양은 기존과 완전히 동일하고, 현장명이 겹치는 현장끼리 서로의 작업을 끌어오던 문제도 같이 해결됨
+    const API_DETAIL_URL = `${n8nBase}/webhook/film-quality-get-v2`;
     const API_SAVE_URL = `${n8nBase}/webhook/film-quality-save`;
     const API_PUBLISH_URL = `${n8nBase}/webhook/film-blog-publish`;
     const API_JOURNAL_CREATE_URL = `${n8nBase}/webhook/film-journal-create`;

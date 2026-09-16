@@ -1,7 +1,9 @@
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. 설정 및 글로벌 변수
     const n8nBase = "https://primary-production-a6fa.up.railway.app";
-    const API_GET_URL = `${n8nBase}/webhook/film-quality-get`;
+    // film-quality-get-v2: 기존 조회는 Airtable 5개를 한 줄로 이어서 호출하느라 2.2~2.4초가 걸렸는데,
+    // 서로 의존하지 않는 조회를 묶어서 동시에 보내도록 바꾼 버전 (약 1.3초). 응답 모양은 완전히 동일함
+    const API_GET_URL = `${n8nBase}/webhook/film-quality-get-v2`;
     const API_SAVE_URL = `${n8nBase}/webhook/film-quality-save`;
     const API_UPLOAD_URL = `${n8nBase}/webhook/film-image-upload`;
     const API_DRIVE_BACKUP_URL = `${n8nBase}/webhook/film-image-drive-backup`; // 구글드라이브 백업은 응답을 기다리지 않고 별도로 발사 (업로드 체감속도 개선용)
