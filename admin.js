@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 현장목록 캐시도 같이 지워서, 다시 열렸을 때 무조건 서버에서 진짜 최신 데이터를 새로 받아오게 함
     window.forceRefreshApp = function() {
         sessionStorage.removeItem('cachedAdminListData');
+        clearDetailCaches(); // 현장 상세 캐시도 같이 비워서, 🔄를 누르면 목록/상세 모두 서버에서 새로 받아오게 함
         // 기존 쿼리스트링(예: 현장소장 링크의 ?code=...)은 그대로 유지한 채 캐시버스팅용 _r만 갱신 -
         // 예전처럼 pathname만으로 새로 만들면 ?code=가 날아가서 현장소장 링크의 범위 제한이 풀려버림
         const params = new URLSearchParams(window.location.search);
@@ -349,7 +350,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadProjectList().then(() => {
             const targetCode = scopedProjectCode || localStorage.getItem('lastActiveProjectCode');
             if (targetCode) {
-                showProjectDetail(targetCode);
+                // 앱 재진입 - 저장해둔 화면을 바로 띄우고 최신화는 뒤에서 (로딩창 대기 없음)
+                showProjectDetail(targetCode, { useCache: true });
             }
         });
     }
@@ -573,7 +575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const card = document.createElement('div');
             card.className = 'project-card';
-            card.addEventListener('click', () => showProjectDetail(recordId));
+            card.addEventListener('click', () => showProjectDetail(recordId, { useCache: true }));
 
             const workersText = fields.시공기사 || "미정";
             const archiveBtnHtml = showArchivedProjects
@@ -1158,7 +1160,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // 7. 상세 화면 진입 및 드래그 앤 드롭 업무 배분
-    async function showProjectDetail(recordId) {
+
+    // 현장 상세 데이터는 조회에 2초 넘게 걸리는데, 폰에서 다른 앱 갔다 오면 브라우저가 탭을 버려서
+    // 페이지가 통째로 다시 실행되고 그때마다 이 조회를 처음부터 다시 함 -> 들어올 때마다 로딩창 대기.
+    // 그래서 상세 데이터도 목록처럼 세션에 저장해두고, 다시 들어올 땐 저장해둔 화면을 먼저 즉시 띄운 뒤
+    // 최신 데이터는 뒤에서 조용히 받아와 바뀐 게 있을 때만 다시 그림.
+    const DETAIL_CACHE_PREFIX = 'cachedProjectDetail_';
+    const DETAIL_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 탭을 하루 종일 열어둔 경우 어제 화면이 잠깐 보이는 것 방지
+
+    function readDetailCache(recordId) {
+        try {
+            const raw = sessionStorage.getItem(DETAIL_CACHE_PREFIX + recordId);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || !parsed.data || !parsed.data.project) return null;
+            if (Date.now() - (parsed.savedAt || 0) > DETAIL_CACHE_MAX_AGE_MS) return null;
+            return parsed.data;
+        } catch (e) {
+            return null; // 캐시가 깨져있으면 없는 셈 치고 정상 조회
+        }
+    }
+
+    function writeDetailCache(recordId, data) {
+        try {
+            sessionStorage.setItem(DETAIL_CACHE_PREFIX + recordId, JSON.stringify({ savedAt: Date.now(), data }));
+        } catch (e) {
+            // 저장공간이 꽉 찬 경우 - 캐시만 포기하고 기능은 그대로 진행
+        }
+    }
+
+    function clearDetailCaches() {
+        Object.keys(sessionStorage)
+            .filter(k => k.startsWith(DETAIL_CACHE_PREFIX))
+            .forEach(k => sessionStorage.removeItem(k));
+    }
+
+    // 배정표 화면에 실제로 그려지는 값들만 추려낸 요약본.
+    // 사진 URL은 Airtable이 조회할 때마다 새로 발급해서 매번 달라지므로 비교에서 제외 -
+    // 이걸로 비교해야 "바뀐 게 없는데 화면만 다시 그려서 펼쳐둔 카드가 접히는" 일이 안 생김
+    function detailBoardSignature(data) {
+        if (!data) return '';
+        const p = data.project || {};
+        const tasks = (data.tasks || []).map(t => {
+            const f = t.fields || {};
+            return [t.id, f.시공품목, f.밑작업기사, f.시공기사, !!f.밑작업완료, !!f.시공완료,
+                    f.작업우선순위, f.시공우선순위, f.현장특이사항].join('|');
+        });
+        return JSON.stringify([p.현장명, p.시공일자, p.공지사항, p.중점체크사항,
+                               (data.workers || []).join(','), (data.activeItems || []).join(','), tasks]);
+    }
+
+    function applyDetailData(recordId, data) {
+        currentDetailData = data;
+
+        // 최신 작업 현황으로 현장 목록 카드의 진행률 캐시도 같이 갱신
+        // (재조회 없이도 목록으로 돌아갔을 때 최신 숫자가 보이게)
+        const dtasks = currentDetailData.tasks || [];
+        projectProgressCache.set(recordId, {
+            done: dtasks.filter(t => t.fields.밑작업완료 && t.fields.시공완료).length,
+            total: dtasks.length
+        });
+
+        // 상세 화면 첫 진입 시 첫 번째 기사님을 자동으로 선택하여 배정표가 바로 열리도록 설정
+        if (!activeWorkerName && currentDetailData.workers && currentDetailData.workers.length > 0) {
+            activeWorkerName = currentDetailData.workers[0];
+        }
+    }
+
+    // useCache: 단순히 화면에 들어오기만 하는 경우(앱 재진입 / 현장 카드 클릭)에만 true.
+    // 저장 직후 재조회나 🔄 새로고침은 방금 바뀐 내용이 반드시 보여야 하므로 캐시를 쓰지 않음
+    async function showProjectDetail(recordId, options = {}) {
+        const { useCache = false } = options;
+
         if (recordId !== activeProjectCode) {
             // 다른 현장으로 이동하는 경우에만 이전 현장의 선택/배정 상태를 초기화
             activeWorkerName = null;
@@ -1166,36 +1239,49 @@ document.addEventListener('DOMContentLoaded', async () => {
             zonePendingChanges.clear();
         }
         activeProjectCode = recordId;
-        showLoading("현장 상세 정보를 불러오는 중...");
+
+        const cached = useCache ? readDetailCache(recordId) : null;
+        if (cached) {
+            // 저장해둔 화면을 로딩창 없이 먼저 보여주고, 최신화는 아래에서 뒤따라 진행
+            applyDetailData(recordId, cached);
+            renderDetailSection();
+            showSection('projectDetailSection');
+            localStorage.setItem('lastActiveProjectCode', recordId);
+        } else {
+            showLoading("현장 상세 정보를 불러오는 중...");
+        }
+
         try {
             const response = await fetchWithTimeout(`${API_DETAIL_URL}?code=${recordId}`);
             if (!response.ok) throw new Error("상세조회 실패");
-            
+
             const result = await response.json();
             // n8n은 데이터를 리턴할 때 항상 배열 [ { ... } ] 형태로 감싸서 주므로, 첫 번째 원소를 꺼내줍니다.
-            currentDetailData = Array.isArray(result) ? result[0] : result;
+            const data = Array.isArray(result) ? result[0] : result;
 
-            // 방금 받아온 최신 작업 현황으로 현장 목록 카드의 진행률 캐시도 같이 갱신
-            // (재조회 없이도 목록으로 돌아갔을 때 최신 숫자가 보이게)
-            const dtasks = currentDetailData.tasks || [];
-            projectProgressCache.set(recordId, {
-                done: dtasks.filter(t => t.fields.밑작업완료 && t.fields.시공완료).length,
-                total: dtasks.length
-            });
+            // 응답을 기다리는 사이에 다른 현장으로 옮겨갔으면 지금 보고 있는 화면을 덮어쓰지 않음
+            if (activeProjectCode !== recordId) return;
 
-            // 상세 화면 첫 진입 시 첫 번째 기사님을 자동으로 선택하여 배정표가 바로 열리도록 설정
-            if (!activeWorkerName && currentDetailData.workers && currentDetailData.workers.length > 0) {
-                activeWorkerName = currentDetailData.workers[0];
+            writeDetailCache(recordId, data);
+            const boardChanged = !cached || detailBoardSignature(cached) !== detailBoardSignature(data);
+            applyDetailData(recordId, data);
+
+            // 캐시로 이미 띄워둔 화면은, 실제로 내용이 바뀌었을 때만 다시 그림
+            if (boardChanged) renderDetailSection();
+            if (!cached) {
+                showSection('projectDetailSection');
+                // 마지막으로 보던 현장을 기억해뒀다가, 앱을 다시 열면 이 현장 화면으로 바로 복귀
+                localStorage.setItem('lastActiveProjectCode', recordId);
             }
-            
-            renderDetailSection();
-            showSection('projectDetailSection');
-            // 마지막으로 보던 현장을 기억해뒀다가, 앱을 다시 열면 이 현장 화면으로 바로 복귀
-            localStorage.setItem('lastActiveProjectCode', recordId);
         } catch (error) {
             console.error(error);
-            showToast("현장 데이터를 불러오지 못했습니다.", "danger");
-            localStorage.removeItem('lastActiveProjectCode');
+            if (cached) {
+                // 화면은 저장해둔 내용으로 이미 떠 있으므로 닫지 않고, 최신화에 실패했다는 것만 알림
+                showToast("최신 정보를 받지 못했습니다. 마지막으로 보던 내용입니다.", "danger");
+            } else {
+                showToast("현장 데이터를 불러오지 못했습니다.", "danger");
+                localStorage.removeItem('lastActiveProjectCode');
+            }
         } finally {
             hideLoading();
         }
