@@ -568,17 +568,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 여러 군데 파손이 있으면 비포를 여러 장 추가해서 순서대로(1번째↔1번째, 2번째↔2번째) 짝지음.
         const damagePhotos = fields.파손비포사진 || [];
         const damageAfterPhotos = fields.파손애프터사진 || [];
-        const damagePairCount = damagePhotos.filter(isValidPhoto).length;
+        // 사진을 지우면 그 칸은 빈 자리(1x1)로만 남고 뒤 사진이 앞으로 당겨지지 않기 때문에,
+        // 화면에 보여줄 비포 사진만 골라내되 애프터와 짝짓고 삭제할 때 쓰는 원래 칸 번호는 그대로 들고 다님
+        const damageSlotIndexes = [];
+        for (let i = 0; i < damagePhotos.length; i++) {
+            const p = damagePhotos[i];
+            if (isValidPhoto(p) || (p && p.isUploading)) damageSlotIndexes.push(i);
+        }
+        const damagePairCount = damageSlotIndexes.length;
         const MAX_DAMAGE_PAIRS = 5;
 
         let damageRowsHtml = "";
-        for (let i = 0; i < damagePairCount; i++) {
-            const beforeData = damagePhotos[i];
+        damageSlotIndexes.forEach((photoIndex, rowIdx) => {
+            const pairNo = rowIdx + 1;
+            const beforeData = damagePhotos[photoIndex];
+            const beforeUploading = !!(beforeData && beforeData.isUploading);
             const beforeTile = `
-                <div class="photo-slot has-image damage-slot">
-                    <img src="${beforeData.url}" class="photo-slot-preview" alt="비포 ${i + 1}">
-                    <span class="damage-slot-badge">비포 ${i + 1}</span>
-                    ${stage === '밑작업' ? `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '파손비포사진', ${i})">×</button>` : ''}
+                <div class="photo-slot has-image damage-slot ${beforeUploading ? 'uploading' : ''}">
+                    <img src="${beforeData.url}" class="photo-slot-preview" alt="비포 ${pairNo}">
+                    <span class="damage-slot-badge">비포 ${pairNo}</span>
+                    ${beforeUploading ? `<div class="photo-slot-uploading-badge">⏳</div>` : (stage === '밑작업' ? `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '파손비포사진', ${photoIndex})">×</button>` : '')}
                 </div>
             `;
 
@@ -586,37 +595,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (stage === '밑작업') {
                 afterTile = `<div class="photo-slot damage-slot damage-locked"><div class="photo-slot-label">시공 단계에서<br>촬영</div></div>`;
             } else {
-                const afterData = damageAfterPhotos[i];
+                const afterData = damageAfterPhotos[photoIndex];
                 const afterHasImage = isValidPhoto(afterData);
                 const afterUploading = !!(afterData && afterData.isUploading);
                 if (afterHasImage) {
                     afterTile = `
                         <div class="photo-slot has-image damage-slot ${afterUploading ? 'uploading' : ''}">
-                            <img src="${afterData.url}" class="photo-slot-preview" alt="애프터 ${i + 1}">
-                            <span class="damage-slot-badge">애프터 ${i + 1}</span>
-                            ${afterUploading ? `<div class="photo-slot-uploading-badge">⏳</div>` : `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '파손애프터사진', ${i})">×</button>`}
+                            <img src="${afterData.url}" class="photo-slot-preview" alt="애프터 ${pairNo}">
+                            <span class="damage-slot-badge">애프터 ${pairNo}</span>
+                            ${afterUploading ? `<div class="photo-slot-uploading-badge">⏳</div>` : `<button class="photo-slot-delete" onclick="event.stopPropagation(); deletePhoto('${recordId}', '파손애프터사진', ${photoIndex})">×</button>`}
                         </div>
                     `;
                 } else {
                     afterTile = `
                         <div class="photo-slot add-tile damage-slot"
-                             data-slot-index="${i}" data-slot-name="애프터 ${i + 1}"
+                             data-slot-index="${photoIndex}" data-slot-name="애프터 ${pairNo}"
                              data-record-id="${recordId}" data-field-name="파손애프터사진">
                             <div class="photo-slot-icon">📷</div>
-                            <div class="photo-slot-label">애프터 ${i + 1}<br>촬영</div>
+                            <div class="photo-slot-label">애프터 ${pairNo}<br>촬영</div>
                         </div>
                     `;
                 }
             }
 
             damageRowsHtml += `<div class="damage-pair-row">${beforeTile}<span class="damage-arrow">→</span>${afterTile}</div>`;
-        }
+        });
 
         let damageAddHtml = "";
         if (stage === '밑작업' && damagePairCount < MAX_DAMAGE_PAIRS) {
+            // 새 사진은 항상 맨 뒤 칸에 올려야 함 (지워진 칸 번호를 재사용하면 남아 있는 사진을 덮어씀)
             damageAddHtml = `
                 <div class="photo-slot add-tile damage-add-tile"
-                     data-slot-index="${damagePairCount}" data-slot-name="비포 ${damagePairCount + 1}"
+                     data-slot-index="${damagePhotos.length}" data-slot-name="비포 ${damagePairCount + 1}"
                      data-record-id="${recordId}" data-field-name="파손비포사진">
                     <div class="photo-slot-icon">➕</div>
                     <div class="photo-slot-label">파손 부위 추가</div>
@@ -740,8 +750,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const allChecked = totalChecks === completedChecks;
 
         // 사진은 최소 1장만 있으면 됨 (밑작업/시공 공통, 업로드 진행 중인 슬롯은 완료로 안 침)
-        const anyUploading = cardElement.querySelectorAll('.photo-slot.uploading').length > 0;
-        const filledCount = cardElement.querySelectorAll('.photo-slot.has-image:not(.uploading)').length;
+        // 파손 복구 사진은 선택 항목이라 필수 장수에서 빼고, 필수 품질 사진 칸만 셈
+        const anyUploading = cardElement.querySelectorAll('.photo-slots-grid .photo-slot.uploading').length > 0;
+        const filledCount = cardElement.querySelectorAll('.photo-slots-grid .photo-slot.has-image:not(.uploading)').length;
         const allUploaded = filledCount >= 1 && !anyUploading;
 
         if (allChecked && allUploaded) {
