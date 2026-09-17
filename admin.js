@@ -1829,6 +1829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         let bodyHtml = "";
         const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+        const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
         const siteNoteValue = fields.현장특이사항 || '';
 
         bodyHtml += `<div class="assignment-card-body" style="display: none; padding-top: 10px;">`;
@@ -1849,6 +1850,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const cleanLine = line.trim();
                 const isGuidelineActive = !existingResults || existingResults.includes(cleanLine);
                 const isIncluded = !excludedLines.includes(cleanLine);
+                const isImportant = importantLines.includes(cleanLine);
                 const escapedLine = cleanLine.replace(/'/g, "\\'");
                 const escapedLineAttr = cleanLine.replace(/"/g, '&quot;');
                 const sampleUrl = getSamplePhotoUrl(currentDetailData.samplePhotos, guidelineKind, fields.시공품목, cleanLine);
@@ -1861,6 +1863,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <span class="toggle-text">${cleanLine}</span>
                         </span>
                         ${sampleThumbHtml}
+                        <button type="button" class="guideline-star-btn${isImportant ? ' active' : ''}" data-line="${escapedLineAttr}" title="중요 표시 (기사님 화면에 빨간 글씨+반짝이는 별로 강조됨). 클릭 후 아래 저장 버튼을 눌러야 반영됨" onclick="event.stopPropagation(); this.classList.toggle('active');">⭐</button>
                         <input type="checkbox" class="guideline-include-input" data-line="${escapedLineAttr}" ${isIncluded ? 'checked' : ''} title="체크 해제 후 아래 저장 버튼을 누르면 이 현장에서만 이 지침 제외" onclick="event.stopPropagation();">
                     </div>
                 `;
@@ -2124,12 +2127,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const noteText = textarea ? textarea.value.trim() : "";
         const cardBody = textarea ? textarea.closest('.assignment-card-body') : null;
         const excludedLines = [];
+        const importantLines = [];
         if (cardBody) {
             cardBody.querySelectorAll('.guideline-include-input').forEach(input => {
                 if (!input.checked) excludedLines.push(input.dataset.line);
             });
+            cardBody.querySelectorAll('.guideline-star-btn.active').forEach(btn => {
+                importantLines.push(btn.dataset.line);
+            });
         }
         const excludedText = excludedLines.join('\n');
+        const importantText = importantLines.join('\n');
 
         showLoading("저장 중...");
         try {
@@ -2141,7 +2149,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     projectCode: activeProjectCode,
                     recordId: recordId,
                     noteText: noteText,
-                    excludedText: excludedText
+                    excludedText: excludedText,
+                    importantText: importantText
                 })
             });
 

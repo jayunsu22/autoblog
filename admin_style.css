@@ -1308,6 +1308,38 @@ body {
     font-weight: 800;
 }
 
+/* 지침 개별 중요 표시 별 - 클릭 시 즉시저장 안 하고, 아래 저장 버튼으로 일괄 반영. 켜지면 기사님 화면에 빨간 글씨+반짝임으로 강조됨 */
+.guideline-star-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    cursor: pointer;
+    opacity: 0.3;
+    filter: grayscale(1);
+    transition: opacity 0.15s, filter 0.15s;
+}
+
+.guideline-star-btn:hover {
+    opacity: 0.7;
+}
+
+.guideline-star-btn.active {
+    opacity: 1;
+    filter: none;
+    animation: star-glow 1.4s ease-in-out infinite;
+}
+
+@keyframes star-glow {
+    0%, 100% { text-shadow: 0 0 2px rgba(245, 158, 11, 0.4); transform: scale(1); }
+    50% { text-shadow: 0 0 8px rgba(245, 158, 11, 0.9); transform: scale(1.15); }
+}
+
 /* 지침 개별 포함/제외 체크박스 - 클릭 시 즉시저장 안 하고, 아래 저장 버튼으로 일괄 반영 */
 .guideline-include-input {
     flex-shrink: 0;
