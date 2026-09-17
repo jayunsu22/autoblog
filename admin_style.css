@@ -1308,6 +1308,57 @@ body {
     font-weight: 800;
 }
 
+/* 순서 빠르게 정하기 모달 - 탭한 순서대로 번호가 매겨지는 리스트 */
+.order-pick-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s ease;
+    background: white;
+}
+
+.order-pick-item:hover {
+    background: var(--accent-gray);
+}
+
+.order-pick-item.picked {
+    background: var(--primary-light);
+    border-color: var(--primary-blue);
+}
+
+.order-pick-badge {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-muted);
+    background: #f8fafc;
+}
+
+.order-pick-item.picked .order-pick-badge {
+    border-color: var(--primary-blue);
+    background: var(--primary-blue);
+    color: white;
+}
+
+.order-pick-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
 /* 지침 개별 중요 표시 별 - 클릭 시 즉시저장 안 하고, 아래 저장 버튼으로 일괄 반영. 켜지면 기사님 화면에 빨간 글씨+반짝임으로 강조됨 */
 .guideline-star-btn {
     flex-shrink: 0;

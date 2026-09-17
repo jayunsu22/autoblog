@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260918">
+    <link rel="stylesheet" href="admin_style.css?v=20260918b">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -159,6 +159,7 @@
                         <select id="assignmentWorkerFilter" onclick="event.stopPropagation()" onchange="event.stopPropagation(); onAssignmentWorkerFilterChange()" style="width: 96px; flex: 0 0 auto; margin: 0 8px; padding: 5px 6px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main);">
                             <option value="">전체보기</option>
                         </select>
+                        <button type="button" onclick="event.stopPropagation(); openOrderPickModal()" title="순서 빠르게 정하기" style="padding: 5px 8px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; flex-shrink: 0;">🔢</button>
                         <button type="button" onclick="event.stopPropagation(); refreshBoardData()" title="새로고침" style="padding: 5px 8px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; flex-shrink: 0;">🔄</button>
                         <span class="count-badge" id="assignedCountBadge" style="display: none;">0개</span>
                     </div>
@@ -375,6 +376,25 @@
         </div>
     </div>
 
+    <!-- 모달: 배정표 순서 빠르게 정하기 (탭한 순서대로 1,2,3... 번호 매김) -->
+    <div id="orderPickModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 480px; max-height: 85vh; max-height: 85dvh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2>🔢 순서 빠르게 정하기</h2>
+                <button class="close-modal-btn" onclick="closeOrderPickModal()">×</button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin: -6px 0 10px 0;">원하는 순서대로 아래 항목을 차례로 탭하세요. 번호가 매겨집니다. 다 되면 저장을 누르세요.</p>
+            <div id="orderPickBody">
+                <!-- 순서 선택 항목들이 동적으로 렌더링됨 -->
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1.5px solid var(--border-color);">
+                <span id="orderPickStatus" style="font-size: 12px; font-weight: 700; color: var(--text-muted); flex: 1;"></span>
+                <button type="button" onclick="resetOrderPick()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">초기화</button>
+                <button type="button" onclick="applyOrderPick()" style="padding: 8px 16px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">💾 저장</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 모달 4: 시공품목 개별 편집 팝업 -->
     <div id="itemEditModal" class="modal-overlay" style="display: none;">
         <div class="modal-content admin-modal" style="max-width: 560px; max-height: 85vh; max-height: 85dvh; overflow-y: auto;">
@@ -439,6 +459,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260918"></script>
+    <script src="admin.js?v=20260918b"></script>
 </body>
 </html>

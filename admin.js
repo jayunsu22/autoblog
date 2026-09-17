@@ -1996,6 +1996,84 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // 순서 빠르게 정하기 모달 - 드래그가 번거로운 모바일에서, 원하는 순서대로 항목을 탭하면
+    // 1,2,3...으로 번호가 매겨지고, 저장 시 그 순서대로 카드가 재배치됨 (탭 안 한 나머지는 기존 순서 유지)
+    let orderPickSequence = [];
+
+    window.openOrderPickModal = function() {
+        orderPickSequence = [];
+        renderOrderPickList();
+        document.getElementById('orderPickModal').style.display = 'flex';
+    };
+
+    window.closeOrderPickModal = function() {
+        document.getElementById('orderPickModal').style.display = 'none';
+    };
+
+    function renderOrderPickList() {
+        const container = document.getElementById('orderPickBody');
+        const statusEl = document.getElementById('orderPickStatus');
+        const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
+
+        if (cards.length === 0) {
+            container.innerHTML = `<div class="empty-state">배정된 작업이 없습니다.</div>`;
+            statusEl.textContent = '';
+            return;
+        }
+
+        container.innerHTML = cards.map(card => {
+            const key = `${card.dataset.recordId}__${card.dataset.stage}`;
+            const nameEl = card.querySelector('.assigned-item-name');
+            const name = nameEl ? nameEl.textContent : '(이름없음)';
+            const pickIdx = orderPickSequence.indexOf(key);
+            const picked = pickIdx !== -1;
+            return `
+                <div class="order-pick-item${picked ? ' picked' : ''}" onclick="toggleOrderPick('${key}')">
+                    <span class="order-pick-badge">${picked ? (pickIdx + 1) : ''}</span>
+                    <span class="order-pick-name">${name}</span>
+                </div>
+            `;
+        }).join('');
+
+        statusEl.textContent = `${orderPickSequence.length} / ${cards.length}개 지정됨`;
+    }
+
+    window.toggleOrderPick = function(key) {
+        const idx = orderPickSequence.indexOf(key);
+        if (idx !== -1) {
+            // 이미 찍은 항목을 다시 탭하면 그 항목만 순서 지정 취소 (뒷 번호들이 자동으로 하나씩 당겨짐)
+            orderPickSequence.splice(idx, 1);
+        } else {
+            orderPickSequence.push(key);
+        }
+        renderOrderPickList();
+    };
+
+    window.resetOrderPick = function() {
+        orderPickSequence = [];
+        renderOrderPickList();
+    };
+
+    window.applyOrderPick = async function() {
+        const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
+        const cardsByKey = new Map(cards.map(c => [`${c.dataset.recordId}__${c.dataset.stage}`, c]));
+
+        // 탭한 순서대로 먼저 배치하고, 탭 안 한 나머지는 기존 화면 순서 그대로 뒤에 이어붙임
+        const orderedKeys = [...orderPickSequence];
+        cards.forEach(c => {
+            const key = `${c.dataset.recordId}__${c.dataset.stage}`;
+            if (!orderedKeys.includes(key)) orderedKeys.push(key);
+        });
+
+        orderedKeys.forEach(key => {
+            const card = cardsByKey.get(key);
+            if (card) boardAssignmentList.appendChild(card);
+        });
+
+        closeOrderPickModal();
+        await persistAssignmentOrder();
+    };
+
     // 드롭 정착 시 최종 순서 갱신 및 서버/로컬스토리지 저장
     boardAssignmentList.addEventListener('drop', async (e) => {
         e.preventDefault();
