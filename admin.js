@@ -106,6 +106,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 카톡 미리보기 카드가 늘 "사진 갤러리"로만 떴다. 견적서 링크(/q/)와 같은
     // Netlify 사이트로 옮겨 Edge Function 이 카드 제목에 현장명을 넣게 했다.
     const GALLERY_APP_BASE_URL = "https://songil.netlify.app/g";
+    // 정산견적(품수 기반 사후 견적) 작성 화면. ?site=<현장 recordId> 로 그 현장의 작업목록을 불러와
+    // 품수×품단가 + 자재소모량×자재단가 + 부가항목으로 견적을 내고 /s/<코드> 링크로 발행한다.
+    // 관리자 PIN 이 같아서 여기서 열면 바로 들어간다. 보관함 현장에도 버튼이 있다 - 정산은 보관 뒤에 하는 일이 많다.
+    const SETTLE_APP_BASE_URL = "https://songil.netlify.app/settle.html";
 
     // 한 "층" 안에서의 방 이름 순서 (탭/버튼을 이 순서로 정렬할 때 기준으로만 쓰임 - 목록을 제한하지 않음)
     const ROOM_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타'];
@@ -600,6 +604,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="card-footer-btns">
                     <button class="card-btn secondary" onclick="event.stopPropagation(); openProjectPhotoGallery('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📷 사진</button>
                     <button class="card-btn secondary" onclick="event.stopPropagation(); openRawPhotoCapture('${recordId}', '${(fields.현장명 || '').replace(/'/g, "\\'")}')">📸 원본</button>
+                    <button class="card-btn secondary" onclick="event.stopPropagation(); window.open('${SETTLE_APP_BASE_URL}?site=${recordId}', '_blank', 'noopener')">💰 현장견적</button>
                     ${archiveBtnHtml}
                     ${showArchivedProjects ? '' : '<button class="card-btn primary">업무 ▶</button>'}
                 </div>
