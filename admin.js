@@ -146,6 +146,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
+    // ---------- 뒷정리 ('한번에' 품목) ----------
+    // 현장정리·본드붓 세척·짐정리처럼 밑작업/시공으로 안 나뉘는 일. 담당 1명(시공기사 칸)·완료 1번(시공완료 칸)을 쓴다.
+    // '매일' 반복이면 시공완료는 켜지 않고, 작업목록.완료일자에 'YYYY-MM-DD 기사' 줄이 쌓인다 → 오늘 줄이 있으면 오늘은 완료.
+    // 블로그 후보(밑작업완료+시공완료)에는 밑작업완료가 켜질 일이 없어 저절로 빠지고, 고객 갤러리·정산견적에서도 뺀다.
+    const CLEANUP_TAB = '__CLEANUP__'; // 업무배정표에서 🧹 뒷정리 탭을 고른 상태
+
+    function 오늘날짜() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // 품목 설정값 (작업방식·반복·사진필수) - 현장 상세(items/masterItems)에 없으면 품목설정(globalMasterItems)에서
+    function 품목설정값(itemName) {
+        const d = currentDetailData || {};
+        const fromMaster = (d.masterItems || []).find(m => m.품목명 === itemName)
+            || (globalMasterItems || []).find(m => m.품목명 === itemName);
+        return Object.assign({}, fromMaster || {}, (d.items || {})[itemName] || {});
+    }
+    function is뒷정리(itemName) { return 품목설정값(itemName).작업방식 === '한번에'; }
+    function is매일(itemName) { return 품목설정값(itemName).반복 === '매일'; }
+
+    // 완료일자 칸 → [{ 날짜, 이름 }] 최신순
+    function 완료기록(fields) {
+        return String((fields && fields.완료일자) || '').split('\n').map(s => s.trim()).filter(Boolean)
+            .map(line => {
+                const i = line.indexOf(' ');
+                return i < 0 ? { 날짜: line, 이름: '' } : { 날짜: line.slice(0, i), 이름: line.slice(i + 1).trim() };
+            })
+            .sort((a, b) => b.날짜.localeCompare(a.날짜));
+    }
+
+    // 뒷정리 완료 여부 - 매일이면 '오늘' 줄이 있는지, 한 번이면 시공완료
+    function 뒷정리완료(fields, itemName) {
+        if (is매일(itemName)) return 완료기록(fields).some(r => r.날짜 === 오늘날짜());
+        return !!(fields && fields.시공완료);
+    }
+
     let activeProjectCode = "";
     let currentDetailData = null; // 상세 현장 데이터 캐시
     let draggedData = null; // HTML5 드래그 중 임시 저장 공간
@@ -157,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let showArchivedProjects = false; // false: 활성 현장만 표시, true: 보관된 현장만 표시
     let galleryAllPhotos = []; // 사진 갤러리 모달에 로드된 전체 사진 [{url, 구역, 품목명, type: '시공'|'밑작업'}]
     let galleryActiveZone = '전체'; // 사진 갤러리에서 현재 선택된 구역 탭
-    let galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false }; // 시공사진/밑작업 사진/원본사진 체크박스 상태 (기본은 시공사진만)
+    let galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false, 뒷정리: false }; // 시공사진/밑작업 사진/원본사진 체크박스 상태 (기본은 시공사진만)
     let galleryFilteredPhotos = []; // 현재 탭 필터링된 사진 목록 (라이트박스 이전/다음 탐색 기준)
     let galleryLightboxIndex = -1; // 라이트박스에서 현재 보고 있는 사진의 인덱스
     let galleryTouchStartX = null; // 스와이프 제스처 시작 X좌표
@@ -723,10 +760,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오는 중...</div>`;
 
         // 열 때마다 기본값(시공사진만 체크)으로 초기화
-        galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false };
+        galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false, 뒷정리: false };
         document.getElementById('galleryTypeConstruction').checked = true;
         document.getElementById('galleryTypePrep').checked = false;
         document.getElementById('galleryTypeRaw').checked = false;
+        document.getElementById('galleryTypeCleanup').checked = false;
 
         showLoading("현장 사진을 불러오는 중...");
         try {
@@ -743,11 +781,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
 
+            // 뒷정리('한번에' 품목) 사진은 시공 사진과 섞지 않고 '🧹 뒷정리' 로 따로 모은다
+            const 뒷정리품목 = new Set((data.masterItems || []).filter(item => item.작업방식 === '한번에').map(item => item.품목명));
+
             const photos = [];
             // 완료보고 여부와 상관없이, 찍혀서 이미 저장된 사진은 바로 갤러리에 보여줌
             // (임시저장 단계에서 찍은 사진도 완료보고 전까지 안 보이던 문제 수정)
             (data.tasks || []).forEach(task => {
                 const fields = task.fields || {};
+                if (뒷정리품목.has(fields.시공품목)) {
+                    (fields.시공후사진 || []).forEach((photo, idx) => {
+                        if (isValidPhoto(photo)) {
+                            photos.push({ url: photo.url, 구역: '뒷정리', 품목명: fields.시공품목 || '', type: '뒷정리', taskId: task.id, fieldName: '시공후사진', slotIndex: idx });
+                        }
+                    });
+                    return;
+                }
                 const zone = zoneByItem[fields.시공품목] || '기타';
                 // taskId/fieldName/slotIndex: 확대보기에서 삭제할 때 기사님 앱과 동일한 delete_photo 페이로드를 만들기 위한 좌표.
                 // slotIndex는 Airtable 첨부 배열의 원래 인덱스(placeholder 슬롯 포함) = 기사님 앱의 슬롯 번호와 같음
@@ -1361,8 +1410,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 구역 탭은 실제 등록된 품목들의 구역 값 기준으로 동적으로 만듦 (2층/3층 등 새 구역이 나와도
         // 코드 수정 없이 자동으로 탭이 생김). 값이 비어있는 품목만 "기타"로 묶음
+        // 뒷정리('한번에' 품목)는 구역과 상관없는 일이라 구역 탭에 섞지 않고 🧹 뒷정리 탭에 따로 모은다
+        const cleanupItems = allItems.filter(item => item.작업방식 === '한번에');
         const zoneMap = new Map();
         allItems.forEach(item => {
+            if (item.작업방식 === '한번에') return;
             const zone = item.구역 || "기타";
             if (!zoneMap.has(zone)) zoneMap.set(zone, []);
             zoneMap.get(zone).push(item);
@@ -1373,6 +1425,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 구역 상관없이 활성화됐지만 밑작업+시공이 둘 다 안 끝난 품목만 모음 - "미완료" 탭용
         const incompleteEntries = [];
         allItems.forEach(item => {
+            // 뒷정리는 매일 새로 하는 일이라 '미완료' 에 넣으면 현장이 끝날 때까지 안 빠진다 - 🧹 탭에서 본다
+            if (item.작업방식 === '한번에') return;
             const zone = item.구역 || "기타";
             const isActive = activeItems.includes(item.품목명);
             if (!isActive) return;
@@ -1387,8 +1441,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!isFullyCompleted) incompleteEntries.push({ item, task, zone });
         });
 
-        if (!activeZoneTab || (activeZoneTab !== INCOMPLETE_TAB && !zoneMap.has(activeZoneTab))) {
-            activeZoneTab = zoneNames[0] || null;
+        const cleanupTabOk = activeZoneTab === CLEANUP_TAB && cleanupItems.length > 0;
+        if (!activeZoneTab || (activeZoneTab !== INCOMPLETE_TAB && !cleanupTabOk && !zoneMap.has(activeZoneTab))) {
+            activeZoneTab = zoneNames[0] || (cleanupItems.length ? CLEANUP_TAB : null);
         }
         // 미완료 탭을 보다가 마지막 미완료 항목까지 끝내면 자동으로 첫 구역 탭으로 돌아감
         if (activeZoneTab === INCOMPLETE_TAB && incompleteEntries.length === 0) {
@@ -1407,6 +1462,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 renderZoneAssignBoard();
             });
             zoneAssignTabs.appendChild(incompleteTab);
+        }
+
+        if (cleanupItems.length > 0) {
+            // (오늘 끝낸 수 / 켜 둔 수) - 매일 하는 일은 날짜가 바뀌면 다시 0부터
+            const 켜진것 = cleanupItems.filter(item => activeItems.includes(item.품목명));
+            const 끝낸수 = 켜진것.filter(item => {
+                const t = tasks.find(x => x.fields.시공품목 === item.품목명);
+                return t && 뒷정리완료(t.fields, item.품목명);
+            }).length;
+            const cleanupTab = document.createElement('button');
+            cleanupTab.type = 'button';
+            cleanupTab.className = `item-category-tab cleanup-tab ${activeZoneTab === CLEANUP_TAB ? 'active' : ''}`;
+            cleanupTab.textContent = 켜진것.length ? `🧹 뒷정리 (${끝낸수}/${켜진것.length})` : `🧹 뒷정리 (${cleanupItems.length})`;
+            cleanupTab.addEventListener('click', () => {
+                activeZoneTab = CLEANUP_TAB;
+                renderZoneAssignBoard();
+            });
+            zoneAssignTabs.appendChild(cleanupTab);
         }
 
         zoneNames.forEach(zone => {
@@ -1432,7 +1505,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const itemsInZone = [...(zoneMap.get(activeZoneTab) || [])];
+        const itemsInZone = [...(activeZoneTab === CLEANUP_TAB ? cleanupItems : (zoneMap.get(activeZoneTab) || []))];
         itemsInZone.sort((a, b) => {
             const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
             const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
@@ -1459,15 +1532,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     function createZoneItemRow(item, isActive, task, workers, zoneLabel) {
         const itemName = item.품목명;
         const fields = task ? task.fields : {};
+        const 뒷정리 = item.작업방식 === '한번에';
         const pending = zonePendingChanges.get(itemName) || {};
         const effectiveActive = pending.active !== undefined ? pending.active : isActive;
         const effectivePrep = pending.밑작업 !== undefined ? pending.밑작업 : (fields.밑작업기사 || "");
         const effectiveWrap = pending.시공 !== undefined ? pending.시공 : (fields.시공기사 || "");
-        const hasAnyAssignee = !!(effectivePrep || effectiveWrap);
+        const hasAnyAssignee = 뒷정리 ? !!effectiveWrap : !!(effectivePrep || effectiveWrap);
         const isValidDamagePhotoRow = (p) => !!p && p.url && !p.url.includes('1x1.png');
         const damageBeforeCountRow = (fields.파손비포사진 || []).filter(isValidDamagePhotoRow).length;
         const damageAfterCountRow = (fields.파손애프터사진 || []).filter(isValidDamagePhotoRow).length;
-        const isFullyCompleted = !!(fields.밑작업완료 && fields.시공완료) && damageBeforeCountRow <= damageAfterCountRow;
+        const isFullyCompleted = 뒷정리
+            ? !!(isActive && task && 뒷정리완료(fields, itemName))
+            : !!(fields.밑작업완료 && fields.시공완료) && damageBeforeCountRow <= damageAfterCountRow;
 
         const row = document.createElement('div');
         row.className = `zone-item-row ${isFullyCompleted ? 'completed' : ''} ${zonePendingChanges.has(itemName) ? 'pending' : ''}`;
@@ -1488,11 +1564,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'zone-item-name';
         nameSpan.textContent = zoneLabel ? `${itemName} · ${zoneLabel}` : itemName;
+        if (뒷정리) {
+            const modeBadge = document.createElement('span');
+            modeBadge.className = 'zone-item-mode-badge';
+            modeBadge.textContent = item.반복 === '매일' ? '매일' : '한 번';
+            nameSpan.appendChild(modeBadge);
+        }
 
         const assignWrap = document.createElement('div');
         assignWrap.className = 'zone-item-assign';
-        assignWrap.appendChild(createZoneAssignSelect(itemName, '밑작업', effectivePrep, effectiveActive, fields, workers, isActive));
-        assignWrap.appendChild(createZoneAssignSelect(itemName, '시공', effectiveWrap, effectiveActive, fields, workers, isActive));
+        if (뒷정리) {
+            // 뒷정리는 밑작업/시공으로 안 나뉜다 - 담당 한 명(시공기사 칸에 저장)
+            assignWrap.appendChild(createZoneAssignSelect(itemName, '시공', effectiveWrap, effectiveActive, fields, workers, isActive, '담당'));
+        } else {
+            assignWrap.appendChild(createZoneAssignSelect(itemName, '밑작업', effectivePrep, effectiveActive, fields, workers, isActive));
+            assignWrap.appendChild(createZoneAssignSelect(itemName, '시공', effectiveWrap, effectiveActive, fields, workers, isActive));
+        }
 
         row.appendChild(toggleLabel);
         row.appendChild(nameSpan);
@@ -1502,20 +1589,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             const badge = document.createElement('span');
             badge.className = 'zone-item-done-badge';
             badge.textContent = '✅';
+            if (뒷정리 && item.반복 === '매일') badge.title = '오늘 완료';
             row.appendChild(badge);
         }
 
         return row;
     }
 
-    function createZoneAssignSelect(itemName, stage, effectiveValue, effectiveActive, fields, workers, isActive) {
+    function createZoneAssignSelect(itemName, stage, effectiveValue, effectiveActive, fields, workers, isActive, placeholder) {
         const select = document.createElement('select');
         select.className = 'zone-assign-select';
-        const isDone = isActive && !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+        // 매일 하는 뒷정리는 날마다 담당이 바뀔 수 있어 끝냈어도 잠그지 않는다
+        const isDone = isActive && !is매일(itemName) && !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
         select.disabled = !effectiveActive || isDone;
         if (isDone) select.classList.add('done');
 
-        let optionsHtml = `<option value="">${stage}</option>`;
+        let optionsHtml = `<option value="">${placeholder || stage}</option>`;
         workers.forEach(w => {
             optionsHtml += `<option value="${w}">${w}</option>`;
         });
@@ -1769,11 +1858,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (fields.시공기사 && (!filterWorkerName || fields.시공기사 === filterWorkerName)) {
                 const priority = fields.시공우선순위 !== undefined ? fields.시공우선순위 : (fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999));
-                cardEntries.push({ task, stage: '시공', assignee: fields.시공기사, isCompleted: !!fields.시공완료, priority });
+                const 뒷정리 = is뒷정리(fields.시공품목);
+                const isCompleted = 뒷정리 ? 뒷정리완료(fields, fields.시공품목) : !!fields.시공완료;
+                cardEntries.push({ task, stage: '시공', assignee: fields.시공기사, isCompleted, priority, 뒷정리 });
             }
         });
 
         cardEntries.sort((a, b) => a.priority - b.priority);
+        // 뒷정리 카드는 하루 일과 끝에 하는 일이라 시공 카드들 아래로 모은다 (그 안에서는 원래 순서)
+        cardEntries.sort((a, b) => (!!a.뒷정리 === !!b.뒷정리) ? 0 : (a.뒷정리 ? 1 : -1));
         cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
 
         let count = 0;
@@ -1790,10 +1883,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     function createAssignmentCard(task, stage, assigneeName) {
         const fields = task.fields;
         const recordId = task.id;
-        const isCompleted = !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+        const 뒷정리 = stage === '시공' && is뒷정리(fields.시공품목);
+        const 매일 = 뒷정리 && is매일(fields.시공품목);
+        const isCompleted = 뒷정리 ? 뒷정리완료(fields, fields.시공품목) : !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+        const stageLabel = 뒷정리 ? (매일 ? '🧹 뒷정리·매일' : '🧹 뒷정리') : stage;
 
         const card = document.createElement('div');
-        card.className = `assignment-card${isCompleted ? ' completed' : ''} ${stage === '밑작업' ? 'stage-prep' : 'stage-construction'}`;
+        card.className = `assignment-card${isCompleted ? ' completed' : ''} ${stage === '밑작업' ? 'stage-prep' : (뒷정리 ? 'stage-cleanup' : 'stage-construction')}`;
         card.dataset.recordId = recordId;
         card.dataset.stage = stage;
 
@@ -1810,12 +1906,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 1. 헤더 (배정 기사 이름, 작업이름, 완료 상태, 아코디언 ▼ 표시, 순서 이동 ▲▼, 배정 취소 x)
         // 특정 기사님으로 필터링된 상태면 카드마다 이름을 반복 표시할 필요가 없어 배지를 생략함
         const assigneeBadgeHtml = activeWorkerName ? '' : `<span class="assignee-badge">${assigneeName}</span>`;
-        const statusBadgeHtml = `<span class="assignment-status-badge${isCompleted ? ' completed' : ''}">${isCompleted ? '✅ 완료됨' : '진행중'}</span>`;
+        const statusText = 매일 ? (isCompleted ? '✅ 오늘 완료' : '오늘 아직') : (isCompleted ? '✅ 완료됨' : '진행중');
+        const statusBadgeHtml = `<span class="assignment-status-badge${isCompleted ? ' completed' : ''}">${statusText}</span>`;
         let headerHtml = `
             <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
                     ${assigneeBadgeHtml}
-                    <span class="assigned-item-name">${fields.시공품목} (${stage})</span>
+                    <span class="assigned-item-name">${fields.시공품목} (${stageLabel})</span>
                     ${statusBadgeHtml}
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
@@ -1846,7 +1943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const existingResults = fields.점검결과 || "";
 
             bodyHtml += `
-                <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">💡 현장 품질 지침 (오른쪽 체크 해제 시 이 현장에서만 제외 - 아래 저장 버튼 눌러야 반영됨)</h4>
+                <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">${뒷정리 ? '📋 할 일' : '💡 현장 품질 지침'} (오른쪽 체크 해제 시 이 현장에서만 제외 - 아래 저장 버튼 눌러야 반영됨)</h4>
                 <div class="assign-checkbox-list">
             `;
 
@@ -1876,6 +1973,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             bodyHtml += `</div>`;
         }
+
+        if (뒷정리) bodyHtml += 뒷정리기록Html(fields, 매일);
 
         bodyHtml += `
             <div class="site-note-box" style="margin-top: 14px;">
@@ -1917,6 +2016,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.classList.remove('dragging');
             await persistAssignmentOrder();
         });
+    }
+
+    // 뒷정리 카드 안의 완료 기록(누가 며칠에 했는지)과 올라온 사진
+    function 뒷정리기록Html(fields, 매일) {
+        const 기록 = 완료기록(fields);
+        const 짧게 = (날짜) => { const m = 날짜.match(/^\d{4}-(\d{2})-(\d{2})$/); return m ? `${+m[1]}/${+m[2]}` : 날짜; };
+        let 기록Html;
+        if (매일) {
+            기록Html = 기록.length
+                ? 기록.slice(0, 14).map(r => `<span class="cleanup-record-chip${r.날짜 === 오늘날짜() ? ' today' : ''}">${짧게(r.날짜)} ${r.이름}</span>`).join('')
+                : `<span class="cleanup-record-empty">아직 완료한 날이 없습니다.</span>`;
+        } else {
+            기록Html = fields.시공완료 ? `<span class="cleanup-record-chip today">완료됨</span>` : `<span class="cleanup-record-empty">아직 안 했습니다.</span>`;
+        }
+        const isValid = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
+        const photos = (fields.시공후사진 || []).filter(isValid);
+        const photosHtml = photos.length
+            ? `<div class="cleanup-record-photos">${photos.slice(-12).map(p => `<a href="${p.url}" target="_blank" rel="noopener"><img src="${(p.thumbnails && p.thumbnails.small && p.thumbnails.small.url) || p.url}" alt="뒷정리 사진" loading="lazy"></a>`).join('')}</div>`
+            : '';
+        return `
+            <div class="cleanup-record">
+                <h4>🧹 ${매일 ? '완료 기록 (최근순)' : '완료 여부'}</h4>
+                <div class="cleanup-record-list">${기록Html}</div>
+                ${photosHtml}
+            </div>
+        `;
     }
 
     // 아코디언 토글 제어 윈도우 글로벌 함수
@@ -2943,7 +3068,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // 카테고리 표시 순서 고정 (목록에 없는 카테고리는 맨 뒤로)
-        const CATEGORY_ORDER = ['문+틀', '샤시', '가구', '몰딩', '기타'];
+        const CATEGORY_ORDER = ['문+틀', '샤시', '가구', '몰딩', '뒷정리', '기타'];
         const sortedCategoryEntries = Array.from(categoryGroups.entries()).sort((a, b) => {
             const rankA = CATEGORY_ORDER.indexOf(a[0]) === -1 ? CATEGORY_ORDER.length : CATEGORY_ORDER.indexOf(a[0]);
             const rankB = CATEGORY_ORDER.indexOf(b[0]) === -1 ? CATEGORY_ORDER.length : CATEGORY_ORDER.indexOf(b[0]);
@@ -2958,7 +3083,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 html += `
                     <div class="item-config-card" data-item-idx="${idx}">
                         <div class="item-config-card-header" onclick="openItemEditModal(${idx})">
-                            <h4>📦 ${item.품목명}</h4>
+                            <h4>${item.작업방식 === '한번에'
+                                ? `🧹 ${item.품목명} <span class="item-mode-badge">${item.반복 === '매일' ? '매일' : '한 번'}${item.사진필수 ? ' · 사진필수' : ''}</span>`
+                                : `📦 ${item.품목명}`}</h4>
                             <span class="accordion-icon">✏️</span>
                         </div>
                     </div>
@@ -3175,6 +3302,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditRoomInput').value = ROOM_ORDER.includes(parsedZone.room) ? parsedZone.room : '기타';
         document.getElementById('itemEditPrepInput').value = item.밑작업지침 || '';
         document.getElementById('itemEditInspInput').value = item.시공후점검지침 || '';
+        document.getElementById('itemEditModeInput').value = item.작업방식 === '한번에' ? '한번에' : '';
+        document.getElementById('itemEditRepeatInput').value = item.반복 === '매일' ? '매일' : '';
+        document.getElementById('itemEditPhotoReqInput').checked = !!item.사진필수;
+        applyItemEditModeUI();
         editingItemSlots = (item.필수사진슬롯 || '').split(',').map(s => s.trim()).filter(s => s !== '');
         renderItemEditSlotTags();
         document.getElementById('itemEditModal').style.display = 'flex';
@@ -3189,9 +3320,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditRoomInput').value = '기타';
         document.getElementById('itemEditPrepInput').value = '';
         document.getElementById('itemEditInspInput').value = '';
+        document.getElementById('itemEditModeInput').value = '';
+        document.getElementById('itemEditRepeatInput').value = '매일';
+        document.getElementById('itemEditPhotoReqInput').checked = false;
+        applyItemEditModeUI();
         editingItemSlots = [];
         renderItemEditSlotTags();
         document.getElementById('itemEditModal').style.display = 'flex';
+    };
+
+    // 작업 방식이 '한 번에'(뒷정리) 이면 구역·밑작업 지침·사진 슬롯을 숨기고 반복·사진필수를 보인다.
+    // 시공 후 점검 지침 칸은 '할 일' 목록으로 이름만 바꿔 그대로 쓴다 (기사님 화면의 체크 항목이 된다).
+    window.applyItemEditModeUI = function() {
+        const 뒷정리 = document.getElementById('itemEditModeInput').value === '한번에';
+        document.getElementById('itemEditCleanupWrap').style.display = 뒷정리 ? 'block' : 'none';
+        document.getElementById('itemEditZoneWrap').style.display = 뒷정리 ? 'none' : '';
+        document.getElementById('itemEditPrepWrap').style.display = 뒷정리 ? 'none' : '';
+        document.getElementById('itemEditSlotWrap').style.display = 뒷정리 ? 'none' : '';
+        document.getElementById('itemEditInspLabel').textContent = 뒷정리
+            ? '할 일 (엔터로 줄 구분 · 기사님 화면에 체크 항목으로 나옴)'
+            : '시공 후 점검 지침 (엔터로 줄 구분)';
+    };
+
+    // 카테고리를 '뒷정리' 로 고르면 작업 방식도 '한 번에' 로 맞춰준다 (대부분 그렇게 쓰므로)
+    window.onItemEditCategoryChange = function() {
+        if (document.getElementById('itemEditCategoryInput').value === '뒷정리') {
+            document.getElementById('itemEditModeInput').value = '한번에';
+            applyItemEditModeUI();
+        }
     };
 
     window.closeItemEditModal = function() {
@@ -3237,6 +3393,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const prepText = document.getElementById('itemEditPrepInput').value;
         const inspText = document.getElementById('itemEditInspInput').value;
         const slotsText = editingItemSlots.join(',');
+        const modeText = document.getElementById('itemEditModeInput').value === '한번에' ? '한번에' : '';
+        // 반복·사진필수는 '한 번에' 품목에서만 뜻이 있다. 기본 품목으로 되돌리면 같이 비운다
+        const repeatText = modeText ? (document.getElementById('itemEditRepeatInput').value === '매일' ? '매일' : '') : '';
+        const photoRequired = modeText ? document.getElementById('itemEditPhotoReqInput').checked : false;
 
         if (!nameText) {
             showToast('품목명을 입력해 주세요.', 'warning');
@@ -3257,7 +3417,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     구역: zoneText,
                     밑작업지침: prepText,
                     시공후점검지침: inspText,
-                    필수사진슬롯: slotsText
+                    필수사진슬롯: slotsText,
+                    작업방식: modeText,
+                    반복: repeatText,
+                    사진필수: photoRequired
                 }
                 : {
                     type: 'update_item',
@@ -3267,7 +3430,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     구역: zoneText,
                     밑작업지침: prepText,
                     시공후점검지침: inspText,
-                    필수사진슬롯: slotsText
+                    필수사진슬롯: slotsText,
+                    작업방식: modeText,
+                    반복: repeatText,
+                    사진필수: photoRequired
                 };
 
             const response = await fetchWithTimeout(API_SAVE_URL, {
@@ -3288,6 +3454,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 item.밑작업지침 = prepText;
                 item.시공후점검지침 = inspText;
                 item.필수사진슬롯 = slotsText;
+                item.작업방식 = modeText;
+                item.반복 = repeatText;
+                item.사진필수 = photoRequired;
                 showToast(`${nameText} 품목 설정이 저장되었습니다!`);
             }
 
