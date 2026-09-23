@@ -2469,3 +2469,100 @@ body {
         padding: 12px !important;
     }
 }
+
+/* ---------- 뒷정리 ('한번에' 품목: 현장정리·본드붓 세척·짐정리) ----------
+   초록 계열로 통일한다. 밑작업(파랑)·시공(주황)과 한눈에 구분되게. */
+.item-category-tab.cleanup-tab {
+    border-color: #15803d;
+    color: #15803d;
+}
+.item-category-tab.cleanup-tab.active {
+    background: #15803d;
+    border-color: #15803d;
+    color: white;
+}
+.zone-item-mode-badge,
+.item-mode-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 11px;
+    font-weight: 800;
+    vertical-align: middle;
+}
+.assignment-card.stage-cleanup .assigned-item-name {
+    color: #15803d;
+}
+.cleanup-record {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+.cleanup-record h4 {
+    font-size: 11px;
+    margin: 0 0 8px;
+    color: #166534;
+}
+.cleanup-record-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.cleanup-record-chip {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid #bbf7d0;
+    font-size: 12px;
+    font-weight: 700;
+    color: #166534;
+}
+.cleanup-record-chip.today {
+    background: #15803d;
+    border-color: #15803d;
+    color: white;
+}
+.cleanup-record-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.cleanup-record-photos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+}
+.cleanup-record-photos img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+}
+/* 품목 편집 창 - '한 번에' 를 고르면 나오는 반복·사진필수 묶음 */
+.item-edit-cleanup-box {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+.item-edit-check-row {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.item-edit-check-row input {
+    width: 18px;
+    height: 18px;
+    accent-color: #15803d;
+}
