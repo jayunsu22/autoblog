@@ -2581,3 +2581,151 @@ body {
     height: 18px;
     accent-color: #15803d;
 }
+
+/* 원본사진 마킹(주석) 편집기 - 사각형/원/화살표 + 텍스트 코멘트로 구역 표시 */
+#rawPhotoAnnotateModal {
+    padding: 8px;
+    z-index: 1100;
+}
+.annotate-modal-content {
+    background: #111827;
+    width: 100%;
+    max-width: 480px;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.annotate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    flex-shrink: 0;
+}
+.annotate-header .close-modal-btn {
+    color: #f1f5f9;
+}
+#annotateProgressLabel {
+    font-size: 13px;
+    font-weight: 700;
+    color: #cbd5e1;
+}
+.annotate-canvas-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    overflow: hidden;
+}
+#annotateCanvas {
+    max-width: 100%;
+    max-height: 100%;
+    touch-action: none;
+    cursor: crosshair;
+}
+#annotateTextInputWrap {
+    position: absolute;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    background: white;
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+    z-index: 5;
+}
+#annotateTextInput {
+    border: 1.5px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    width: 150px;
+    outline: none;
+}
+#annotateTextInputWrap button {
+    border: none;
+    background: var(--primary-blue);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+#annotateTextInputWrap button:last-child {
+    background: var(--accent-gray);
+    color: var(--text-muted);
+}
+.annotate-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #1f2937;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+.annotate-tool-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    background: #374151;
+    color: #e5e7eb;
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.annotate-tool-btn.active {
+    background: var(--primary-blue);
+    border-color: var(--primary-blue);
+    color: white;
+}
+.annotate-color-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+}
+.annotate-color-btn.active {
+    border-color: white;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, .4);
+}
+.annotate-toolbar-sep {
+    width: 1px;
+    height: 24px;
+    background: #4b5563;
+    flex-shrink: 0;
+}
+.annotate-icon-btn {
+    border: none;
+    background: #374151;
+    color: #e5e7eb;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.annotate-footer {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px 16px;
+    background: #1f2937;
+    flex-shrink: 0;
+}
+.annotate-footer .card-btn {
+    flex: 1;
+}

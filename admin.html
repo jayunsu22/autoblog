@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260926">
+    <link rel="stylesheet" href="admin_style.css?v=20260927">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -357,6 +357,40 @@
     <input type="file" id="rawPhotoFileInputCamera" accept="image/*" capture="environment" style="display: none;">
     <input type="file" id="rawPhotoFileInputGallery" accept="image/*" multiple style="display: none;">
 
+    <!-- 모달 2.7: 원본사진 마킹(주석) 편집기 - 사각형/원/화살표로 구역 표시 + 시공방법·주의사항 텍스트 코멘트 -->
+    <div id="rawPhotoAnnotateModal" class="modal-overlay" style="display: none;">
+        <div class="annotate-modal-content">
+            <div class="annotate-header">
+                <span id="annotateProgressLabel"></span>
+                <button type="button" class="close-modal-btn" onclick="cancelRawPhotoAnnotateQueue()">×</button>
+            </div>
+            <div class="annotate-canvas-wrap">
+                <canvas id="annotateCanvas"></canvas>
+                <div id="annotateTextInputWrap" style="display: none;">
+                    <input type="text" id="annotateTextInput" placeholder="시공방법, 주의사항 등..." onkeydown="if(event.key==='Enter'){confirmAnnotateText();}">
+                    <button type="button" onclick="confirmAnnotateText()">확인</button>
+                    <button type="button" onclick="cancelAnnotateText()">×</button>
+                </div>
+            </div>
+            <div class="annotate-toolbar">
+                <button type="button" class="annotate-tool-btn active" data-tool="rect" onclick="setAnnotateTool('rect')">▭</button>
+                <button type="button" class="annotate-tool-btn" data-tool="circle" onclick="setAnnotateTool('circle')">◯</button>
+                <button type="button" class="annotate-tool-btn" data-tool="arrow" onclick="setAnnotateTool('arrow')">➜</button>
+                <button type="button" class="annotate-tool-btn" data-tool="text" onclick="setAnnotateTool('text')">Ａ</button>
+                <span class="annotate-toolbar-sep"></span>
+                <button type="button" class="annotate-color-btn active" data-color="#ef4444" style="background:#ef4444" onclick="setAnnotateColor('#ef4444')"></button>
+                <button type="button" class="annotate-color-btn" data-color="#2563eb" style="background:#2563eb" onclick="setAnnotateColor('#2563eb')"></button>
+                <button type="button" class="annotate-color-btn" data-color="#f59e0b" style="background:#f59e0b" onclick="setAnnotateColor('#f59e0b')"></button>
+                <span class="annotate-toolbar-sep"></span>
+                <button type="button" class="annotate-icon-btn" onclick="undoAnnotate()">↩ 실행취소</button>
+            </div>
+            <div class="annotate-footer">
+                <button type="button" class="card-btn secondary" onclick="skipRawPhotoAnnotate()">건너뛰기</button>
+                <button type="button" class="card-btn primary" onclick="saveRawPhotoAnnotate()">✔ 저장하고 다음</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 사진 확대보기 라이트박스 (좌우 스와이프 또는 화살표 버튼으로 이전/다음 사진 탐색) -->
     <div id="galleryLightbox" class="lightbox-overlay" style="display: none;" onclick="closeGalleryLightbox()">
         <button type="button" id="galleryLightboxDeleteBtn" class="lightbox-delete-btn" style="display: none;" title="이 사진 삭제" onclick="event.stopPropagation(); deleteGalleryPhoto();">🗑</button>
@@ -493,6 +527,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260926"></script>
+    <script src="admin.js?v=20260927"></script>
 </body>
 </html>

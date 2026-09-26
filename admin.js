@@ -961,11 +961,269 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.getElementById('rawPhotoFileInputCamera').addEventListener('change', (e) => {
-        uploadRawPhotoFiles(Array.from(e.target.files || []));
+        startRawPhotoAnnotateQueue(Array.from(e.target.files || []));
     });
     document.getElementById('rawPhotoFileInputGallery').addEventListener('change', (e) => {
-        uploadRawPhotoFiles(Array.from(e.target.files || []));
+        startRawPhotoAnnotateQueue(Array.from(e.target.files || []));
     });
+
+    // ===== 원본사진 마킹(주석) 편집기 =====
+    // 촬영/앨범으로 고른 사진을 바로 올리지 않고, 사각형/원/화살표로 구역을 표시하고
+    // 시공방법·주의사항 등 텍스트 코멘트를 얹은 뒤 업로드하기 위한 캔버스 편집기.
+    // 여러 장을 한번에 골랐을 때는 한 장씩 순서대로 편집하고, 다 끝나면 한번에 업로드한다.
+    const ANNOTATE_MAX_DIM = 1600; // 캔버스 해상도(=최종 업로드 해상도) 상한. 화면 표시는 CSS로 축소되고, 그리기 좌표는 이 해상도 기준.
+    let annotateQueue = [];       // 편집 대기 중인 원본 File 목록
+    let annotateIndex = 0;        // 지금 편집 중인 사진의 큐 인덱스
+    let annotateResultFiles = []; // 편집(또는 건너뛰기) 완료된 File 목록 - 큐가 끝나면 한번에 업로드
+    let annotateImage = null;     // 현재 캔버스에 그려진 원본 이미지(ImageBitmap)
+    let annotateShapes = [];      // 현재 사진에 그려진 도형/텍스트 목록
+    let annotateTool = 'rect';    // rect | circle | arrow | text
+    let annotateColor = '#ef4444';
+    let annotateDragStart = null; // 드래그 중인 도형의 시작점 {x,y}
+    let annotateDragCurrent = null; // 드래그 중인 도형의 현재점 {x,y} (미리보기용)
+    let annotateTextPos = null;   // 텍스트 도구로 탭한 위치(캔버스 좌표) - 입력 확정 대기중
+
+    function startRawPhotoAnnotateQueue(files) {
+        if (files.length === 0) return;
+        annotateQueue = files;
+        annotateIndex = 0;
+        annotateResultFiles = [];
+        document.getElementById('rawPhotoZoneModal').style.display = 'none';
+        document.getElementById('rawPhotoAnnotateModal').style.display = 'flex';
+        loadAnnotatePhoto();
+    }
+
+    async function loadAnnotatePhoto() {
+        const file = annotateQueue[annotateIndex];
+        document.getElementById('annotateProgressLabel').textContent =
+            annotateQueue.length > 1 ? `${annotateIndex + 1} / ${annotateQueue.length}장` : '사진 표시';
+        annotateShapes = [];
+        annotateDragStart = null;
+        annotateDragCurrent = null;
+        hideAnnotateTextInput();
+
+        const bitmap = await createImageBitmap(file);
+        let w = bitmap.width, h = bitmap.height;
+        if (w > ANNOTATE_MAX_DIM || h > ANNOTATE_MAX_DIM) {
+            const scale = ANNOTATE_MAX_DIM / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+        }
+        const canvas = document.getElementById('annotateCanvas');
+        canvas.width = w;
+        canvas.height = h;
+
+        const offscreen = document.createElement('canvas');
+        offscreen.width = w;
+        offscreen.height = h;
+        offscreen.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+        annotateImage = offscreen;
+        bitmap.close && bitmap.close();
+
+        redrawAnnotateCanvas();
+    }
+
+    window.setAnnotateTool = function(tool) {
+        annotateTool = tool;
+        document.querySelectorAll('.annotate-tool-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tool === tool);
+        });
+    };
+
+    window.setAnnotateColor = function(color) {
+        annotateColor = color;
+        document.querySelectorAll('.annotate-color-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.color === color);
+        });
+    };
+
+    window.undoAnnotate = function() {
+        annotateShapes.pop();
+        redrawAnnotateCanvas();
+    };
+
+    function redrawAnnotateCanvas() {
+        const canvas = document.getElementById('annotateCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(annotateImage, 0, 0);
+        annotateShapes.forEach(s => drawAnnotateShape(ctx, s));
+        if (annotateDragStart && annotateDragCurrent && annotateTool !== 'text') {
+            drawAnnotateShape(ctx, {
+                type: annotateTool,
+                x1: annotateDragStart.x, y1: annotateDragStart.y,
+                x2: annotateDragCurrent.x, y2: annotateDragCurrent.y,
+                color: annotateColor
+            });
+        }
+    }
+
+    function drawAnnotateShape(ctx, s) {
+        const lineWidth = Math.max(4, Math.round(annotateImage.width / 260));
+        if (s.type === 'rect') {
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = lineWidth;
+            ctx.strokeRect(Math.min(s.x1, s.x2), Math.min(s.y1, s.y2), Math.abs(s.x2 - s.x1), Math.abs(s.y2 - s.y1));
+        } else if (s.type === 'circle') {
+            const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
+            const rx = Math.abs(s.x2 - s.x1) / 2, ry = Math.abs(s.y2 - s.y1) / 2;
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = lineWidth;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (s.type === 'arrow') {
+            const headLen = lineWidth * 4.5;
+            const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+            ctx.strokeStyle = s.color;
+            ctx.fillStyle = s.color;
+            ctx.lineWidth = lineWidth;
+            ctx.beginPath();
+            ctx.moveTo(s.x1, s.y1);
+            ctx.lineTo(s.x2, s.y2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(s.x2, s.y2);
+            ctx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI / 6), s.y2 - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI / 6), s.y2 - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+        } else if (s.type === 'text') {
+            const fontSize = Math.max(24, Math.round(annotateImage.width / 34));
+            ctx.font = `700 ${fontSize}px -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif`;
+            const padX = fontSize * 0.35, padY = fontSize * 0.28;
+            const metrics = ctx.measureText(s.text);
+            const boxW = metrics.width + padX * 2;
+            const boxH = fontSize + padY * 2;
+            ctx.fillStyle = s.color;
+            ctx.fillRect(s.x1, s.y1, boxW, boxH);
+            ctx.fillStyle = '#ffffff';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(s.text, s.x1 + padX, s.y1 + boxH / 2);
+        }
+    }
+
+    // 화면(CSS) 좌표 → 캔버스 실제 픽셀 좌표로 변환 (캔버스가 CSS로 축소 표시되므로 배율 보정 필요)
+    function getAnnotateCanvasPos(evt) {
+        const canvas = document.getElementById('annotateCanvas');
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (evt.clientX - rect.left) * scaleX,
+            y: (evt.clientY - rect.top) * scaleY
+        };
+    }
+
+    (function setupAnnotateCanvasEvents() {
+        const canvas = document.getElementById('annotateCanvas');
+        canvas.addEventListener('pointerdown', (e) => {
+            const pos = getAnnotateCanvasPos(e);
+            if (annotateTool === 'text') {
+                showAnnotateTextInput(pos);
+                return;
+            }
+            annotateDragStart = pos;
+            annotateDragCurrent = pos;
+        });
+        canvas.addEventListener('pointermove', (e) => {
+            if (!annotateDragStart) return;
+            annotateDragCurrent = getAnnotateCanvasPos(e);
+            redrawAnnotateCanvas();
+        });
+        canvas.addEventListener('pointerup', (e) => {
+            if (!annotateDragStart) return;
+            const pos = getAnnotateCanvasPos(e);
+            const moved = Math.hypot(pos.x - annotateDragStart.x, pos.y - annotateDragStart.y) > 6;
+            if (moved) {
+                annotateShapes.push({
+                    type: annotateTool,
+                    x1: annotateDragStart.x, y1: annotateDragStart.y,
+                    x2: pos.x, y2: pos.y,
+                    color: annotateColor
+                });
+            }
+            annotateDragStart = null;
+            annotateDragCurrent = null;
+            redrawAnnotateCanvas();
+        });
+    })();
+
+    function showAnnotateTextInput(pos) {
+        annotateTextPos = pos;
+        const canvas = document.getElementById('annotateCanvas');
+        const rect = canvas.getBoundingClientRect();
+        const wrap = document.getElementById('annotateTextInputWrap');
+        const cssScale = rect.width / canvas.width;
+        wrap.style.left = `${pos.x * cssScale}px`;
+        wrap.style.top = `${pos.y * cssScale}px`;
+        wrap.style.display = 'flex';
+        const input = document.getElementById('annotateTextInput');
+        input.value = '';
+        setTimeout(() => input.focus(), 50);
+    }
+
+    function hideAnnotateTextInput() {
+        document.getElementById('annotateTextInputWrap').style.display = 'none';
+        annotateTextPos = null;
+    }
+
+    window.confirmAnnotateText = function() {
+        const input = document.getElementById('annotateTextInput');
+        const text = input.value.trim();
+        if (text && annotateTextPos) {
+            annotateShapes.push({ type: 'text', x1: annotateTextPos.x, y1: annotateTextPos.y, text, color: annotateColor });
+        }
+        hideAnnotateTextInput();
+        redrawAnnotateCanvas();
+    };
+
+    window.cancelAnnotateText = function() {
+        hideAnnotateTextInput();
+    };
+
+    // 지금 사진은 마킹 없이 원본 그대로 업로드 목록에 담기
+    window.skipRawPhotoAnnotate = function() {
+        annotateResultFiles.push(annotateQueue[annotateIndex]);
+        advanceAnnotateQueue();
+    };
+
+    // 지금 사진에 그린 도형/텍스트를 이미지에 합성해서 업로드 목록에 담기
+    window.saveRawPhotoAnnotate = async function() {
+        if (annotateShapes.length === 0) {
+            window.skipRawPhotoAnnotate();
+            return;
+        }
+        const canvas = document.getElementById('annotateCanvas');
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        const originalName = annotateQueue[annotateIndex].name || 'photo.jpg';
+        const markedFile = new File([blob], originalName.replace(/\.\w+$/, '') + '_marked.jpg', { type: 'image/jpeg' });
+        annotateResultFiles.push(markedFile);
+        advanceAnnotateQueue();
+    };
+
+    function advanceAnnotateQueue() {
+        annotateIndex++;
+        if (annotateIndex < annotateQueue.length) {
+            loadAnnotatePhoto();
+        } else {
+            document.getElementById('rawPhotoAnnotateModal').style.display = 'none';
+            const filesToUpload = annotateResultFiles;
+            annotateQueue = [];
+            annotateResultFiles = [];
+            document.getElementById('rawPhotoZoneModal').style.display = 'flex';
+            uploadRawPhotoFiles(filesToUpload);
+        }
+    }
+
+    // 편집기 전체를 취소 - 지금까지 편집/건너뛴 사진들까지 전부 버리고 업로드하지 않음
+    window.cancelRawPhotoAnnotateQueue = function() {
+        if (!confirm('지금까지 표시한 내용이 모두 취소됩니다. 그만둘까요?')) return;
+        annotateQueue = [];
+        annotateResultFiles = [];
+        document.getElementById('rawPhotoAnnotateModal').style.display = 'none';
+        document.getElementById('rawPhotoZoneModal').style.display = 'flex';
+    };
 
     // 시공사진/밑작업 사진 체크박스로 걸러낸 목록 (구역 탭/그리드가 공통으로 이 목록을 기준으로 삼음)
     function getGalleryTypeFilteredPhotos() {
