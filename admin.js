@@ -753,7 +753,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 현장 사진 갤러리: 시공 완료된 사진만 모아서 구역별로 훑어볼 수 있게 보여줌 (예전 현장 기억 안 날 때 용도)
-    window.openProjectPhotoGallery = async function(recordId, projectName) {
+    // defaultType을 넘기면 그 종류만 체크된 상태로 열림 (예: '원본사진 보기' 버튼은 '원본'만 체크해서 진입)
+    window.openProjectPhotoGallery = async function(recordId, projectName, defaultType) {
         galleryActiveRecordId = recordId;
         galleryActiveProjectName = projectName || '';
         const title = splitProjectTitle(projectName);
@@ -763,12 +764,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('galleryZoneTabs').innerHTML = '';
         document.getElementById('galleryPhotoGrid').innerHTML = `<div class="empty-state">사진을 불러오는 중...</div>`;
 
-        // 열 때마다 기본값(시공사진만 체크)으로 초기화
-        galleryTypeFilter = { 시공: true, 밑작업: false, 원본: false, 뒷정리: false };
-        document.getElementById('galleryTypeConstruction').checked = true;
-        document.getElementById('galleryTypePrep').checked = false;
-        document.getElementById('galleryTypeRaw').checked = false;
-        document.getElementById('galleryTypeCleanup').checked = false;
+        // 열 때마다 기본값(시공사진만 체크, 원본사진 보기로 열었으면 원본만 체크)으로 초기화
+        const dt = defaultType || '시공';
+        galleryTypeFilter = { 시공: dt === '시공', 밑작업: dt === '밑작업', 원본: dt === '원본', 뒷정리: dt === '뒷정리' };
+        document.getElementById('galleryTypeConstruction').checked = dt === '시공';
+        document.getElementById('galleryTypePrep').checked = dt === '밑작업';
+        document.getElementById('galleryTypeRaw').checked = dt === '원본';
+        document.getElementById('galleryTypeCleanup').checked = dt === '뒷정리';
 
         showLoading("현장 사진을 불러오는 중...");
         try {
@@ -879,11 +881,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('rawPhotoZoneModal').style.display = 'flex';
     };
 
-    // 현장 상세화면 상단 "📸 원본사진" 버튼용 - 현재 열려있는 현장 기준으로 캡처 팝업을 엶
+    // 현장 상세화면 상단 "📸 원본사진 찍기" 버튼용 - 현재 열려있는 현장 기준으로 캡처 팝업을 엶
     window.openRawPhotoCaptureForActiveProject = function() {
         if (!activeProjectCode) return;
         const name = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
         openRawPhotoCapture(activeProjectCode, name);
+    };
+
+    // 현장 상세화면 상단 "📷 원본사진 보기" 버튼용 - 기존 사진 갤러리를 원본사진만 체크된 상태로 엶
+    window.openRawPhotoGalleryForActiveProject = function() {
+        if (!activeProjectCode) return;
+        const name = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
+        openProjectPhotoGallery(activeProjectCode, name, '원본');
     };
 
     window.closeRawPhotoZoneModal = function() {
