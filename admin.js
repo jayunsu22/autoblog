@@ -606,12 +606,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // 최신(나중에 등록된) 현장이 위로 오도록 시공일자 내림차순 정렬
+        // 최신(나중에 등록된) 현장이 위로 오도록 시공일자 내림차순 정렬.
+        // 시공일 미정(견적 앱에서 날짜 없이 만든 현장)은 맨 위 - 날짜를 채워야 할 현장이라 눈에 띄어야 한다.
+        // 미정끼리는 나중에 만든 것이 위.
         const sortedProjects = [...projects].sort((a, b) => {
             const fieldsA = a.fields ? a.fields : a;
             const fieldsB = b.fields ? b.fields : b;
             const dateA = fieldsA.시공일자 || "";
             const dateB = fieldsB.시공일자 || "";
+            if (!dateA !== !dateB) return dateA ? 1 : -1;
+            if (!dateA) return String(fieldsB.createdTime || b.createdTime || "").localeCompare(String(fieldsA.createdTime || a.createdTime || ""));
             return dateB.localeCompare(dateA);
         });
 
@@ -1192,6 +1196,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // 시공일 배지(달력)에서 날짜를 고르면 바로 저장. 견적 앱에서 날짜 없이 만든 현장을 여기서 채운다.
+    // n8n 은 update_project_name 이 newDate 도 받는다 (보낸 것만 바꿈)
+    window.saveProjectDate = async function(newDate) {
+        if (!activeProjectCode || !newDate || isScopedManagerView) return;
+        const current = (currentDetailData && currentDetailData.project && currentDetailData.project.시공일자) || '';
+        if (newDate === current) return;
+
+        showLoading("시공일 저장 중...");
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'update_project_name', projectCode: activeProjectCode, newDate: newDate })
+            });
+            if (!response.ok) throw new Error("시공일 변경 오류");
+
+            // 목록 캐시에도 반영 - 뒤로 나가면 날짜순 자리로 바로 옮겨져 보이게
+            const project = globalProjectList.find(p => p.id === activeProjectCode);
+            if (project) {
+                if (project.fields) project.fields.시공일자 = newDate;
+                else project.시공일자 = newDate;
+            }
+            refreshListCacheFromMemory();
+
+            showToast(`시공일을 ${newDate} 로 저장했습니다!`);
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast("시공일 저장에 실패했습니다.", "danger");
+            const dateInput = document.getElementById('detailDateInput');
+            if (dateInput) dateInput.value = current;
+        } finally {
+            hideLoading();
+        }
+    };
+
     // 6. 새 현장 개설 제출
     window.handleNewProjectSubmit = async function(event) {
         event.preventDefault();
@@ -1377,6 +1417,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const p = currentDetailData.project;
         detailProjectTitle.textContent = p.현장명;
         detailProjectDate.textContent = `시공일: ${p.시공일자 || '미정'}`;
+        const dateInput = document.getElementById('detailDateInput');
+        if (dateInput) {
+            dateInput.value = p.시공일자 || '';
+            dateInput.disabled = !!isScopedManagerView; // 현장소장 링크 화면에서는 날짜를 못 바꾼다
+        }
 
         // 공지 및 주의사항 표시
         const noticeEl = document.getElementById('detailProjectNotice');
