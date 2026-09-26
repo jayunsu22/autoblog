@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260927b">
+    <link rel="stylesheet" href="admin_style.css?v=20260927c">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -75,9 +75,9 @@
                     </span>
                 </div>
                 <div class="detail-action-wrap">
-                    <button class="action-btn copy" onclick="copyWorkerLink()">🔗 기사접속링크 복사</button>
+                    <button class="action-btn link-copy" onclick="copyWorkerLink()">기사접속<br>링크복사</button>
+                    <button class="action-btn link-copy" onclick="copyManagerLink()">현장소장<br>링크복사</button>
                     <button class="action-btn copy" onclick="openWorkerLink()">🔗 링크 열기</button>
-                    <button class="action-btn copy" onclick="copyManagerLink()">👔 현장소장 링크 복사</button>
                     <button class="action-btn copy" onclick="openRawPhotoGalleryForActiveProject()">📷 원본사진 보기</button>
                     <button class="action-btn copy" onclick="openRawPhotoCaptureForActiveProject()">📸 원본사진 찍기</button>
                     <button class="action-btn publish" onclick="requestBlogPublish()">✍️ 블로그 원고 발행</button>
@@ -386,8 +386,8 @@
                 <button type="button" class="annotate-icon-btn" onclick="undoAnnotate()">↩ 실행취소</button>
             </div>
             <div class="annotate-footer">
-                <button type="button" class="card-btn secondary" onclick="skipRawPhotoAnnotate()">건너뛰기</button>
-                <button type="button" class="card-btn primary" onclick="saveRawPhotoAnnotate()">✔ 저장하고 다음</button>
+                <button type="button" id="annotateSkipBtn" class="card-btn secondary" onclick="skipRawPhotoAnnotate()">건너뛰기</button>
+                <button type="button" id="annotateSaveBtn" class="card-btn primary" onclick="saveRawPhotoAnnotate()">✔ 저장하고 다음</button>
             </div>
         </div>
     </div>
@@ -395,6 +395,7 @@
     <!-- 사진 확대보기 라이트박스 (좌우 스와이프 또는 화살표 버튼으로 이전/다음 사진 탐색) -->
     <div id="galleryLightbox" class="lightbox-overlay" style="display: none;" onclick="closeGalleryLightbox()">
         <button type="button" id="galleryLightboxDeleteBtn" class="lightbox-delete-btn" style="display: none;" title="이 사진 삭제" onclick="event.stopPropagation(); deleteGalleryPhoto();">🗑</button>
+        <button type="button" id="galleryLightboxEditBtn" class="lightbox-edit-btn" style="display: none;" title="구역 표시/코멘트 편집" onclick="event.stopPropagation(); editGalleryPhoto();">✏️</button>
         <button type="button" class="lightbox-close-btn" onclick="event.stopPropagation(); closeGalleryLightbox();">×</button>
         <button type="button" class="lightbox-nav-btn lightbox-prev" onclick="event.stopPropagation(); galleryLightboxPrev();">‹</button>
         <img id="galleryLightboxImg" src="" alt="사진 확대보기">
@@ -528,6 +529,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260927b"></script>
+    <script src="admin.js?v=20260927c"></script>
 </body>
 </html>

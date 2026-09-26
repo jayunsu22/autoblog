@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_SAMPLE_PHOTO_URL = `${n8nBase}/webhook/film-sample-photo-upload`;
     const API_SAMPLE_PHOTO_DELETE_URL = `${n8nBase}/webhook/film-sample-photo-delete`;
     const API_RAW_PHOTO_UPLOAD_URL = `${n8nBase}/webhook/raw-photo-upload`; // 원본사진(기사 배정 없이 구역만 골라 바로 업로드) 전용
+    const API_RAW_PHOTO_UPDATE_URL = `${n8nBase}/webhook/raw-photo-update`; // 이미 올라간 원본사진에 마킹을 다시 편집해서 덮어쓸 때 전용
     // 기사님용 워커 앱 주소. /w/<레코드ID> 형태.
     // 예전엔 github.io 정적 페이지(index.html?code=...)였는데, 정적 호스팅은 서버에서 og 태그를
     // 못 바꿔서 카톡 미리보기 카드가 어느 현장이든 늘 "현장 품질 관리 시스템"으로만 떴다.
@@ -991,27 +992,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     let annotateDragStart = null; // 드래그 중인 도형의 시작점 {x,y}
     let annotateDragCurrent = null; // 드래그 중인 도형의 현재점 {x,y} (미리보기용)
     let annotateTextPos = null;   // 텍스트 도구로 탭한 위치(캔버스 좌표) - 입력 확정 대기중
+    let annotateEditMode = false; // true면 '원본사진 보기'에서 기존 사진을 다시 여는 편집 모드 (새 촬영 큐가 아님)
+    let annotateEditRawId = null; // 편집 모드에서 지금 고치고 있는 원본사진 레코드ID
 
     function startRawPhotoAnnotateQueue(files) {
         if (files.length === 0) return;
+        annotateEditMode = false;
+        annotateEditRawId = null;
         annotateQueue = files;
         annotateIndex = 0;
         annotateResultFiles = [];
+        setAnnotateFooterMode('capture');
         document.getElementById('rawPhotoZoneModal').style.display = 'none';
         document.getElementById('rawPhotoAnnotateModal').style.display = 'flex';
         loadAnnotatePhoto();
     }
 
-    async function loadAnnotatePhoto() {
-        const file = annotateQueue[annotateIndex];
-        document.getElementById('annotateProgressLabel').textContent =
-            annotateQueue.length > 1 ? `${annotateIndex + 1} / ${annotateQueue.length}장` : '사진 표시';
+    // '원본사진 보기' 확대보기에서 ✏️ 편집을 눌렀을 때 - 기존에 올라간 사진을 그대로 불러와서 이어서 마킹
+    window.startRawPhotoAnnotateEdit = async function(rawId, url) {
+        annotateEditMode = true;
+        annotateEditRawId = rawId;
+        annotateQueue = [];
+        annotateIndex = 0;
+        annotateResultFiles = [];
+        setAnnotateFooterMode('edit');
+        document.getElementById('annotateProgressLabel').textContent = '사진 편집';
         annotateShapes = [];
         annotateDragStart = null;
         annotateDragCurrent = null;
         hideAnnotateTextInput();
+        document.getElementById('rawPhotoAnnotateModal').style.display = 'flex';
 
-        const bitmap = await createImageBitmap(file);
+        showLoading('사진을 불러오는 중...');
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('사진을 불러오지 못했습니다');
+            const blob = await res.blob();
+            await loadAnnotateImageFromBlob(blob);
+        } catch (e) {
+            showToast('사진을 불러오지 못했습니다: ' + e.message, 'danger');
+            window.cancelRawPhotoAnnotateQueue();
+        } finally {
+            hideLoading();
+        }
+    };
+
+    // 편집기 하단 버튼 문구/동작을 촬영모드(다음 사진으로 넘어감) / 편집모드(그 자리에서 저장)에 맞게 바꿈
+    function setAnnotateFooterMode(mode) {
+        const skipBtn = document.getElementById('annotateSkipBtn');
+        const saveBtn = document.getElementById('annotateSaveBtn');
+        if (mode === 'edit') {
+            skipBtn.textContent = '취소';
+            saveBtn.textContent = '✔ 저장';
+        } else {
+            skipBtn.textContent = '건너뛰기';
+            saveBtn.textContent = '✔ 저장하고 다음';
+        }
+    }
+
+    // File/Blob 이미지를 편집 캔버스에 그려넣는 공통 로직 (새 촬영 큐 / 기존 사진 편집 둘 다 공유)
+    async function loadAnnotateImageFromBlob(blobOrFile) {
+        const bitmap = await createImageBitmap(blobOrFile);
         let w = bitmap.width, h = bitmap.height;
         if (w > ANNOTATE_MAX_DIM || h > ANNOTATE_MAX_DIM) {
             const scale = ANNOTATE_MAX_DIM / Math.max(w, h);
@@ -1030,6 +1071,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         bitmap.close && bitmap.close();
 
         redrawAnnotateCanvas();
+    }
+
+    async function loadAnnotatePhoto() {
+        const file = annotateQueue[annotateIndex];
+        document.getElementById('annotateProgressLabel').textContent =
+            annotateQueue.length > 1 ? `${annotateIndex + 1} / ${annotateQueue.length}장` : '사진 표시';
+        annotateShapes = [];
+        annotateDragStart = null;
+        annotateDragCurrent = null;
+        hideAnnotateTextInput();
+        await loadAnnotateImageFromBlob(file);
     }
 
     window.setAnnotateTool = function(tool) {
@@ -1191,16 +1243,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         hideAnnotateTextInput();
     };
 
-    // 지금 사진은 마킹 없이 원본 그대로 업로드 목록에 담기
+    // 지금 사진은 마킹 없이 원본 그대로 업로드 목록에 담기 (편집모드에서는 "취소"로 동작 - cancelRawPhotoAnnotateQueue가 처리)
     window.skipRawPhotoAnnotate = function() {
+        if (annotateEditMode) {
+            window.cancelRawPhotoAnnotateQueue();
+            return;
+        }
         annotateResultFiles.push(annotateQueue[annotateIndex]);
         advanceAnnotateQueue();
     };
 
-    // 지금 사진에 그린 도형/텍스트를 이미지에 합성해서 업로드 목록에 담기
+    // 지금 사진에 그린 도형/텍스트를 이미지에 합성해서 저장
+    // - 촬영모드: 업로드 목록에 담아뒀다가 큐가 끝나면 한번에 업로드
+    // - 편집모드: 그 자리에서 바로 raw-photo-update로 덮어쓰기
     window.saveRawPhotoAnnotate = async function() {
+        if (annotateEditMode) {
+            const canvas = document.getElementById('annotateCanvas');
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            showLoading('저장 중...');
+            try {
+                const formData = new FormData();
+                formData.append('recordId', annotateEditRawId);
+                formData.append('image', blob, 'photo.jpg');
+                const response = await fetchWithTimeout(API_RAW_PHOTO_UPDATE_URL, { method: 'POST', body: formData }, 30000);
+                if (!response.ok) throw new Error('저장 실패');
+                showToast('✏️ 원본사진이 수정되었습니다.');
+                finishRawPhotoAnnotateEdit();
+            } catch (e) {
+                showToast('저장 실패: ' + e.message, 'danger');
+            } finally {
+                hideLoading();
+            }
+            return;
+        }
+
         if (annotateShapes.length === 0) {
-            window.skipRawPhotoAnnotate();
+            annotateResultFiles.push(annotateQueue[annotateIndex]);
+            advanceAnnotateQueue();
             return;
         }
         const canvas = document.getElementById('annotateCanvas');
@@ -1225,8 +1304,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 편집기 전체를 취소 - 지금까지 편집/건너뛴 사진들까지 전부 버리고 업로드하지 않음
+    // 편집모드 저장 성공 후 - 편집기를 닫고 갤러리로 돌아가서 목록을 새로고침 (수정된 사진이 바로 반영되게)
+    function finishRawPhotoAnnotateEdit() {
+        annotateEditMode = false;
+        annotateEditRawId = null;
+        document.getElementById('rawPhotoAnnotateModal').style.display = 'none';
+        if (galleryActiveRecordId) {
+            openProjectPhotoGallery(galleryActiveRecordId, galleryActiveProjectName, '원본');
+        }
+    }
+
+    // 편집기 전체를 취소
+    // - 촬영모드: 지금까지 편집/건너뛴 사진들까지 전부 버리고 업로드하지 않음 (확인 필요)
+    // - 편집모드: 그냥 갤러리로 되돌아감 (원본은 그대로 있으니 확인 불필요)
     window.cancelRawPhotoAnnotateQueue = function() {
+        if (annotateEditMode) {
+            annotateEditMode = false;
+            annotateEditRawId = null;
+            document.getElementById('rawPhotoAnnotateModal').style.display = 'none';
+            document.getElementById('photoGalleryModal').style.display = 'flex';
+            return;
+        }
         if (!confirm('지금까지 표시한 내용이 모두 취소됩니다. 그만둘까요?')) return;
         annotateQueue = [];
         annotateResultFiles = [];
@@ -1299,6 +1397,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('galleryLightbox').style.display = 'flex';
     };
 
+    // 원본사진 확대보기에서 ✏️ 버튼으로 구역표시/코멘트 편집기를 다시 엶 (원본사진만 - rawId가 있어야 저장 대상 특정 가능)
+    window.editGalleryPhoto = function() {
+        const photo = galleryFilteredPhotos[galleryLightboxIndex];
+        if (!photo || photo.type !== '원본' || !photo.rawId) return;
+        document.getElementById('galleryLightbox').style.display = 'none';
+        startRawPhotoAnnotateEdit(photo.rawId, photo.url);
+    };
+
     // 확대보기에서 지금 보고 있는 사진 삭제 (잘못 올린 사진을 기사님 앱에 들어가지 않고 바로 지우기 위한 용도)
     // - 시공/밑작업: 기사님 앱의 deletePhoto와 완전히 같은 delete_photo 페이로드 → 해당 슬롯만 비워져서 다른 슬롯 위치가 안 밀림
     // - 원본: 원본사진 테이블은 레코드 1건 = 사진 1장이라 delete_raw_photo로 레코드 자체를 삭제
@@ -1349,6 +1455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const photo = galleryFilteredPhotos[galleryLightboxIndex];
         if (!photo) return;
         document.getElementById('galleryLightboxImg').src = photo.url;
+        document.getElementById('galleryLightboxEditBtn').style.display = (photo.type === '원본' && photo.rawId) ? 'flex' : 'none';
     }
 
     window.galleryLightboxNext = function() {

@@ -451,6 +451,16 @@ body {
     color: var(--text-main);
 }
 
+.action-btn.link-copy {
+    background: var(--primary-light);
+    color: var(--primary-blue);
+    line-height: 1.35;
+}
+
+.action-btn.link-copy:hover {
+    background: #dbeafe;
+}
+
 .action-btn.publish:hover {
     background: #d97706;
 }
@@ -730,6 +740,29 @@ body {
     background: rgba(220, 38, 38, 0.85);
 }
 
+/* 확대보기 사진 편집 버튼 (원본사진 전용, 🗑 왼쪽) - 구역표시/코멘트 편집기를 다시 엶 */
+.lightbox-edit-btn {
+    position: absolute;
+    top: 14px;
+    right: 114px;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    background: rgba(37, 99, 235, 0.55);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.lightbox-edit-btn:hover {
+    background: rgba(37, 99, 235, 0.85);
+}
+
 .lightbox-prev {
     left: 12px;
 }
@@ -767,6 +800,14 @@ body {
         font-size: 16px;
         top: 10px;
         right: 54px;
+    }
+
+    .lightbox-edit-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+        top: 10px;
+        right: 98px;
     }
 }
 
