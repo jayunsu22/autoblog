@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const SETTLE_APP_BASE_URL = "https://songil.netlify.app/settle.html";
 
     // 한 "층" 안에서의 방 이름 순서 (탭/버튼을 이 순서로 정렬할 때 기준으로만 쓰임 - 목록을 제한하지 않음)
-    const ROOM_ORDER = ['방1', '방2', '방3', '방4', '방5', '거실', '주방', '현관', '기타'];
+    const ROOM_ORDER = ['거실', '주방', '현관', '방1', '방2', '방3', '방4', '방5', '기타']; // 거실/주방/현관이 제일 많이 쓰여서 맨 앞으로
 
     // "2층 거실" 같은 구역 문자열을 {floor, room}으로 분해. 층 표기가 없으면 1층으로 취급해서
     // 기존 데이터(층 구분 없던 시절)와 100% 호환되게 함
