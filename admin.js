@@ -2165,9 +2165,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 구역 탭을 하나씩 넘기며 품목을 찾아 켜는 게 번거로워서, 전체 구역을 한 화면에 펼쳐놓고
     // 시공할 품목을 빠르게 체크할 수 있게 함. 체크 상태는 기존 zonePendingChanges에 그대로 쌓여서
     // 매트릭스 화면 하단의 저장 툴바와 완전히 같은 방식으로 동작함(모달 안에서 바로 저장도 가능).
+    // 구역이 14개나 되다 보니 한 화면에 다 펼쳐놓으면 찾기 힘들어서, 구역별 탭(색깔 구분)으로 나눠
+    // 지금 보고 있는 구역의 품목만 렌더링한다.
+    let bulkItemSetupGroups = []; // [{ key, label, items }]
+    let bulkItemSetupActiveKey = null;
+    const BULK_ITEM_TAB_COLORS = [
+        { bg: '#dbeafe', text: '#1e40af' },
+        { bg: '#dcfce7', text: '#166534' },
+        { bg: '#fef3c7', text: '#92400e' },
+        { bg: '#fce7f3', text: '#9d174d' },
+        { bg: '#ede9fe', text: '#5b21b6' },
+        { bg: '#ffe4e6', text: '#9f1239' },
+        { bg: '#cffafe', text: '#155e75' },
+        { bg: '#fef9c3', text: '#854d0e' },
+        { bg: '#e0e7ff', text: '#3730a3' },
+        { bg: '#d1fae5', text: '#065f46' }
+    ];
+
     window.openBulkItemSetupModal = function() {
         const allItems = [...(currentDetailData.masterItems || [])];
-        const tasks = currentDetailData.tasks || [];
         const cleanupItems = allItems.filter(item => item.작업방식 === '한번에');
         const zoneMap = new Map();
         allItems.forEach(item => {
@@ -2178,57 +2194,89 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const zoneNames = sortZones([...zoneMap.keys()]);
 
-        function buildGroupHtml(groupLabel, items) {
-            const sorted = [...items].sort((a, b) => {
-                const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
-                const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
-                if (pA !== pB) return pA - pB;
-                return (a.품목명 || '').localeCompare(b.품목명 || '');
-            });
-            const activeCount = sorted.filter(item => getEffectiveActive(item.품목명)).length;
-            const rowsHtml = sorted.map(item => {
-                const itemName = item.품목명;
-                const task = tasks.find(t => t.fields.시공품목 === itemName);
-                const fields = task ? task.fields : {};
-                const pending = zonePendingChanges.get(itemName) || {};
-                const effectiveActive = getEffectiveActive(itemName);
-                const 뒷정리 = item.작업방식 === '한번에';
-                const effectivePrep = pending.밑작업 !== undefined ? pending.밑작업 : (fields.밑작업기사 || '');
-                const effectiveWrap = pending.시공 !== undefined ? pending.시공 : (fields.시공기사 || '');
-                const hasAnyAssignee = 뒷정리 ? !!effectiveWrap : !!(effectivePrep || effectiveWrap);
-                const safeAttr = itemName.replace(/"/g, '&quot;');
-                return `
-                    <label class="bulk-item-row${hasAnyAssignee ? ' locked' : ''}"${hasAnyAssignee ? ' title="기사가 배정된 품목은 여기서 끌 수 없습니다."' : ''}>
-                        <input type="checkbox" class="bulk-item-checkbox" data-item="${safeAttr}" ${effectiveActive ? 'checked' : ''} ${hasAnyAssignee ? 'disabled' : ''}>
-                        <span>${itemName}</span>
-                    </label>
-                `;
-            }).join('');
-            return `
-                <div class="bulk-item-zone-group">
-                    <h4 class="bulk-item-zone-title">${groupLabel} (${activeCount}/${sorted.length})</h4>
-                    <div class="bulk-item-zone-rows">${rowsHtml}</div>
-                </div>
-            `;
+        bulkItemSetupGroups = zoneNames.map(zone => ({ key: zone, label: zone, items: zoneMap.get(zone) }));
+        if (cleanupItems.length > 0) {
+            bulkItemSetupGroups.push({ key: '__CLEANUP__', label: '🧹 뒷정리', items: cleanupItems });
+        }
+        if (!bulkItemSetupActiveKey || !bulkItemSetupGroups.some(g => g.key === bulkItemSetupActiveKey)) {
+            bulkItemSetupActiveKey = bulkItemSetupGroups[0] ? bulkItemSetupGroups[0].key : null;
         }
 
-        let bodyHtml = zoneNames.map(zone => buildGroupHtml(zone, zoneMap.get(zone))).join('');
-        if (cleanupItems.length > 0) bodyHtml += buildGroupHtml('🧹 뒷정리', cleanupItems);
+        renderBulkItemSetupTabs();
+        renderBulkItemSetupBody();
+        updateBulkItemSetupCount();
+        document.getElementById('bulkItemSetupModal').style.display = 'flex';
+    };
 
-        document.getElementById('bulkItemSetupBody').innerHTML = bodyHtml;
-        document.querySelectorAll('.bulk-item-checkbox').forEach(cb => {
+    function renderBulkItemSetupTabs() {
+        const tabsEl = document.getElementById('bulkItemSetupTabs');
+        tabsEl.innerHTML = bulkItemSetupGroups.map((g, idx) => {
+            const activeCount = g.items.filter(item => getEffectiveActive(item.품목명)).length;
+            const color = BULK_ITEM_TAB_COLORS[idx % BULK_ITEM_TAB_COLORS.length];
+            const isActive = g.key === bulkItemSetupActiveKey;
+            const style = isActive
+                ? `background:${color.text}; color:#fff; border-color:${color.text};`
+                : `background:${color.bg}; color:${color.text}; border-color:${color.bg};`;
+            const safeKey = g.key.replace(/'/g, "\\'");
+            return `<button type="button" class="bulk-item-setup-tab" style="${style}" onclick="selectBulkItemSetupTab('${safeKey}')">${g.label} (${activeCount}/${g.items.length})</button>`;
+        }).join('');
+    }
+
+    window.selectBulkItemSetupTab = function(key) {
+        bulkItemSetupActiveKey = key;
+        renderBulkItemSetupTabs();
+        renderBulkItemSetupBody();
+    };
+
+    function renderBulkItemSetupBody() {
+        const group = bulkItemSetupGroups.find(g => g.key === bulkItemSetupActiveKey);
+        const bodyEl = document.getElementById('bulkItemSetupBody');
+        if (!group) {
+            bodyEl.innerHTML = '';
+            return;
+        }
+        const tasks = currentDetailData.tasks || [];
+        // 여기도 매트릭스와 똑같이 켜진 품목이 위로 모이게 정렬
+        const sorted = [...group.items].sort((a, b) => {
+            const aActive = getEffectiveActive(a.품목명);
+            const bActive = getEffectiveActive(b.품목명);
+            if (aActive !== bActive) return aActive ? -1 : 1;
+            const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
+            const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
+            if (pA !== pB) return pA - pB;
+            return (a.품목명 || '').localeCompare(b.품목명 || '');
+        });
+        const rowsHtml = sorted.map(item => {
+            const itemName = item.품목명;
+            const task = tasks.find(t => t.fields.시공품목 === itemName);
+            const fields = task ? task.fields : {};
+            const pending = zonePendingChanges.get(itemName) || {};
+            const effectiveActive = getEffectiveActive(itemName);
+            const 뒷정리 = item.작업방식 === '한번에';
+            const effectivePrep = pending.밑작업 !== undefined ? pending.밑작업 : (fields.밑작업기사 || '');
+            const effectiveWrap = pending.시공 !== undefined ? pending.시공 : (fields.시공기사 || '');
+            const hasAnyAssignee = 뒷정리 ? !!effectiveWrap : !!(effectivePrep || effectiveWrap);
+            const safeAttr = itemName.replace(/"/g, '&quot;');
+            return `
+                <label class="bulk-item-row${hasAnyAssignee ? ' locked' : ''}"${hasAnyAssignee ? ' title="기사가 배정된 품목은 여기서 끌 수 없습니다."' : ''}>
+                    <input type="checkbox" class="bulk-item-checkbox" data-item="${safeAttr}" ${effectiveActive ? 'checked' : ''} ${hasAnyAssignee ? 'disabled' : ''}>
+                    <span>${itemName}</span>
+                </label>
+            `;
+        }).join('');
+
+        bodyEl.innerHTML = `<div class="bulk-item-zone-rows">${rowsHtml}</div>`;
+        bodyEl.querySelectorAll('.bulk-item-checkbox').forEach(cb => {
             cb.addEventListener('change', () => {
                 const itemName = cb.dataset.item;
                 const isActiveNow = (currentDetailData.activeItems || []).includes(itemName);
                 setZonePending(itemName, 'active', cb.checked, isActiveNow);
+                renderBulkItemSetupTabs();
                 updateBulkItemSetupCount();
                 updateZoneSaveToolbar();
             });
         });
-
-        updateBulkItemSetupCount();
-        document.getElementById('bulkItemSetupModal').style.display = 'flex';
-    };
+    }
 
     function updateBulkItemSetupCount() {
         const countEl = document.getElementById('bulkItemSetupCount');
