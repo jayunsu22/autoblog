@@ -2556,6 +2556,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
         const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
         const siteNoteValue = fields.현장특이사항 || '';
+        const siteNoteImportant = !!fields.특이사항중요;
 
         // 같은 카테고리(문+틀/샤시 등)의 다른 품목에 지침 체크 상태를 일괄 적용하는 버튼용 - 대상이 1개 이상 있을 때만 노출
         const masterItemInfo = (currentDetailData.masterItems || []).find(m => m.품목명 === fields.시공품목);
@@ -2613,7 +2614,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         bodyHtml += `
             <div class="site-note-box" style="margin-top: 14px;">
-                <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">📝 이 현장의 이 품목만의 특이사항 (작업자에게 체크 항목으로 노출됨)</h4>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
+                    <h4 style="font-size: 11px; color: #666; margin: 0;">📝 이 현장의 이 품목만의 특이사항 (작업자에게 체크 항목으로 노출됨)</h4>
+                    <button type="button" class="guideline-star-btn site-note-star-btn${siteNoteImportant ? ' active' : ''}" title="중요 표시 (기사님 화면에 빨간 글씨+반짝이는 별로 강조됨). 클릭 후 아래 저장 버튼을 눌러야 반영됨" onclick="event.stopPropagation(); this.classList.toggle('active');">⭐</button>
+                </div>
                 <textarea class="site-note-textarea" rows="2" placeholder="예: 이 문틀은 이미 파손 이력 있음, 더 조심히 다뤄주세요" style="width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 8px; resize: vertical; box-sizing: border-box;">${siteNoteValue}</textarea>
                 <button type="button" onclick="saveSiteNote('${recordId}', '${stage}', this.closest('.assignment-card-body'))" style="margin-top: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">지침/특이사항 저장</button>
             </div>
@@ -3020,13 +3024,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cardBody = containerEl || document.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"] .assignment-card-body`);
         const textarea = cardBody ? cardBody.querySelector('.site-note-textarea') : null;
         const noteText = textarea ? textarea.value.trim() : "";
+        const noteStarBtn = cardBody ? cardBody.querySelector('.site-note-star-btn') : null;
+        const noteImportant = noteStarBtn ? noteStarBtn.classList.contains('active') : false;
         const excludedLines = [];
         const importantLines = [];
         if (cardBody) {
             cardBody.querySelectorAll('.guideline-include-input').forEach(input => {
                 if (!input.checked) excludedLines.push(input.dataset.line);
             });
-            cardBody.querySelectorAll('.guideline-star-btn.active').forEach(btn => {
+            // .site-note-star-btn도 시각적 재사용을 위해 guideline-star-btn 클래스를 같이 쓰지만
+            // data-line이 없는 별개 토글(noteImportant)이므로 여기서는 제외
+            cardBody.querySelectorAll('.guideline-star-btn.active:not(.site-note-star-btn)').forEach(btn => {
                 importantLines.push(btn.dataset.line);
             });
         }
@@ -3044,7 +3052,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     recordId: recordId,
                     noteText: noteText,
                     excludedText: excludedText,
-                    importantText: importantText
+                    importantText: importantText,
+                    noteImportant: noteImportant
                 })
             });
 
@@ -3094,13 +3103,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         })();
         const excludedLines = [];
         const importantLines = [];
+        let noteText = fields.현장특이사항 || '';
+        let noteImportant = !!fields.특이사항중요;
         if (cardBody) {
             cardBody.querySelectorAll('.guideline-include-input').forEach(input => {
                 if (!input.checked) excludedLines.push(input.dataset.line);
             });
-            cardBody.querySelectorAll('.guideline-star-btn.active').forEach(btn => {
+            // .site-note-star-btn도 시각적 재사용을 위해 guideline-star-btn 클래스를 같이 쓰지만
+            // data-line이 없는 별개 토글(특이사항 중요표시)이므로 여기서는 제외
+            cardBody.querySelectorAll('.guideline-star-btn.active:not(.site-note-star-btn)').forEach(btn => {
                 importantLines.push(btn.dataset.line);
             });
+            const noteTextarea = cardBody.querySelector('.site-note-textarea');
+            if (noteTextarea) noteText = noteTextarea.value.trim();
+            const noteStarBtn = cardBody.querySelector('.site-note-star-btn');
+            if (noteStarBtn) noteImportant = noteStarBtn.classList.contains('active');
         }
 
         // 인원배정 여부와 무관하게(밑작업만 배정되고 시공은 아직 미배정이어도) 같은 카테고리로 활성화된 품목이면 후보에 포함
@@ -3110,10 +3127,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return tCat === itemCategory;
         });
 
+        // 지침 체크 상태뿐 아니라 특이사항 텍스트/중요표시도 같이 넘겨서 다른 품목에 그대로 적용할 수 있게 함
         bulkApplySourceState = {
             recordId, stage,
             excludedText: excludedLines.join('\n'),
-            importantText: importantLines.join('\n')
+            importantText: importantLines.join('\n'),
+            noteText, noteImportant
         };
 
         document.getElementById('bulkApplyModalTitle').textContent = `📋 "${fields.시공품목}" (${stage}) 지침을 다른 ${itemCategory} 품목에 적용`;
@@ -3149,13 +3168,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('적용할 품목을 선택해 주세요.', 'danger');
             return;
         }
-        const { recordId, stage, excludedText, importantText } = bulkApplySourceState;
+        const { recordId, stage, excludedText, importantText, noteText, noteImportant } = bulkApplySourceState;
 
         showLoading(`적용 중... (0/${targetIds.length})`);
         let done = 0;
         for (const targetId of targetIds) {
-            const targetTask = currentDetailData.tasks.find(t => t.id === targetId);
-            const noteText = targetTask ? (targetTask.fields.현장특이사항 || '') : '';
             try {
                 const response = await fetchWithTimeout(API_SAVE_URL, {
                     method: 'POST',
@@ -3166,7 +3183,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         recordId: targetId,
                         noteText,
                         excludedText,
-                        importantText
+                        importantText,
+                        noteImportant
                     })
                 });
                 if (!response.ok) throw new Error('실패');
