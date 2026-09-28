@@ -1925,7 +1925,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const itemsInZone = [...(activeZoneTab === CLEANUP_TAB ? cleanupItems : (zoneMap.get(activeZoneTab) || []))];
+        // 켜져 있는(활성화된) 품목이 위로 모이고, 꺼져있는 품목은 아래로 - 이미 시공할 걸로 골라둔 것부터 눈에 띄게
         itemsInZone.sort((a, b) => {
+            const aActive = getEffectiveActive(a.품목명);
+            const bActive = getEffectiveActive(b.품목명);
+            if (aActive !== bActive) return aActive ? -1 : 1;
             const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
             const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
             if (pA !== pB) return pA - pB;
@@ -2039,6 +2043,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return select;
     }
 
+    // 대기 중인 변경사항까지 반영한 "지금 화면에 보여줄" 활성화 여부 (서버 상태 + 아직 저장 안 한 토글)
+    function getEffectiveActive(itemName) {
+        const pending = zonePendingChanges.get(itemName);
+        const isActiveNow = (currentDetailData.activeItems || []).includes(itemName);
+        return (pending && pending.active !== undefined) ? pending.active : isActiveNow;
+    }
+
     // 매트릭스에서 체크/선택한 내용을 임시로만 기록 (서버에는 저장 버튼을 눌러야 반영됨)
     // 원래 서버 상태로 되돌아오면 해당 항목의 대기 기록을 지워서 "N개 대기중" 카운트를 정확히 유지
     function setZonePending(itemName, key, value, baseline) {
@@ -2150,6 +2161,90 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // ===== 품목 일괄설정 모달 =====
+    // 구역 탭을 하나씩 넘기며 품목을 찾아 켜는 게 번거로워서, 전체 구역을 한 화면에 펼쳐놓고
+    // 시공할 품목을 빠르게 체크할 수 있게 함. 체크 상태는 기존 zonePendingChanges에 그대로 쌓여서
+    // 매트릭스 화면 하단의 저장 툴바와 완전히 같은 방식으로 동작함(모달 안에서 바로 저장도 가능).
+    window.openBulkItemSetupModal = function() {
+        const allItems = [...(currentDetailData.masterItems || [])];
+        const tasks = currentDetailData.tasks || [];
+        const cleanupItems = allItems.filter(item => item.작업방식 === '한번에');
+        const zoneMap = new Map();
+        allItems.forEach(item => {
+            if (item.작업방식 === '한번에') return;
+            const zone = item.구역 || '기타';
+            if (!zoneMap.has(zone)) zoneMap.set(zone, []);
+            zoneMap.get(zone).push(item);
+        });
+        const zoneNames = sortZones([...zoneMap.keys()]);
+
+        function buildGroupHtml(groupLabel, items) {
+            const sorted = [...items].sort((a, b) => {
+                const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
+                const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
+                if (pA !== pB) return pA - pB;
+                return (a.품목명 || '').localeCompare(b.품목명 || '');
+            });
+            const activeCount = sorted.filter(item => getEffectiveActive(item.품목명)).length;
+            const rowsHtml = sorted.map(item => {
+                const itemName = item.품목명;
+                const task = tasks.find(t => t.fields.시공품목 === itemName);
+                const fields = task ? task.fields : {};
+                const pending = zonePendingChanges.get(itemName) || {};
+                const effectiveActive = getEffectiveActive(itemName);
+                const 뒷정리 = item.작업방식 === '한번에';
+                const effectivePrep = pending.밑작업 !== undefined ? pending.밑작업 : (fields.밑작업기사 || '');
+                const effectiveWrap = pending.시공 !== undefined ? pending.시공 : (fields.시공기사 || '');
+                const hasAnyAssignee = 뒷정리 ? !!effectiveWrap : !!(effectivePrep || effectiveWrap);
+                const safeAttr = itemName.replace(/"/g, '&quot;');
+                return `
+                    <label class="bulk-item-row${hasAnyAssignee ? ' locked' : ''}"${hasAnyAssignee ? ' title="기사가 배정된 품목은 여기서 끌 수 없습니다."' : ''}>
+                        <input type="checkbox" class="bulk-item-checkbox" data-item="${safeAttr}" ${effectiveActive ? 'checked' : ''} ${hasAnyAssignee ? 'disabled' : ''}>
+                        <span>${itemName}</span>
+                    </label>
+                `;
+            }).join('');
+            return `
+                <div class="bulk-item-zone-group">
+                    <h4 class="bulk-item-zone-title">${groupLabel} (${activeCount}/${sorted.length})</h4>
+                    <div class="bulk-item-zone-rows">${rowsHtml}</div>
+                </div>
+            `;
+        }
+
+        let bodyHtml = zoneNames.map(zone => buildGroupHtml(zone, zoneMap.get(zone))).join('');
+        if (cleanupItems.length > 0) bodyHtml += buildGroupHtml('🧹 뒷정리', cleanupItems);
+
+        document.getElementById('bulkItemSetupBody').innerHTML = bodyHtml;
+        document.querySelectorAll('.bulk-item-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const itemName = cb.dataset.item;
+                const isActiveNow = (currentDetailData.activeItems || []).includes(itemName);
+                setZonePending(itemName, 'active', cb.checked, isActiveNow);
+                updateBulkItemSetupCount();
+                updateZoneSaveToolbar();
+            });
+        });
+
+        updateBulkItemSetupCount();
+        document.getElementById('bulkItemSetupModal').style.display = 'flex';
+    };
+
+    function updateBulkItemSetupCount() {
+        const countEl = document.getElementById('bulkItemSetupCount');
+        if (!countEl) return;
+        const n = zonePendingChanges.size;
+        countEl.textContent = n > 0 ? `${n}개 품목 변경사항 대기 중` : '';
+    }
+
+    window.closeBulkItemSetupModal = function() {
+        document.getElementById('bulkItemSetupModal').style.display = 'none';
+    };
+
+    window.saveBulkItemSetup = async function() {
+        await window.saveZonePendingChanges();
+        window.closeBulkItemSetupModal();
+    };
 
     // 1열: 기사 리스트 그리기
     function renderBoardWorkers() {
