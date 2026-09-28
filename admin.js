@@ -5,6 +5,15 @@ window.onerror = function(message, source, lineno, colno, error) {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // 지금 실제로 불러와진 admin.js 버전을 헤더에 표시 (캐시 때문에 옛날 버전이 떠 있는 건지
+    // 바로 눈으로 확인하려고 - 값은 이 파일을 불러온 <script> 태그의 ?v= 그대로 읽어옴)
+    try {
+        const scriptEl = document.querySelector('script[src*="admin.js"]');
+        const match = scriptEl && scriptEl.src.match(/[?&]v=([^&]+)/);
+        const versionEl = document.getElementById('appVersionBadge');
+        if (versionEl && match) versionEl.textContent = `v${match[1]}`;
+    } catch (e) { /* 버전 표시 실패해도 앱 동작에는 영향 없음 */ }
+
     // 현장소장용 개별 링크 (admin.html?code=현장ID) - 다른 팀장에게 이 링크만 전달하면
     // 암호 없이 바로 그 현장 상세화면으로 들어가고, 다른 현장 목록/전역 설정은 안 보이게 잠가둠
     const urlParams = new URLSearchParams(window.location.search);
