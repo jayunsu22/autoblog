@@ -2003,6 +2003,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             nameSpan.appendChild(modeBadge);
         }
 
+        // 기사 배정 전이라도 밑작업/시공 지침을 미리 손볼 수 있는 버튼 - 품목이 켜져 있어야(작업 레코드가 있어야) 누를 수 있음
+        const guidelineBtn = document.createElement('button');
+        guidelineBtn.type = 'button';
+        guidelineBtn.className = 'zone-item-guideline-btn';
+        guidelineBtn.textContent = '📋 지침';
+        guidelineBtn.disabled = !task;
+        guidelineBtn.title = task ? '밑작업/시공 지침 편집' : '먼저 품목을 켜야 지침을 편집할 수 있습니다.';
+        guidelineBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.openItemGuidelineModal(itemName);
+        });
+
         const assignWrap = document.createElement('div');
         assignWrap.className = 'zone-item-assign';
         if (뒷정리) {
@@ -2015,6 +2027,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         row.appendChild(toggleLabel);
         row.appendChild(nameSpan);
+        row.appendChild(guidelineBtn);
         row.appendChild(assignWrap);
 
         if (isFullyCompleted) {
@@ -2051,6 +2064,106 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return select;
     }
+
+    // ===== 품목별 지침 편집 모달 (기사 배정 없이도 바로 편집 가능) =====
+    // 원래는 업무배정표 카드(기사 배정된 것만 보임)에서만 밑작업/시공 지침을 손볼 수 있었는데,
+    // 배정 전에 미리 지침부터 정리해두고 싶다는 요청으로 추가. 품목 배정 매트릭스 행에서 바로 열림 -
+    // 저장 방식은 기존 지침 체크(제외된지침/중요지침, update_site_note)와 완전히 동일함.
+    let itemGuidelineState = null; // { itemName, task }
+
+    window.openItemGuidelineModal = function(itemName) {
+        const task = (currentDetailData.tasks || []).find(t => t.fields.시공품목 === itemName);
+        if (!task) {
+            showToast('먼저 품목을 켜야 지침을 편집할 수 있습니다.', 'danger');
+            return;
+        }
+        const itemInfo = currentDetailData.items[itemName] || { 밑작업지침: '', 시공후점검지침: '' };
+        const fields = task.fields;
+        const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+        const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+
+        itemGuidelineState = { itemName, task };
+        document.getElementById('itemGuidelineModalTitle').textContent = `📋 "${itemName}" 지침 편집`;
+
+        function buildSection(label, guidelineText) {
+            const lines = (guidelineText || '').split('\n').map(l => l.trim()).filter(Boolean);
+            if (lines.length === 0) return '';
+            const rowsHtml = lines.map(line => {
+                const isIncluded = !excludedLines.includes(line);
+                const isImportant = importantLines.includes(line);
+                const escAttr = line.replace(/"/g, '&quot;');
+                return `
+                    <div class="assign-toggle-item ${isIncluded ? 'active' : ''}">
+                        <span style="display:flex; align-items:center; gap:8px; flex:1;">
+                            <span class="toggle-dot"></span>
+                            <span class="toggle-text">${line}</span>
+                        </span>
+                        <button type="button" class="guideline-star-btn${isImportant ? ' active' : ''}" data-line="${escAttr}" title="중요 표시" onclick="event.stopPropagation(); this.classList.toggle('active');">⭐</button>
+                        <input type="checkbox" class="guideline-include-input" data-line="${escAttr}" ${isIncluded ? 'checked' : ''} title="체크 해제하면 이 현장에서만 이 지침 제외">
+                    </div>
+                `;
+            }).join('');
+            return `<h4 style="font-size:12px; color:var(--text-muted); margin:12px 0 8px;">${label}</h4><div class="assign-checkbox-list">${rowsHtml}</div>`;
+        }
+
+        let bodyHtml = buildSection('🔧 밑작업 지침', itemInfo.밑작업지침) + buildSection('🛠 시공 지침', itemInfo.시공후점검지침);
+        if (!bodyHtml) bodyHtml = '<div class="empty-state" style="padding:16px 0;">등록된 지침이 없습니다.</div>';
+
+        const bodyEl = document.getElementById('itemGuidelineBody');
+        bodyEl.innerHTML = bodyHtml;
+        // 체크박스 클릭 시 왼쪽 초록 점(active 표시)도 같이 토글되도록 연결 - 체크 해제 = 제외 = 점 꺼짐
+        bodyEl.querySelectorAll('.guideline-include-input').forEach(input => {
+            input.addEventListener('change', () => {
+                input.closest('.assign-toggle-item').classList.toggle('active', input.checked);
+            });
+        });
+
+        document.getElementById('itemGuidelineModal').style.display = 'flex';
+    };
+
+    window.closeItemGuidelineModal = function() {
+        document.getElementById('itemGuidelineModal').style.display = 'none';
+        itemGuidelineState = null;
+    };
+
+    window.saveItemGuideline = async function() {
+        if (!itemGuidelineState) return;
+        const { task } = itemGuidelineState;
+        const bodyEl = document.getElementById('itemGuidelineBody');
+        const excludedLines = [];
+        const importantLines = [];
+        bodyEl.querySelectorAll('.guideline-include-input').forEach(input => {
+            if (!input.checked) excludedLines.push(input.dataset.line);
+        });
+        bodyEl.querySelectorAll('.guideline-star-btn.active').forEach(btn => {
+            importantLines.push(btn.dataset.line);
+        });
+
+        showLoading('저장 중...');
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'update_site_note',
+                    projectCode: activeProjectCode,
+                    recordId: task.id,
+                    noteText: task.fields.현장특이사항 || '',
+                    excludedText: excludedLines.join('\n'),
+                    importantText: importantLines.join('\n')
+                })
+            });
+            if (!response.ok) throw new Error('저장 실패');
+            showToast('지침이 저장되었습니다.');
+            window.closeItemGuidelineModal();
+            await showProjectDetail(activeProjectCode);
+        } catch (error) {
+            console.error(error);
+            showToast('저장 실패: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    };
 
     // 대기 중인 변경사항까지 반영한 "지금 화면에 보여줄" 활성화 여부 (서버 상태 + 아직 저장 안 한 토글)
     function getEffectiveActive(itemName) {
@@ -2178,6 +2291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 지금 보고 있는 구역의 품목만 렌더링한다.
     let bulkItemSetupGroups = []; // [{ key, label, items }]
     let bulkItemSetupActiveKey = null;
+    let bulkItemSetupMode = 'category'; // 'category' | 'zone' - 문+틀/샤시처럼 종류별로 보는 게 기본, 구역별로도 전환 가능
     const BULK_ITEM_TAB_COLORS = [
         { bg: '#dbeafe', text: '#1e40af' },
         { bg: '#dcfce7', text: '#166534' },
@@ -2191,8 +2305,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         { bg: '#d1fae5', text: '#065f46' }
     ];
 
-    window.openBulkItemSetupModal = function() {
+    // 구역별/카테고리별 두 가지 방식으로 품목을 묶음 - 카테고리는 시공품목 마스터의 카테고리 값을 그대로 씀
+    // (뒷정리 품목들도 카테고리 값이 "뒷정리"로 들어있어서 별도 처리 없이 자연스럽게 한 탭으로 묶임)
+    function buildBulkItemGroups(mode) {
         const allItems = [...(currentDetailData.masterItems || [])];
+        if (mode === 'category') {
+            const catMap = new Map();
+            allItems.forEach(item => {
+                const cat = item.카테고리 || '기타';
+                if (!catMap.has(cat)) catMap.set(cat, []);
+                catMap.get(cat).push(item);
+            });
+            const catNames = [...catMap.keys()].sort((a, b) => {
+                if (a === '기타') return 1;
+                if (b === '기타') return -1;
+                return catMap.get(b).length - catMap.get(a).length; // 품목 많은 카테고리가 앞으로
+            });
+            return catNames.map(cat => ({ key: `c:${cat}`, label: cat, items: catMap.get(cat) }));
+        }
+
         const cleanupItems = allItems.filter(item => item.작업방식 === '한번에');
         const zoneMap = new Map();
         allItems.forEach(item => {
@@ -2202,19 +2333,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             zoneMap.get(zone).push(item);
         });
         const zoneNames = sortZones([...zoneMap.keys()]);
+        const groups = zoneNames.map(zone => ({ key: `z:${zone}`, label: zone, items: zoneMap.get(zone) }));
+        if (cleanupItems.length > 0) groups.push({ key: 'z:__CLEANUP__', label: '🧹 뒷정리', items: cleanupItems });
+        return groups;
+    }
 
-        bulkItemSetupGroups = zoneNames.map(zone => ({ key: zone, label: zone, items: zoneMap.get(zone) }));
-        if (cleanupItems.length > 0) {
-            bulkItemSetupGroups.push({ key: '__CLEANUP__', label: '🧹 뒷정리', items: cleanupItems });
-        }
-        if (!bulkItemSetupActiveKey || !bulkItemSetupGroups.some(g => g.key === bulkItemSetupActiveKey)) {
-            bulkItemSetupActiveKey = bulkItemSetupGroups[0] ? bulkItemSetupGroups[0].key : null;
-        }
+    window.openBulkItemSetupModal = function() {
+        bulkItemSetupGroups = buildBulkItemGroups(bulkItemSetupMode);
+        bulkItemSetupActiveKey = bulkItemSetupGroups[0] ? bulkItemSetupGroups[0].key : null;
 
+        renderBulkItemSetupModeToggle();
         renderBulkItemSetupTabs();
         renderBulkItemSetupBody();
         updateBulkItemSetupCount();
         document.getElementById('bulkItemSetupModal').style.display = 'flex';
+    };
+
+    function renderBulkItemSetupModeToggle() {
+        const el = document.getElementById('bulkItemSetupModeToggle');
+        if (!el) return;
+        el.innerHTML = `
+            <button type="button" class="bulk-item-mode-btn ${bulkItemSetupMode === 'category' ? 'active' : ''}" onclick="setBulkItemSetupMode('category')">카테고리별</button>
+            <button type="button" class="bulk-item-mode-btn ${bulkItemSetupMode === 'zone' ? 'active' : ''}" onclick="setBulkItemSetupMode('zone')">구역별</button>
+        `;
+    }
+
+    window.setBulkItemSetupMode = function(mode) {
+        if (mode === bulkItemSetupMode) return;
+        bulkItemSetupMode = mode;
+        bulkItemSetupGroups = buildBulkItemGroups(bulkItemSetupMode);
+        bulkItemSetupActiveKey = bulkItemSetupGroups[0] ? bulkItemSetupGroups[0].key : null;
+        renderBulkItemSetupModeToggle();
+        renderBulkItemSetupTabs();
+        renderBulkItemSetupBody();
     };
 
     function renderBulkItemSetupTabs() {

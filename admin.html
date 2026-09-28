@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260929c">
+    <link rel="stylesheet" href="admin_style.css?v=20260929d">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -423,14 +423,29 @@
                 <h2 style="font-size: 16px;">📋 일괄품목 설정</h2>
                 <button class="close-modal-btn" onclick="closeBulkItemSetupModal()">×</button>
             </div>
-            <p style="font-size: 12px; color: var(--text-muted); margin: -10px 0 12px;">이번 현장에서 시공할 품목을 구역별로 한 번에 켜고 끌 수 있어요. 기사가 이미 배정된 품목은 여기서 끌 수 없습니다.</p>
-            <div id="bulkItemSetupTabs" class="bulk-item-setup-tabs"></div>
+            <p style="font-size: 12px; color: var(--text-muted); margin: -10px 0 12px;">이번 현장에서 시공할 품목을 한 번에 켜고 끌 수 있어요. 기사가 이미 배정된 품목은 여기서 끌 수 없습니다.</p>
+            <div class="bulk-item-sticky-wrap">
+                <div id="bulkItemSetupModeToggle" class="bulk-item-mode-toggle"></div>
+                <div id="bulkItemSetupTabs" class="bulk-item-setup-tabs"></div>
+            </div>
             <div id="bulkItemSetupBody"></div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1.5px solid var(--border-color);">
                 <span id="bulkItemSetupCount" style="font-size: 12px; font-weight: 700; color: var(--text-muted); flex: 1;"></span>
                 <button type="button" class="card-btn secondary" style="padding: 8px 14px; font-size: 12.5px;" onclick="closeBulkItemSetupModal()">닫기</button>
                 <button type="button" class="card-btn primary" style="padding: 8px 16px; font-size: 12.5px;" onclick="saveBulkItemSetup()">💾 저장</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 모달: 품목별 밑작업/시공 지침 편집 (기사 배정 없이도 바로 편집 가능) -->
+    <div id="itemGuidelineModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 460px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="itemGuidelineModalTitle" style="font-size: 15px;">📋 지침 편집</h2>
+                <button class="close-modal-btn" onclick="closeItemGuidelineModal()">×</button>
+            </div>
+            <div id="itemGuidelineBody"></div>
+            <button type="button" class="card-btn primary" style="width: 100%; margin-top: 14px; padding: 12px;" onclick="saveItemGuideline()">💾 저장</button>
         </div>
     </div>
 
@@ -571,6 +586,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260929c"></script>
+    <script src="admin.js?v=20260929d"></script>
 </body>
 </html>
