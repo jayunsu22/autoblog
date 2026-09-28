@@ -2004,16 +2004,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 기사 배정 전이라도 밑작업/시공 지침을 미리 손볼 수 있는 버튼 - 품목이 켜져 있어야(작업 레코드가 있어야) 누를 수 있음
-        const guidelineBtn = document.createElement('button');
-        guidelineBtn.type = 'button';
-        guidelineBtn.className = 'zone-item-guideline-btn';
-        guidelineBtn.textContent = '📋 지침';
-        guidelineBtn.disabled = !task;
-        guidelineBtn.title = task ? '밑작업/시공 지침 편집' : '먼저 품목을 켜야 지침을 편집할 수 있습니다.';
-        guidelineBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.openItemGuidelineModal(itemName);
-        });
+        // 뒷정리는 밑작업/시공 구분이 없어(담당 한 명) 지침 버튼도 하나만 노출
+        const guidelineBtnWrap = document.createElement('div');
+        guidelineBtnWrap.className = 'zone-item-guideline-wrap';
+        if (뒷정리) {
+            guidelineBtnWrap.appendChild(createGuidelineStageBtn(itemName, '시공', task, '📋 지침'));
+        } else {
+            guidelineBtnWrap.appendChild(createGuidelineStageBtn(itemName, '밑작업', task, '🔧 밑작업'));
+            guidelineBtnWrap.appendChild(createGuidelineStageBtn(itemName, '시공', task, '🛠 시공'));
+        }
 
         const assignWrap = document.createElement('div');
         assignWrap.className = 'zone-item-assign';
@@ -2027,7 +2026,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         row.appendChild(toggleLabel);
         row.appendChild(nameSpan);
-        row.appendChild(guidelineBtn);
+        row.appendChild(guidelineBtnWrap);
         row.appendChild(assignWrap);
 
         if (isFullyCompleted) {
@@ -2039,6 +2038,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         return row;
+    }
+
+    function createGuidelineStageBtn(itemName, stage, task, label) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'zone-item-guideline-btn';
+        btn.textContent = label;
+        btn.disabled = !task;
+        btn.title = task ? `${stage} 지침 편집` : '먼저 품목을 켜야 지침을 편집할 수 있습니다.';
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.openItemStageGuidelineModal(itemName, stage);
+        });
+        return btn;
     }
 
     function createZoneAssignSelect(itemName, stage, effectiveValue, effectiveActive, fields, workers, isActive, placeholder) {
@@ -2065,104 +2078,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         return select;
     }
 
-    // ===== 품목별 지침 편집 모달 (기사 배정 없이도 바로 편집 가능) =====
+    // ===== 품목별 밑작업/시공 지침 편집 모달 (기사 배정 없이도 바로 편집 가능) =====
     // 원래는 업무배정표 카드(기사 배정된 것만 보임)에서만 밑작업/시공 지침을 손볼 수 있었는데,
-    // 배정 전에 미리 지침부터 정리해두고 싶다는 요청으로 추가. 품목 배정 매트릭스 행에서 바로 열림 -
-    // 저장 방식은 기존 지침 체크(제외된지침/중요지침, update_site_note)와 완전히 동일함.
-    let itemGuidelineState = null; // { itemName, task }
-
-    window.openItemGuidelineModal = function(itemName) {
+    // 배정 전에 미리 지침부터 정리해두고 싶다는 요청으로 추가. 품목 배정 매트릭스 행에서 바로 열리고,
+    // 업무배정표 카드와 완전히 같은 본문(buildGuidelineStageInnerHtml)을 그대로 재사용해서
+    // "다른 카테고리 품목에 적용" 일괄적용까지 카드에서와 동일하게 동작함.
+    window.openItemStageGuidelineModal = function(itemName, stage) {
         const task = (currentDetailData.tasks || []).find(t => t.fields.시공품목 === itemName);
         if (!task) {
             showToast('먼저 품목을 켜야 지침을 편집할 수 있습니다.', 'danger');
             return;
         }
-        const itemInfo = currentDetailData.items[itemName] || { 밑작업지침: '', 시공후점검지침: '' };
-        const fields = task.fields;
-        const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
-        const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
-
-        itemGuidelineState = { itemName, task };
-        document.getElementById('itemGuidelineModalTitle').textContent = `📋 "${itemName}" 지침 편집`;
-
-        function buildSection(label, guidelineText) {
-            const lines = (guidelineText || '').split('\n').map(l => l.trim()).filter(Boolean);
-            if (lines.length === 0) return '';
-            const rowsHtml = lines.map(line => {
-                const isIncluded = !excludedLines.includes(line);
-                const isImportant = importantLines.includes(line);
-                const escAttr = line.replace(/"/g, '&quot;');
-                return `
-                    <div class="assign-toggle-item ${isIncluded ? 'active' : ''}">
-                        <span style="display:flex; align-items:center; gap:8px; flex:1;">
-                            <span class="toggle-dot"></span>
-                            <span class="toggle-text">${line}</span>
-                        </span>
-                        <button type="button" class="guideline-star-btn${isImportant ? ' active' : ''}" data-line="${escAttr}" title="중요 표시" onclick="event.stopPropagation(); this.classList.toggle('active');">⭐</button>
-                        <input type="checkbox" class="guideline-include-input" data-line="${escAttr}" ${isIncluded ? 'checked' : ''} title="체크 해제하면 이 현장에서만 이 지침 제외">
-                    </div>
-                `;
-            }).join('');
-            return `<h4 style="font-size:12px; color:var(--text-muted); margin:12px 0 8px;">${label}</h4><div class="assign-checkbox-list">${rowsHtml}</div>`;
-        }
-
-        let bodyHtml = buildSection('🔧 밑작업 지침', itemInfo.밑작업지침) + buildSection('🛠 시공 지침', itemInfo.시공후점검지침);
-        if (!bodyHtml) bodyHtml = '<div class="empty-state" style="padding:16px 0;">등록된 지침이 없습니다.</div>';
-
+        document.getElementById('itemGuidelineModalTitle').textContent = `${stage === '밑작업' ? '🔧' : '🛠'} "${itemName}" (${stage}) 지침 편집`;
         const bodyEl = document.getElementById('itemGuidelineBody');
-        bodyEl.innerHTML = bodyHtml;
-        // 체크박스 클릭 시 왼쪽 초록 점(active 표시)도 같이 토글되도록 연결 - 체크 해제 = 제외 = 점 꺼짐
-        bodyEl.querySelectorAll('.guideline-include-input').forEach(input => {
-            input.addEventListener('change', () => {
-                input.closest('.assign-toggle-item').classList.toggle('active', input.checked);
-            });
-        });
-
+        bodyEl.innerHTML = `<div class="assignment-card-body" style="display: block; padding-top: 4px;">${buildGuidelineStageInnerHtml(task, stage)}</div>`;
         document.getElementById('itemGuidelineModal').style.display = 'flex';
     };
 
     window.closeItemGuidelineModal = function() {
         document.getElementById('itemGuidelineModal').style.display = 'none';
-        itemGuidelineState = null;
-    };
-
-    window.saveItemGuideline = async function() {
-        if (!itemGuidelineState) return;
-        const { task } = itemGuidelineState;
-        const bodyEl = document.getElementById('itemGuidelineBody');
-        const excludedLines = [];
-        const importantLines = [];
-        bodyEl.querySelectorAll('.guideline-include-input').forEach(input => {
-            if (!input.checked) excludedLines.push(input.dataset.line);
-        });
-        bodyEl.querySelectorAll('.guideline-star-btn.active').forEach(btn => {
-            importantLines.push(btn.dataset.line);
-        });
-
-        showLoading('저장 중...');
-        try {
-            const response = await fetchWithTimeout(API_SAVE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'update_site_note',
-                    projectCode: activeProjectCode,
-                    recordId: task.id,
-                    noteText: task.fields.현장특이사항 || '',
-                    excludedText: excludedLines.join('\n'),
-                    importantText: importantLines.join('\n')
-                })
-            });
-            if (!response.ok) throw new Error('저장 실패');
-            showToast('지침이 저장되었습니다.');
-            window.closeItemGuidelineModal();
-            await showProjectDetail(activeProjectCode);
-        } catch (error) {
-            console.error(error);
-            showToast('저장 실패: ' + error.message, 'danger');
-        } finally {
-            hideLoading();
-        }
     };
 
     // 대기 중인 변경사항까지 반영한 "지금 화면에 보여줄" 활성화 여부 (서버 상태 + 아직 저장 안 한 토글)
@@ -2190,17 +2124,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         entry[key] = value;
     }
 
+    // 목록 아래(zoneSaveToolbar)와 목록 위(zoneSaveToolbarTop) 두 곳에 저장 툴바를 두어서,
+    // 품목이 많아 아래까지 스크롤하지 않아도 바로 저장할 수 있게 함 - 둘 다 항상 같은 상태로 동기화
     function updateZoneSaveToolbar() {
-        const toolbar = document.getElementById('zoneSaveToolbar');
-        const countEl = document.getElementById('zoneSaveCount');
-        if (!toolbar || !countEl) return;
         const n = zonePendingChanges.size;
-        if (n > 0) {
-            toolbar.style.display = 'flex';
-            countEl.textContent = `${n}개 품목 변경사항 대기 중`;
-        } else {
-            toolbar.style.display = 'none';
-        }
+        [['zoneSaveToolbar', 'zoneSaveCount'], ['zoneSaveToolbarTop', 'zoneSaveCountTop']].forEach(([toolbarId, countId]) => {
+            const toolbar = document.getElementById(toolbarId);
+            const countEl = document.getElementById(countId);
+            if (!toolbar || !countEl) return;
+            if (n > 0) {
+                toolbar.style.display = 'flex';
+                countEl.textContent = `${n}개 품목 변경사항 대기 중`;
+            } else {
+                toolbar.style.display = 'none';
+            }
+        });
     }
 
     window.cancelZonePendingChanges = function() {
@@ -2602,55 +2540,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             boardAssignmentList.innerHTML = `<div class="drag-placeholder">우측의 품목 카드를 이곳이나 왼쪽 기사 카드 위로 드래그하여 배정하세요.</div>`;
         }
     }
-    function createAssignmentCard(task, stage, assigneeName) {
+    // 업무배정표 카드 / 품목배정 매트릭스 지침 모달 양쪽에서 공통으로 쓰는 지침 체크리스트+특이사항 본문 HTML.
+    // "다른 카테고리 품목에 적용" 버튼과 특이사항 저장 버튼은 본인을 담고 있는 .assignment-card-body를
+    // this.closest(...)로 직접 찾아서 넘기므로, 카드/모달 어느 쪽에 그려지든 동일하게 동작함.
+    function buildGuidelineStageInnerHtml(task, stage) {
         const fields = task.fields;
         const recordId = task.id;
         const 뒷정리 = stage === '시공' && is뒷정리(fields.시공품목);
         const 매일 = 뒷정리 && is매일(fields.시공품목);
-        const isCompleted = 뒷정리 ? 뒷정리완료(fields, fields.시공품목) : !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
-        const stageLabel = 뒷정리 ? (매일 ? '🧹 뒷정리·매일' : '🧹 뒷정리') : stage;
 
-        const card = document.createElement('div');
-        card.className = `assignment-card${isCompleted ? ' completed' : ''} ${stage === '밑작업' ? 'stage-prep' : (뒷정리 ? 'stage-cleanup' : 'stage-construction')}`;
-        card.dataset.recordId = recordId;
-        card.dataset.stage = stage;
-
-        // 상하 우선순위 정렬용 드래그앤드롭 이벤트 리스너 바인딩
-        card.draggable = true;
-        card.addEventListener('dragstart', (e) => {
-            card.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-        card.addEventListener('dragend', () => {
-            card.classList.remove('dragging');
-        });
-
-        // 1. 헤더 (배정 기사 이름, 작업이름, 완료 상태, 아코디언 ▼ 표시, 순서 이동 ▲▼, 배정 취소 x)
-        // 특정 기사님으로 필터링된 상태면 카드마다 이름을 반복 표시할 필요가 없어 배지를 생략함
-        const assigneeBadgeHtml = activeWorkerName ? '' : `<span class="assignee-badge">${assigneeName}</span>`;
-        const statusText = 매일 ? (isCompleted ? '✅ 오늘 완료' : '오늘 아직') : (isCompleted ? '✅ 완료됨' : '진행중');
-        const statusBadgeHtml = `<span class="assignment-status-badge${isCompleted ? ' completed' : ''}">${statusText}</span>`;
-        let headerHtml = `
-            <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
-                <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
-                    ${assigneeBadgeHtml}
-                    <span class="assigned-item-name">${fields.시공품목} (${stageLabel})</span>
-                    ${statusBadgeHtml}
-                    <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
-                </div>
-                <span class="drag-handle" title="여기를 잡고 위아래로 드래그해서 순서 이동">✋</span>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'up')" title="위로 이동">▲</button>
-                    <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'down')" title="아래로 이동">▼</button>
-                    <button class="btn-unassign" onclick="event.stopPropagation(); unassignWorker('${recordId}', '${stage}')" title="배정 취소">×</button>
-                </div>
-            </div>
-        `;
-
-        // 2. 바디 (지침 목록 온오프 제어 - 기본적으로 숨김 처리 display: none;)
         const itemInfo = currentDetailData.items[fields.시공품목] || { 밑작업지침: "", 시공후점검지침: "" };
         const guidelinesText = stage === '밑작업' ? itemInfo.밑작업지침 : itemInfo.시공후점검지침;
-        
+
         let bodyHtml = "";
         const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
         const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -2666,10 +2567,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             return tCat === itemCategory;
         }).length : 0;
         const bulkApplyBtnHtml = bulkApplyCandidateCount > 0
-            ? `<button type="button" class="bulk-apply-btn" onclick="event.stopPropagation(); openBulkApplyGuidelinesModal('${recordId}', '${stage}')">📋 다른 ${itemCategory} 품목에 적용 (${bulkApplyCandidateCount})</button>`
+            ? `<button type="button" class="bulk-apply-btn" onclick="event.stopPropagation(); openBulkApplyGuidelinesModal('${recordId}', '${stage}', this.closest('.assignment-card-body'))">📋 다른 ${itemCategory} 품목에 적용 (${bulkApplyCandidateCount})</button>`
             : '';
-
-        bodyHtml += `<div class="assignment-card-body" style="display: none; padding-top: 10px;">`;
 
         if (guidelinesText) {
             // 체크박스로 포함/제외를 표시해야 하므로, 이미 제외된 줄도 목록에서 지우지 않고
@@ -2715,11 +2614,62 @@ document.addEventListener('DOMContentLoaded', async () => {
         bodyHtml += `
             <div class="site-note-box" style="margin-top: 14px;">
                 <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">📝 이 현장의 이 품목만의 특이사항 (작업자에게 체크 항목으로 노출됨)</h4>
-                <textarea id="siteNoteInput-${recordId}-${stage}" rows="2" placeholder="예: 이 문틀은 이미 파손 이력 있음, 더 조심히 다뤄주세요" style="width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 8px; resize: vertical; box-sizing: border-box;">${siteNoteValue}</textarea>
-                <button type="button" onclick="saveSiteNote('${recordId}', '${stage}')" style="margin-top: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">지침/특이사항 저장</button>
+                <textarea class="site-note-textarea" rows="2" placeholder="예: 이 문틀은 이미 파손 이력 있음, 더 조심히 다뤄주세요" style="width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 8px; resize: vertical; box-sizing: border-box;">${siteNoteValue}</textarea>
+                <button type="button" onclick="saveSiteNote('${recordId}', '${stage}', this.closest('.assignment-card-body'))" style="margin-top: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">지침/특이사항 저장</button>
             </div>
         `;
 
+        return bodyHtml;
+    }
+
+    function createAssignmentCard(task, stage, assigneeName) {
+        const fields = task.fields;
+        const recordId = task.id;
+        const 뒷정리 = stage === '시공' && is뒷정리(fields.시공품목);
+        const 매일 = 뒷정리 && is매일(fields.시공품목);
+        const isCompleted = 뒷정리 ? 뒷정리완료(fields, fields.시공품목) : !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
+        const stageLabel = 뒷정리 ? (매일 ? '🧹 뒷정리·매일' : '🧹 뒷정리') : stage;
+
+        const card = document.createElement('div');
+        card.className = `assignment-card${isCompleted ? ' completed' : ''} ${stage === '밑작업' ? 'stage-prep' : (뒷정리 ? 'stage-cleanup' : 'stage-construction')}`;
+        card.dataset.recordId = recordId;
+        card.dataset.stage = stage;
+
+        // 상하 우선순위 정렬용 드래그앤드롭 이벤트 리스너 바인딩
+        card.draggable = true;
+        card.addEventListener('dragstart', (e) => {
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+        });
+
+        // 1. 헤더 (배정 기사 이름, 작업이름, 완료 상태, 아코디언 ▼ 표시, 순서 이동 ▲▼, 배정 취소 x)
+        // 특정 기사님으로 필터링된 상태면 카드마다 이름을 반복 표시할 필요가 없어 배지를 생략함
+        const assigneeBadgeHtml = activeWorkerName ? '' : `<span class="assignee-badge">${assigneeName}</span>`;
+        const statusText = 매일 ? (isCompleted ? '✅ 오늘 완료' : '오늘 아직') : (isCompleted ? '✅ 완료됨' : '진행중');
+        const statusBadgeHtml = `<span class="assignment-status-badge${isCompleted ? ' completed' : ''}">${statusText}</span>`;
+        let headerHtml = `
+            <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
+                    ${assigneeBadgeHtml}
+                    <span class="assigned-item-name">${fields.시공품목} (${stageLabel})</span>
+                    ${statusBadgeHtml}
+                    <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
+                </div>
+                <span class="drag-handle" title="여기를 잡고 위아래로 드래그해서 순서 이동">✋</span>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'up')" title="위로 이동">▲</button>
+                    <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'down')" title="아래로 이동">▼</button>
+                    <button class="btn-unassign" onclick="event.stopPropagation(); unassignWorker('${recordId}', '${stage}')" title="배정 취소">×</button>
+                </div>
+            </div>
+        `;
+
+        // 2. 바디 (지침 목록 온오프 제어 - 기본적으로 숨김 처리 display: none;) - 모달과 공용인 buildGuidelineStageInnerHtml 재사용
+        let bodyHtml = `<div class="assignment-card-body" style="display: none; padding-top: 10px;">`;
+        bodyHtml += buildGuidelineStageInnerHtml(task, stage);
         bodyHtml += `</div>`;
 
         card.innerHTML = `${headerHtml}${bodyHtml}`;
@@ -3066,10 +3016,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 지침 체크박스(포함/제외) + 특이사항 텍스트를 한 번에 일괄 저장 - 체크박스 클릭마다 서버로 안 보내고
     // 이 버튼을 눌렀을 때만 통신해서 지침이 여러 개여도 지연 없이 빠르게 체크할 수 있게 함
-    window.saveSiteNote = async function(recordId, stage) {
-        const textarea = document.getElementById(`siteNoteInput-${recordId}-${stage}`);
+    window.saveSiteNote = async function(recordId, stage, containerEl) {
+        const cardBody = containerEl || document.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"] .assignment-card-body`);
+        const textarea = cardBody ? cardBody.querySelector('.site-note-textarea') : null;
         const noteText = textarea ? textarea.value.trim() : "";
-        const cardBody = textarea ? textarea.closest('.assignment-card-body') : null;
         const excludedLines = [];
         const importantLines = [];
         if (cardBody) {
@@ -3102,7 +3052,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             showToast("저장되었습니다.");
             await showProjectDetail(activeProjectCode);
-            reopenAssignmentCard(recordId, stage); // 저장 후 새로고침으로 접혀버리지 않고 보던 카드 그대로 열어둠
+            if (containerEl) {
+                window.closeItemGuidelineModal(); // 모달에서 저장한 경우: 새로고침으로 내용이 낡아지므로 닫아줌
+            } else {
+                reopenAssignmentCard(recordId, stage); // 카드에서 저장한 경우: 새로고침으로 접혀버리지 않고 보던 카드 그대로 열어둠
+            }
         } catch (error) {
             console.error(error);
             showToast("저장에 실패했습니다.", "danger");
@@ -3126,16 +3080,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 방1문+틀/방3문+틀/... 등 다른 품목에도 그대로 적용 - 하나씩 들어가서 반복 체크할 필요 없게 함.
     let bulkApplySourceState = null; // { recordId, stage, excludedText, importantText }
 
-    window.openBulkApplyGuidelinesModal = function(recordId, stage) {
+    window.openBulkApplyGuidelinesModal = function(recordId, stage, sourceEl) {
         const task = currentDetailData.tasks.find(t => t.id === recordId);
         if (!task) return;
         const fields = task.fields;
         const masterItemInfo = (currentDetailData.masterItems || []).find(m => m.품목명 === fields.시공품목);
         const itemCategory = masterItemInfo ? masterItemInfo.카테고리 : '';
 
-        // 지금 화면에 보이는(저장 전일 수도 있는) 체크 상태를 그대로 읽어서 소스로 삼음
-        const card = document.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"]`);
-        const cardBody = card ? card.querySelector('.assignment-card-body') : null;
+        // 지금 화면에 보이는(저장 전일 수도 있는) 체크 상태를 그대로 읽어서 소스로 삼음 (카드에서 열렸으면 DOM에서 찾고, 모달에서 열렸으면 sourceEl로 바로 받음)
+        const cardBody = sourceEl || (() => {
+            const card = document.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"]`);
+            return card ? card.querySelector('.assignment-card-body') : null;
+        })();
         const excludedLines = [];
         const importantLines = [];
         if (cardBody) {
@@ -3225,7 +3181,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.closeBulkApplyModal();
         showToast(`${done}개 품목에 지침을 적용했습니다.`);
         await showProjectDetail(activeProjectCode);
-        reopenAssignmentCard(recordId, stage);
+        const itemGuidelineModalOpen = document.getElementById('itemGuidelineModal').style.display === 'flex';
+        if (itemGuidelineModalOpen) {
+            window.closeItemGuidelineModal(); // 모달에서 시작한 일괄적용이면 내용이 낡아지므로 닫아줌
+        } else {
+            reopenAssignmentCard(recordId, stage);
+        }
     };
 
     // 9. 블로그 발행 모달 (일차별 탭 UI)
