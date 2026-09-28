@@ -2356,9 +2356,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 같은 카테고리(문+틀/샤시 등)의 다른 품목에 지침 체크 상태를 일괄 적용하는 버튼용 - 대상이 1개 이상 있을 때만 노출
         const masterItemInfo = (currentDetailData.masterItems || []).find(m => m.품목명 === fields.시공품목);
         const itemCategory = masterItemInfo ? masterItemInfo.카테고리 : '';
+        // 인원배정 여부와 무관하게(밑작업만 배정되고 시공은 아직 미배정이어도) 같은 카테고리로 활성화된 품목이면 후보에 포함
         const bulkApplyCandidateCount = (!뒷정리 && itemCategory) ? (currentDetailData.tasks || []).filter(t => {
             if (t.id === recordId) return false;
-            if (!t.fields[stage + '기사']) return false;
             const tCat = ((currentDetailData.masterItems || []).find(m => m.품목명 === t.fields.시공품목) || {}).카테고리;
             return tCat === itemCategory;
         }).length : 0;
@@ -2844,9 +2844,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        // 인원배정 여부와 무관하게(밑작업만 배정되고 시공은 아직 미배정이어도) 같은 카테고리로 활성화된 품목이면 후보에 포함
         const candidates = (currentDetailData.tasks || []).filter(t => {
             if (t.id === recordId) return false;
-            if (!t.fields[stage + '기사']) return false;
             const tCat = ((currentDetailData.masterItems || []).find(m => m.품목명 === t.fields.시공품목) || {}).카테고리;
             return tCat === itemCategory;
         });
