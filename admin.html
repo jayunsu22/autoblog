@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20260927c">
+    <link rel="stylesheet" href="admin_style.css?v=20260928">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -392,6 +392,22 @@
         </div>
     </div>
 
+    <!-- 모달: 품질 지침 체크 상태를 같은 카테고리의 다른 품목에 일괄 적용 -->
+    <div id="bulkApplyModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content admin-modal" style="max-width: 460px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="bulkApplyModalTitle" style="font-size: 15px;">📋 지침 일괄 적용</h2>
+                <button class="close-modal-btn" onclick="closeBulkApplyModal()">×</button>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <button type="button" class="card-btn secondary" style="flex: 1; padding: 8px; font-size: 12.5px;" onclick="toggleBulkApplyAll(true)">전체 선택</button>
+                <button type="button" class="card-btn secondary" style="flex: 1; padding: 8px; font-size: 12.5px;" onclick="toggleBulkApplyAll(false)">전체 해제</button>
+            </div>
+            <div id="bulkApplyItemList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            <button type="button" class="card-btn primary" style="width: 100%; margin-top: 14px; padding: 12px;" onclick="confirmBulkApplyGuidelines()">✔ 선택한 품목에 적용</button>
+        </div>
+    </div>
+
     <!-- 사진 확대보기 라이트박스 (좌우 스와이프 또는 화살표 버튼으로 이전/다음 사진 탐색) -->
     <div id="galleryLightbox" class="lightbox-overlay" style="display: none;" onclick="closeGalleryLightbox()">
         <button type="button" id="galleryLightboxDeleteBtn" class="lightbox-delete-btn" style="display: none;" title="이 사진 삭제" onclick="event.stopPropagation(); deleteGalleryPhoto();">🗑</button>
@@ -529,6 +545,6 @@
         </div>
     </div>
 
-    <script src="admin.js?v=20260927d"></script>
+    <script src="admin.js?v=20260928"></script>
 </body>
 </html>

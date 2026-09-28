@@ -1344,6 +1344,46 @@ body {
     gap: 6px;
 }
 
+/* 지침 체크 상태를 같은 카테고리의 다른 품목에 일괄 적용하는 버튼 */
+.bulk-apply-btn {
+    display: block;
+    margin-bottom: 10px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 800;
+    border: 1.5px solid var(--primary-blue);
+    border-radius: 8px;
+    background: var(--primary-light);
+    color: var(--primary-blue);
+    cursor: pointer;
+}
+
+.bulk-apply-btn:hover {
+    background: #dbeafe;
+}
+
+/* 일괄 적용 모달의 대상 품목 선택 목록 */
+.bulk-apply-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #334155;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.bulk-apply-item-row input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-blue);
+    cursor: pointer;
+}
+
 /* 배정 카드 내부의 체크 지침 온오프 토글 스위치 */
 .assign-toggle-item {
     display: flex;

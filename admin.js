@@ -2353,6 +2353,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
         const siteNoteValue = fields.현장특이사항 || '';
 
+        // 같은 카테고리(문+틀/샤시 등)의 다른 품목에 지침 체크 상태를 일괄 적용하는 버튼용 - 대상이 1개 이상 있을 때만 노출
+        const masterItemInfo = (currentDetailData.masterItems || []).find(m => m.품목명 === fields.시공품목);
+        const itemCategory = masterItemInfo ? masterItemInfo.카테고리 : '';
+        const bulkApplyCandidateCount = (!뒷정리 && itemCategory) ? (currentDetailData.tasks || []).filter(t => {
+            if (t.id === recordId) return false;
+            if (!t.fields[stage + '기사']) return false;
+            const tCat = ((currentDetailData.masterItems || []).find(m => m.품목명 === t.fields.시공품목) || {}).카테고리;
+            return tCat === itemCategory;
+        }).length : 0;
+        const bulkApplyBtnHtml = bulkApplyCandidateCount > 0
+            ? `<button type="button" class="bulk-apply-btn" onclick="event.stopPropagation(); openBulkApplyGuidelinesModal('${recordId}', '${stage}')">📋 다른 ${itemCategory} 품목에 적용 (${bulkApplyCandidateCount})</button>`
+            : '';
+
         bodyHtml += `<div class="assignment-card-body" style="display: none; padding-top: 10px;">`;
 
         if (guidelinesText) {
@@ -2363,6 +2376,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             bodyHtml += `
                 <h4 style="font-size: 11px; margin-bottom: 8px; color: #666;">${뒷정리 ? '📋 할 일' : '💡 현장 품질 지침'} (오른쪽 체크 해제 시 이 현장에서만 제외 - 아래 저장 버튼 눌러야 반영됨)</h4>
+                ${bulkApplyBtnHtml}
                 <div class="assign-checkbox-list">
             `;
 
@@ -2803,6 +2817,113 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (body) body.style.display = 'block';
         if (arrow) arrow.textContent = '▲';
     }
+
+    // ===== 지침 체크 상태 일괄 적용 (같은 카테고리 품목들에게 한번에 복사) =====
+    // 예: "방2문+틀" 밑작업 카드에서 지침 몇 개를 체크 해제한 뒤, 이 버튼으로 같은 "문+틀" 카테고리의
+    // 방1문+틀/방3문+틀/... 등 다른 품목에도 그대로 적용 - 하나씩 들어가서 반복 체크할 필요 없게 함.
+    let bulkApplySourceState = null; // { recordId, stage, excludedText, importantText }
+
+    window.openBulkApplyGuidelinesModal = function(recordId, stage) {
+        const task = currentDetailData.tasks.find(t => t.id === recordId);
+        if (!task) return;
+        const fields = task.fields;
+        const masterItemInfo = (currentDetailData.masterItems || []).find(m => m.품목명 === fields.시공품목);
+        const itemCategory = masterItemInfo ? masterItemInfo.카테고리 : '';
+
+        // 지금 화면에 보이는(저장 전일 수도 있는) 체크 상태를 그대로 읽어서 소스로 삼음
+        const card = document.querySelector(`.assignment-card[data-record-id="${recordId}"][data-stage="${stage}"]`);
+        const cardBody = card ? card.querySelector('.assignment-card-body') : null;
+        const excludedLines = [];
+        const importantLines = [];
+        if (cardBody) {
+            cardBody.querySelectorAll('.guideline-include-input').forEach(input => {
+                if (!input.checked) excludedLines.push(input.dataset.line);
+            });
+            cardBody.querySelectorAll('.guideline-star-btn.active').forEach(btn => {
+                importantLines.push(btn.dataset.line);
+            });
+        }
+
+        const candidates = (currentDetailData.tasks || []).filter(t => {
+            if (t.id === recordId) return false;
+            if (!t.fields[stage + '기사']) return false;
+            const tCat = ((currentDetailData.masterItems || []).find(m => m.품목명 === t.fields.시공품목) || {}).카테고리;
+            return tCat === itemCategory;
+        });
+
+        bulkApplySourceState = {
+            recordId, stage,
+            excludedText: excludedLines.join('\n'),
+            importantText: importantLines.join('\n')
+        };
+
+        document.getElementById('bulkApplyModalTitle').textContent = `📋 "${fields.시공품목}" (${stage}) 지침을 다른 ${itemCategory} 품목에 적용`;
+
+        const listEl = document.getElementById('bulkApplyItemList');
+        if (candidates.length === 0) {
+            listEl.innerHTML = `<div class="empty-state" style="padding:12px 0;">같은 카테고리(${itemCategory})의 다른 품목이 이 현장에 없습니다.</div>`;
+        } else {
+            listEl.innerHTML = candidates.map(t => `
+                <label class="bulk-apply-item-row">
+                    <input type="checkbox" class="bulk-apply-target-check" value="${t.id}">
+                    <span>${t.fields.시공품목}</span>
+                </label>
+            `).join('');
+        }
+
+        document.getElementById('bulkApplyModal').style.display = 'flex';
+    };
+
+    window.toggleBulkApplyAll = function(checked) {
+        document.querySelectorAll('.bulk-apply-target-check').forEach(cb => { cb.checked = checked; });
+    };
+
+    window.closeBulkApplyModal = function() {
+        document.getElementById('bulkApplyModal').style.display = 'none';
+        bulkApplySourceState = null;
+    };
+
+    window.confirmBulkApplyGuidelines = async function() {
+        if (!bulkApplySourceState) return;
+        const targetIds = [...document.querySelectorAll('.bulk-apply-target-check:checked')].map(cb => cb.value);
+        if (targetIds.length === 0) {
+            showToast('적용할 품목을 선택해 주세요.', 'danger');
+            return;
+        }
+        const { recordId, stage, excludedText, importantText } = bulkApplySourceState;
+
+        showLoading(`적용 중... (0/${targetIds.length})`);
+        let done = 0;
+        for (const targetId of targetIds) {
+            const targetTask = currentDetailData.tasks.find(t => t.id === targetId);
+            const noteText = targetTask ? (targetTask.fields.현장특이사항 || '') : '';
+            try {
+                const response = await fetchWithTimeout(API_SAVE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'update_site_note',
+                        projectCode: activeProjectCode,
+                        recordId: targetId,
+                        noteText,
+                        excludedText,
+                        importantText
+                    })
+                });
+                if (!response.ok) throw new Error('실패');
+            } catch (e) {
+                console.error(e);
+            }
+            done++;
+            showLoading(`적용 중... (${done}/${targetIds.length})`);
+        }
+        hideLoading();
+
+        window.closeBulkApplyModal();
+        showToast(`${done}개 품목에 지침을 적용했습니다.`);
+        await showProjectDetail(activeProjectCode);
+        reopenAssignmentCard(recordId, stage);
+    };
 
     // 9. 블로그 발행 모달 (일차별 탭 UI)
     function createEmptyDayDraft(dayNumber) {
