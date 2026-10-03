@@ -1539,14 +1539,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // 현장명 수정 (제목 옆 연필 아이콘) - 오타 정정이나 동/호수 추가 등 간단한 수정용
-    window.renameProjectPrompt = async function() {
+    // 제목 줄바꿈 위치는 이 기기(localStorage)에만 기억한다. 실제 현장명은 한 줄로 저장한다 -
+    // 드라이브 폴더 검색·노션 제목 등이 현장명을 그대로 쓰기 때문에 이름 안에 줄바꿈을 넣지 않는다.
+    const TITLE_BREAK_KEY = 'siteTitleBreaks_v1';
+    function loadTitleBreaks() {
+        try { return JSON.parse(localStorage.getItem(TITLE_BREAK_KEY)) || {}; } catch (e) { return {}; }
+    }
+    function titleWithBreaks(projectId, name) {
+        const lines = loadTitleBreaks()[projectId];
+        return (Array.isArray(lines) && lines.join(' ') === name) ? lines.join('\n') : name;
+    }
+    function rememberTitleBreaks(projectId, lines) {
+        const map = loadTitleBreaks();
+        if (lines.length > 1) map[projectId] = lines; else delete map[projectId];
+        try { localStorage.setItem(TITLE_BREAK_KEY, JSON.stringify(map)); } catch (e) { /* 저장 실패해도 이름 변경은 계속 */ }
+    }
+
+    // 현장명 수정 (제목 앞 연필 아이콘) - 오타 정정이나 동/호수 추가, 제목 줄 나누기용
+    window.renameProjectPrompt = function() {
         if (!activeProjectCode) return;
         const current = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
-        const name = prompt("현장명을 입력해 주세요:", current);
-        if (!name || !name.trim()) return;
-        const newName = name.trim();
-        if (newName === current) return;
+        document.getElementById('renameInput').value = titleWithBreaks(activeProjectCode, current);
+        document.getElementById('renameModal').style.display = 'flex';
+    };
+
+    window.closeRenameModal = function() {
+        document.getElementById('renameModal').style.display = 'none';
+    };
+
+    window.submitRenameProject = async function() {
+        if (!activeProjectCode) return;
+        const current = (currentDetailData && currentDetailData.project && currentDetailData.project.현장명) || '';
+        const lines = document.getElementById('renameInput').value.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length === 0) return;
+        const newName = lines.join(' ');
+        closeRenameModal();
+        rememberTitleBreaks(activeProjectCode, lines);
+        if (newName === current) {
+            detailProjectTitle.textContent = titleWithBreaks(activeProjectCode, current);
+            return;
+        }
 
         showLoading("현장명 변경 중...");
         try {
@@ -1798,8 +1830,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderDetailSection() {
         const p = currentDetailData.project;
-        detailProjectTitle.textContent = p.현장명;
-        detailProjectDate.textContent = `시공일: ${p.시공일자 || '미정'}`;
+        detailProjectTitle.textContent = titleWithBreaks(activeProjectCode, p.현장명);
+        const dateParts = String(p.시공일자 || '').split('-');
+        detailProjectDate.textContent = `시공일: ${dateParts.length === 3 ? `${Number(dateParts[1])}/${Number(dateParts[2])}` : '미정'}`;
         const dateInput = document.getElementById('detailDateInput');
         if (dateInput) {
             dateInput.value = p.시공일자 || '';
