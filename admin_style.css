@@ -2993,3 +2993,46 @@ body {
 .annotate-footer .card-btn {
     flex: 1;
 }
+
+/* ===== 네이비 대시보드 테마 (2026-10-03): 네이비 헤더 + 민트 포인트. 위의 기본 스타일을 덮어쓴다 ===== */
+:root {
+    --bg-body: #eef1f6;
+    --text-main: #1d2740;
+    --text-muted: #6b7690;
+    --border-color: #e1e6ef;
+    --primary-blue: #1f2a44;
+    --primary-hover: #2b3a5e;
+    --primary-light: #e8ecf4;
+    --accent-gray: #eef1f6;
+    --accent-mint: #3ec7a1;
+}
+
+.admin-header {
+    background: #1f2a44;
+    border-bottom: none;
+    box-shadow: none;
+}
+.logo-area h1 { color: #fff; }
+.app-version-badge { background: rgba(255, 255, 255, 0.12); color: #9fb0d0; }
+.refresh-btn { color: #c9d4ea; }
+.refresh-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.nav-btn { background: rgba(255, 255, 255, 0.08); color: #dbe3f3; }
+.nav-btn.active, .nav-btn:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+#newProjectBtn, #newProjectBtn:hover { background: var(--accent-mint); color: #0b2a22; }
+
+.detail-header-card {
+    border: none;
+    border-left: 4px solid var(--accent-mint);
+    box-shadow: 0 1px 3px rgba(31, 42, 68, 0.06);
+}
+.detail-date { background: var(--primary-light); color: #1f2a44; }
+.action-btn.copy, .action-btn.link-copy { background: var(--accent-gray); color: var(--text-main); }
+.action-btn.copy:hover, .action-btn.link-copy:hover { background: var(--border-color); }
+.action-btn.publish { background: #1f2a44; color: #fff; }
+.action-btn.publish:hover { background: #2b3a5e; }
+
+.item-select-bar { border: none; box-shadow: 0 1px 3px rgba(31, 42, 68, 0.06); }
+.board-column { background: #e4e9f2; }
+.column-header { border-bottom-color: #d3dbe9; }
+.column-header h3 { color: var(--text-main); }
+.count-badge { background: #d3dbe9; color: #1f2a44; }
