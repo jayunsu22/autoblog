@@ -3040,7 +3040,7 @@ body {
 /* 현장 제목 카드: 연필 + 제목 + 시공일을 한 흐름으로 이어 붙인다.
    제목이 한 줄이면 그 뒤에, 두 줄이면 마지막 줄 끝에 시공일이 붙는다 */
 .detail-title-wrap { display: block; flex: 1 1 280px; }
-.detail-title-wrap .title-edit-btn { display: inline; vertical-align: baseline; padding: 0 6px 0 0; opacity: 1; }
+.detail-title-wrap .title-edit-btn { display: inline; vertical-align: baseline; padding: 0 0 0 8px; opacity: 1; }
 #detailProjectTitle { display: inline; font-size: 18px; line-height: 1.5; white-space: pre-line; word-break: keep-all; }
 .detail-date-wrap { margin-left: 8px; vertical-align: baseline; }
 .detail-date { font-size: 12.5px; padding: 2px 8px; }
