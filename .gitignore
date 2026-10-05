@@ -8,6 +8,11 @@
 !index.html
 !style.css
 !app-switcher.js
+!.github/
+!.github/workflows/
+!.github/workflows/n8n-health.yml
+!.github/scripts/
+!.github/scripts/n8n-health.sh
 !gallery.html
 !manifest.json
 !icon-192.png

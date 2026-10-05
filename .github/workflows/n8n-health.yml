@@ -1,0 +1,49 @@
+name: n8n 외부 점검
+
+# 5분마다 n8n 서버·DB·웹훅을 밖에서 확인하고, 장애/복구를 텔레그램과 GitHub 이메일로 알린다.
+# 텔레그램은 저장소 Secrets 에 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 가 있을 때만 간다.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      force_webhook:
+        description: '실제 웹훅(partner-info)도 지금 점검'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n8n-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 이전 상태 불러오기
+        uses: actions/cache/restore@v4
+        with:
+          path: state.txt
+          key: n8n-health-none
+          restore-keys: n8n-health-
+
+      - name: 점검
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE_WEBHOOK: ${{ github.event.inputs.force_webhook == 'true' && '1' || '0' }}
+        shell: bash   # -eo pipefail 이 켜져야 아래 tee 가 스크립트의 종료코드(알림 실행=1)를 가리지 않는다
+        run: bash .github/scripts/n8n-health.sh | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: 상태 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.txt
+          key: n8n-health-${{ github.run_id }}-${{ github.run_attempt }}
