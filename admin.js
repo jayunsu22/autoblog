@@ -405,8 +405,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const headerNavEl = document.getElementById('headerNav');
             if (headerNavEl) headerNavEl.style.display = 'none';
         }
+        // 일정 앱에서 넘어오는 주인용 딥링크 (admin.html#site=<현장 id>). 현장소장 보기(?code=)에서는 무시한다.
+        // 암호 확인이 끝난 뒤에만 이 함수가 불리므로 암호 화면을 건너뛰지 않는다.
+        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)$/.exec(location.hash);
+        const hashCode = hashMatch ? hashMatch[1] : '';
+        if (hashMatch) history.replaceState(null, '', location.pathname + location.search);
         loadProjectList().then(() => {
-            const targetCode = scopedProjectCode || localStorage.getItem('lastActiveProjectCode');
+            const targetCode = scopedProjectCode || hashCode || localStorage.getItem('lastActiveProjectCode');
             if (targetCode) {
                 // 앱 재진입 - 저장해둔 화면을 바로 띄우고 최신화는 뒤에서 (로딩창 대기 없음)
                 showProjectDetail(targetCode, { useCache: true });
