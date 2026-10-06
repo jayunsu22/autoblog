@@ -3905,9 +3905,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemConfigModal').style.display = 'none';
     };
 
+    let itemConfigTab = ''; // 품목설정에서 지금 보고 있는 카테고리 탭
+
+    // 카테고리 값 '뒷정리'는 저장 값이라 그대로 두고, 화면에서만 '현장정리'로 보여준다
+    function itemCategoryLabel(cat) { return cat === '뒷정리' ? '현장정리' : cat; }
+
+    window.selectItemConfigTab = function(cat) {
+        itemConfigTab = cat;
+        renderItemConfigList();
+        document.getElementById('itemConfigBody').scrollTop = 0;
+    };
+
     function renderItemConfigList() {
         const container = document.getElementById('itemConfigBody');
+        const tabsEl = document.getElementById('itemConfigTabs');
         if (!globalMasterItems || globalMasterItems.length === 0) {
+            tabsEl.innerHTML = '';
             container.innerHTML = `<div class="empty-state">등록된 시공품목이 없습니다. 아래에서 새 품목을 추가해 주세요.</div>`;
             return;
         }
@@ -3937,9 +3950,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             return rankA - rankB;
         });
 
+        // 보고 있던 탭이 없어졌으면(카테고리를 바꿔 비었을 때 등) 첫 탭으로
+        if (!sortedCategoryEntries.some(([c]) => c === itemConfigTab)) itemConfigTab = sortedCategoryEntries[0][0];
+
+        tabsEl.innerHTML = sortedCategoryEntries.map(([category, indices]) =>
+            `<button type="button" class="gallery-zone-tab${category === itemConfigTab ? ' active' : ''}" data-cat="${category.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" onclick="selectItemConfigTab(this.dataset.cat)">${itemCategoryLabel(category)} (${indices.length})</button>`
+        ).join('');
+        const activeTab = tabsEl.querySelector('.active');
+        if (activeTab) tabsEl.scrollLeft = activeTab.offsetLeft - (tabsEl.clientWidth - activeTab.offsetWidth) / 2;
+
         let html = "";
-        sortedCategoryEntries.forEach(([category, indices]) => {
-            html += `<h3 class="item-config-category-heading">${category} (${indices.length})</h3>`;
+        sortedCategoryEntries.filter(([category]) => category === itemConfigTab).forEach(([category, indices]) => {
             indices.forEach(idx => {
                 const item = globalMasterItems[idx];
                 html += `
@@ -4323,6 +4344,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             closeItemEditModal();
+            itemConfigTab = categoryText || '기타'; // 저장한 품목이 있는 탭으로 이동 (카테고리를 바꿨어도 바로 보이게)
             renderItemConfigList();
         } catch (error) {
             console.error(error);
