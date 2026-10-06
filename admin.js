@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isScopedManagerView = !!scopedProjectCode;
 
     // 0. 관리자 암호 잠금 (간단한 접근 차단용 - 강력한 보안은 아니고, 평문 대신 해시로만 비교)
-    const ADMIN_PIN_HASH = '0f0a7bcf9f760e453e4719af259d31ddba9a638dd73831df3e244b615a7c4c7e';
+    const ADMIN_PIN_HASH = 'a003cd9b9678a76cb3d2c7716575044695340503a755935065154c30ce40ea20';
     const ADMIN_UNLOCK_KEY = 'adminUnlocked';
     // 열려 있다는 표시는 암호 해시에서 따온 값이라, 암호를 바꾸면 이미 열려 있던 모든 기기가 한 번 잠긴다(예전 값 '1' 도 무효)
     const ADMIN_UNLOCK_VALUE = ADMIN_PIN_HASH.slice(0, 16);
