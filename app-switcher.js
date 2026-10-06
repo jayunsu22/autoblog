@@ -216,7 +216,15 @@
     document.getElementById('aswOverlay').classList.remove('on');
   }
 
+  // 사장님만 쓰는 앱에서만 버튼을 단다. 팀원·고객·가맹점이 보는 화면은 data-app-id 가 여기 없어서
+  // 예전 화면(이미 저장돼 있던 HTML)이 이 파일을 불러와도 버튼이 안 생긴다 (2026-10-06).
+  var OWNER_APPS = ['admin', 'settle', 'quotepro', 'schedule'];
+
   function init() {
+    if (OWNER_APPS.indexOf(currentAppId) === -1) {
+      Array.prototype.forEach.call(document.querySelectorAll('.aswBtn, #aswOverlay'), function (el) { el.remove(); });
+      return;
+    }
     // 바깥 사람에게 보내는 주소(예: 현장소장용 admin.html?code=…)에서는 버튼을 아예 달지 않는다.
     // 스크립트 태그에 data-hide-when-param="code" 를 주면 주소에 ?code= 가 있을 때 숨긴다.
     var hideParam = currentScript ? currentScript.getAttribute('data-hide-when-param') : '';
