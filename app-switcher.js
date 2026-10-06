@@ -10,7 +10,7 @@
     { id: 'admin', name: '필름현장관리자', icon: '🏢', url: 'https://jayunsu22.github.io/autoblog/admin.html' },
     { id: 'settle', name: '현장 정산견적', icon: '🧮', url: 'https://songil.netlify.app/settle.html' },
     { id: 'worker', name: '현장 품질관리', icon: '📸', url: 'https://songil.netlify.app/worker/' },
-    { id: 'quote1min', name: '1분견적', icon: '⚡', url: 'https://songil.netlify.app/' },
+    { id: 'quote1min', name: '1분견적', icon: '⚡', url: 'https://songil.netlify.app/songil' },
     { id: 'filmfind', name: '1분견적 필름찾기', icon: '🎨', url: 'https://songil.netlify.app/film/' },
     { id: 'apply', name: '1분견적 무료가입', icon: '✍️', url: 'https://songil.netlify.app/apply.html' },
     { id: 'partners', name: '1분견적 파트너스', icon: '🤝', url: 'https://songil.netlify.app/dashboard_index.html' },
@@ -28,6 +28,10 @@
       if (!raw) return DEFAULT_APPS.slice();
       var parsed = JSON.parse(raw);
       if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_APPS.slice();
+      // 예전에 저장된 1분견적 주소(가맹점 코드 없는 루트)는 "로딩중.."에서 멈추므로 /songil 로 바로잡는다
+      parsed.forEach(function (a) {
+        if (a && /^https:\/\/songil\.netlify\.app\/?$/.test(a.url || '')) a.url = 'https://songil.netlify.app/songil';
+      });
       return parsed;
     } catch (e) {
       return DEFAULT_APPS.slice();
