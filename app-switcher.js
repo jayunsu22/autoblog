@@ -217,6 +217,10 @@
   }
 
   function init() {
+    // 바깥 사람에게 보내는 주소(예: 현장소장용 admin.html?code=…)에서는 버튼을 아예 달지 않는다.
+    // 스크립트 태그에 data-hide-when-param="code" 를 주면 주소에 ?code= 가 있을 때 숨긴다.
+    var hideParam = currentScript ? currentScript.getAttribute('data-hide-when-param') : '';
+    if (hideParam && new URLSearchParams(location.search).has(hideParam)) return;
     injectStyle();
 
     var btn = document.createElement('button');
