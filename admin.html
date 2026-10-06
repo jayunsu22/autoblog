@@ -332,8 +332,8 @@
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--text-main); cursor: pointer;">
                     <input type="checkbox" id="galleryTypeRaw" onchange="toggleGalleryTypeFilter('원본')"> 원본
                 </label>
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--text-main); cursor: pointer;" title="뒷정리 사진은 관리자만 봅니다. 공유 링크에는 나가지 않습니다.">
-                    <input type="checkbox" id="galleryTypeCleanup" onchange="toggleGalleryTypeFilter('뒷정리')"> 🧹 뒷정리
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--text-main); cursor: pointer;" title="현장정리 사진은 관리자만 봅니다. 공유 링크에는 나가지 않습니다.">
+                    <input type="checkbox" id="galleryTypeCleanup" onchange="toggleGalleryTypeFilter('뒷정리')"> 🧹 현장정리
                 </label>
                 <button type="button" onclick="copyGalleryShareLink()" style="padding: 8px 14px; font-size: 12.5px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; margin-left: auto;">🔗 공유복사</button>
             </div>
@@ -535,7 +535,7 @@
                 <option value="샤시">샤시</option>
                 <option value="가구">가구</option>
                 <option value="몰딩">몰딩</option>
-                <option value="뒷정리">뒷정리</option>
+                <option value="뒷정리">현장정리</option>
                 <option value="기타">기타</option>
             </select>
 
@@ -611,7 +611,7 @@
     </div>
 
     <script src="owner-key.js?v=20261006d"></script>
-    <script src="admin.js?v=20261006c"></script>
+    <script src="admin.js?v=20261006d"></script>
     <script src="app-switcher.js?v=20261006e" data-app-id="admin" data-hide-when-param="code"></script>
 </body>
 </html>

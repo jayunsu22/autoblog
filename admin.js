@@ -1942,7 +1942,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cleanupTab = document.createElement('button');
             cleanupTab.type = 'button';
             cleanupTab.className = `item-category-tab cleanup-tab ${activeZoneTab === CLEANUP_TAB ? 'active' : ''}`;
-            cleanupTab.textContent = 켜진것.length ? `🧹 뒷정리 (${끝낸수}/${켜진것.length})` : `🧹 뒷정리 (${cleanupItems.length})`;
+            cleanupTab.textContent = 켜진것.length ? `🧹 현장정리 (${끝낸수}/${켜진것.length})` : `🧹 현장정리 (${cleanupItems.length})`;
             cleanupTab.addEventListener('click', () => {
                 activeZoneTab = CLEANUP_TAB;
                 renderZoneAssignBoard();
@@ -2312,7 +2312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const zoneNames = sortZones([...zoneMap.keys()]);
         const groups = zoneNames.map(zone => ({ key: `z:${zone}`, label: zone, items: zoneMap.get(zone) }));
-        if (cleanupItems.length > 0) groups.push({ key: 'z:__CLEANUP__', label: '🧹 뒷정리', items: cleanupItems });
+        if (cleanupItems.length > 0) groups.push({ key: 'z:__CLEANUP__', label: '🧹 현장정리', items: cleanupItems });
         return groups;
     }
 
@@ -2672,7 +2672,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const 뒷정리 = stage === '시공' && is뒷정리(fields.시공품목);
         const 매일 = 뒷정리 && is매일(fields.시공품목);
         const isCompleted = 뒷정리 ? 뒷정리완료(fields, fields.시공품목) : !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
-        const stageLabel = 뒷정리 ? (매일 ? '🧹 뒷정리·매일' : '🧹 뒷정리') : stage;
+        const stageLabel = 뒷정리 ? (매일 ? '🧹 현장정리·매일' : '🧹 현장정리') : stage;
 
         const card = document.createElement('div');
         card.className = `assignment-card${isCompleted ? ' completed' : ''} ${stage === '밑작업' ? 'stage-prep' : (뒷정리 ? 'stage-cleanup' : 'stage-construction')}`;
@@ -2763,7 +2763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isValid = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
         const photos = (fields.시공후사진 || []).filter(isValid);
         const photosHtml = photos.length
-            ? `<div class="cleanup-record-photos">${photos.slice(-12).map(p => `<a href="${p.url}" target="_blank" rel="noopener"><img src="${(p.thumbnails && p.thumbnails.small && p.thumbnails.small.url) || p.url}" alt="뒷정리 사진" loading="lazy"></a>`).join('')}</div>`
+            ? `<div class="cleanup-record-photos">${photos.slice(-12).map(p => `<a href="${p.url}" target="_blank" rel="noopener"><img src="${(p.thumbnails && p.thumbnails.small && p.thumbnails.small.url) || p.url}" alt="현장정리 사진" loading="lazy"></a>`).join('')}</div>`
             : '';
         return `
             <div class="cleanup-record">
