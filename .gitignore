@@ -8,6 +8,7 @@
 !index.html
 !style.css
 !app-switcher.js
+!owner-key.js
 !.github/
 !.github/workflows/
 !.github/workflows/n8n-health.yml
