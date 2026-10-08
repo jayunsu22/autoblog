@@ -804,7 +804,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const isValidPhoto = (p) => !!p && p.url && !p.url.includes('1x1.png') && !(p.filename && p.filename.includes('1x1.png'));
 
-            // 뒷정리('한번에' 품목) 사진은 시공 사진과 섞지 않고 '🧹 뒷정리' 로 따로 모은다
+            // 뒷정리('한번에' 품목) 사진은 시공 사진과 섞지 않고 '현장정리' 구역으로 따로 모은다
             const 뒷정리품목 = new Set((data.masterItems || []).filter(item => item.작업방식 === '한번에').map(item => item.품목명));
 
             const photos = [];
@@ -815,7 +815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (뒷정리품목.has(fields.시공품목)) {
                     (fields.시공후사진 || []).forEach((photo, idx) => {
                         if (isValidPhoto(photo)) {
-                            photos.push({ url: photo.url, 구역: '뒷정리', 품목명: fields.시공품목 || '', type: '뒷정리', taskId: task.id, fieldName: '시공후사진', slotIndex: idx });
+                            photos.push({ url: photo.url, 구역: '현장정리', 품목명: fields.시공품목 || '', type: '뒷정리', taskId: task.id, fieldName: '시공후사진', slotIndex: idx });
                         }
                     });
                     return;
@@ -2582,8 +2582,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         cardEntries.sort((a, b) => a.priority - b.priority);
-        // 뒷정리 카드는 하루 일과 끝에 하는 일이라 시공 카드들 아래로 모은다 (그 안에서는 원래 순서)
-        cardEntries.sort((a, b) => (!!a.뒷정리 === !!b.뒷정리) ? 0 : (a.뒷정리 ? 1 : -1));
+        // 현장정리 카드: '현장세팅' 처럼 하루 시작에 하는 일은 맨 앞, 나머지(현장마무리 등)는 하루 끝이라
+        // 시공 카드들 아래로 모은다. 기사님 앱과 같은 규칙 (2026-10-08)
+        const 정리자리 = (e) => !e.뒷정리 ? 1 : (/세팅/.test(e.task.fields.시공품목 || '') ? 0 : 2);
+        cardEntries.sort((a, b) => 정리자리(a) - 정리자리(b));
         cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
 
         let count = 0;
