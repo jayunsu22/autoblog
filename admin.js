@@ -2544,6 +2544,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 2. 임시 로컬 캐시를 이용한 순서 정렬 백업 (에어테이블 우선순위 적용 전 과도기 지원)
         const sortOrderKey = `task_sort_order_${activeProjectCode}`;
         const savedOrder = JSON.parse(localStorage.getItem(sortOrderKey) || "[]");
+        // 서버에 아직 못 올린 순서가 있으면 그 순서로 보여준다 (저장 실패해도 화면이 되돌아가지 않게)
+        const unsentOrder = readUnsentOrder(activeProjectCode);
         
         // 밑작업/시공을 완전히 독립된 카드로 나열 - 같은 품목이어도 각자의 우선순위 필드로 따로 정렬됨
         // (밑작업을 몰아서 하고 시공은 나중에 하는 경우가 많아서, 둘을 묶어서 같이 옮기지 않음)
@@ -2552,12 +2554,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fields = task.fields;
 
             if (fields.밑작업기사 && (!filterWorkerName || fields.밑작업기사 === filterWorkerName)) {
-                const priority = fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999);
+                const unsentP = unsentOrder[task.id + '|밑작업'];
+                const priority = unsentP !== undefined ? unsentP : (fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999));
                 cardEntries.push({ task, stage: '밑작업', assignee: fields.밑작업기사, isCompleted: !!fields.밑작업완료, priority });
             }
 
             if (fields.시공기사 && (!filterWorkerName || fields.시공기사 === filterWorkerName)) {
-                const priority = fields.시공우선순위 !== undefined ? fields.시공우선순위 : (fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999));
+                const unsentP = unsentOrder[task.id + '|시공'];
+                const priority = unsentP !== undefined ? unsentP : (fields.시공우선순위 !== undefined ? fields.시공우선순위 : (fields.작업우선순위 !== undefined ? fields.작업우선순위 : (savedOrder.indexOf(task.id) !== -1 ? savedOrder.indexOf(task.id) : 999)));
                 const 뒷정리 = is뒷정리(fields.시공품목);
                 const isCompleted = 뒷정리 ? 뒷정리완료(fields, fields.시공품목) : !!fields.시공완료;
                 cardEntries.push({ task, stage: '시공', assignee: fields.시공기사, isCompleted, priority, 뒷정리 });
@@ -2576,6 +2580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         assignedCountBadge.textContent = `${count}개`;
+        if (count > 0) scheduleOrderSync();
         if (count === 0) {
             boardAssignmentList.innerHTML = `<div class="drag-placeholder">우측의 품목 카드를 이곳이나 왼쪽 기사 카드 위로 드래그하여 배정하세요.</div>`;
         }
@@ -2803,39 +2808,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 현재 배정표 DOM 순서를 로컬스토리지 + 서버(우선순위 필드)에 저장
-    // 같은 품목의 밑작업/시공 카드는 (동일 기사에게 배정된 경우) 작업자 화면에서 항상 붙어서
-    // 나오므로, 레코드당 우선순위를 하나로 통일해서 저장 - 먼저 나오는 카드의 위치를 기준으로 함
-    async function persistAssignmentOrder() {
-        // 1. 배정표 내 카드 순서를 DOM 그대로 수집 - 밑작업/시공은 서로 독립된 카드라 각자 우선순위를 가짐
+    // 밑작업/시공은 서로 독립된 카드라 각자 우선순위(작업우선순위/시공우선순위)를 가짐.
+    //
+    // (2026-10-08) 예전에는 서버 저장이 실패해도 화면 데이터에 '저장됨' 으로 먼저 적어버려서,
+    // 다음 번에 바뀐 것만 보낼 때 실패했던 카드들이 영영 안 올라갔다 - 관리자 화면(이 폰의
+    // 로컬 순서)은 맞는데 기사님 화면(서버 값)은 순서가 안 바뀌는 원인이었다.
+    // 이제 서버가 받은 뒤에만 '저장됨' 으로 적고, 못 보낸 것은 폰에 모아뒀다가 다음에 같이 보낸다.
+    const UNSENT_ORDER_PREFIX = 'task_order_unsent_';
+    function readUnsentOrder(projectCode) {
+        try { return JSON.parse(localStorage.getItem(UNSENT_ORDER_PREFIX + projectCode) || '{}') || {}; }
+        catch (e) { return {}; }
+    }
+    function writeUnsentOrder(projectCode, map) {
+        try {
+            if (Object.keys(map).length) localStorage.setItem(UNSENT_ORDER_PREFIX + projectCode, JSON.stringify(map));
+            else localStorage.removeItem(UNSENT_ORDER_PREFIX + projectCode);
+        } catch (e) { /* 저장 공간 문제는 무시 - 다음 순서 변경 때 다시 보낸다 */ }
+    }
+
+    let orderSaving = false;
+    async function persistAssignmentOrder(options = {}) {
+        const { silent = false } = options;
+        // 1. 배정표 내 카드 순서를 DOM 그대로 수집
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
         const allEntries = cards.map((c, idx) => ({ id: c.dataset.recordId, stage: c.dataset.stage, priority: idx + 1 }));
+        const projectCode = activeProjectCode;
 
-        // 실제로 순위가 바뀐 작업만 서버로 전송 (전체를 매번 다시 보내면 목록이 길 때 느리고 실패하기 쉬움)
+        // 2. 서버 값과 다른 카드 + 지난번에 못 보낸 카드를 보낸다
+        const unsent = readUnsentOrder(projectCode);
         const reorderTasks = allEntries.filter(({ id, stage, priority }) => {
+            if (unsent[id + '|' + stage] !== undefined) return true;
             const task = currentDetailData.tasks.find(t => t.id === id);
             if (!task) return true;
             const currentVal = stage === '밑작업' ? task.fields.작업우선순위 : task.fields.시공우선순위;
             return currentVal !== priority;
         });
 
-        // 2. 임시 로컬 캐시에 정렬 순서 보관 (즉시 반영용)
-        const sortOrderKey = `task_sort_order_${activeProjectCode}`;
+        // 3. 이 폰의 순서 캐시 (화면을 바로 그 순서로 보여주는 데 쓴다)
+        const sortOrderKey = `task_sort_order_${projectCode}`;
         localStorage.setItem(sortOrderKey, JSON.stringify(allEntries.map(e => e.id)));
 
-        // 3. 로컬 데이터에도 바로 반영해서 즉시 화면에 순서가 보이게 함
-        allEntries.forEach(({ id, stage, priority }) => {
-            const task = currentDetailData.tasks.find(t => t.id === id);
-            if (!task) return;
-            if (stage === '밑작업') task.fields.작업우선순위 = priority;
-            else task.fields.시공우선순위 = priority;
-        });
-
         if (reorderTasks.length === 0) {
-            renderBoardAssignments();
-            return;
+            if (!silent) renderBoardAssignments();
+            return true;
         }
 
-        showLoading("우선순위 순서 저장 중...");
+        // 보내기 전에 '못 보낸 것' 으로 먼저 적어둔다 - 앱이 꺼지거나 통신이 끊겨도 다음에 다시 보낸다
+        reorderTasks.forEach(({ id, stage, priority }) => { unsent[id + '|' + stage] = priority; });
+        writeUnsentOrder(projectCode, unsent);
+
+        if (!silent) showLoading("우선순위 순서 저장 중...");
+        orderSaving = true;
+        let ok = false;
         try {
             const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
@@ -2846,14 +2870,59 @@ document.addEventListener('DOMContentLoaded', async () => {
                 })
             });
             if (!response.ok) throw new Error("우선순위 순서 저장 실패");
-            showToast("작업 우선순위 순서가 정상 저장되었습니다.");
+            ok = true;
+            // 서버가 받은 것만 '저장됨' 으로 적고, 못 보낸 목록에서 뺀다
+            reorderTasks.forEach(({ id, stage, priority }) => {
+                const task = currentDetailData.tasks.find(t => t.id === id);
+                if (task) {
+                    if (stage === '밑작업') task.fields.작업우선순위 = priority;
+                    else task.fields.시공우선순위 = priority;
+                }
+            });
+            const left = readUnsentOrder(projectCode);
+            reorderTasks.forEach(({ id, stage, priority }) => {
+                if (left[id + '|' + stage] === priority) delete left[id + '|' + stage];
+            });
+            writeUnsentOrder(projectCode, left);
+            if (!silent) showToast("작업 우선순위 순서가 정상 저장되었습니다.");
         } catch (error) {
             console.warn(error);
-            showToast("이 폰에는 순서가 반영됐지만, 서버 저장에 실패해서 다른 기기에는 안 보일 수 있습니다.", "danger");
+            if (!silent) showToast("서버 저장에 실패했습니다. 이 폰에만 반영됐고, 다음에 화면을 열 때 다시 보냅니다.", "danger");
         } finally {
-            hideLoading();
-            renderBoardAssignments();
+            orderSaving = false;
+            if (!silent) hideLoading();
+            if (activeProjectCode === projectCode) renderBoardAssignments();
         }
+        return ok;
+    }
+
+    // 배정표를 그린 뒤, 이 폰에서 정한 순서가 서버에 다 안 올라가 있으면 조용히 올린다.
+    // - 지난번에 못 보낸 순서가 남아 있을 때
+    // - 이 폰의 순서 캐시에는 있는데 서버 우선순위가 비어 있는 카드가 있을 때
+    //   (예전 버그로 서버에 안 올라간 순서 - 관리자 화면과 기사님 화면 순서가 달랐다)
+    let orderSyncTimer = null;
+    let orderSyncFailedAt = 0;   // 조용히 보내다 실패하면 1분은 다시 안 보낸다 (통신 끊긴 곳에서 계속 두드리지 않게)
+    function scheduleOrderSync() {
+        if (orderSaving || !activeProjectCode || !currentDetailData) return;
+        if (Date.now() - orderSyncFailedAt < 60000) return;
+        const projectCode = activeProjectCode;
+        const unsent = readUnsentOrder(projectCode);
+        const savedOrder = JSON.parse(localStorage.getItem(`task_sort_order_${projectCode}`) || "[]");
+        const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
+        const needs = cards.some(c => {
+            const id = c.dataset.recordId, stage = c.dataset.stage;
+            if (unsent[id + '|' + stage] !== undefined) return true;
+            const task = (currentDetailData.tasks || []).find(t => t.id === id);
+            if (!task) return false;
+            const val = stage === '밑작업' ? task.fields.작업우선순위 : task.fields.시공우선순위;
+            return (val === undefined || val === null) && savedOrder.indexOf(id) !== -1;
+        });
+        if (!needs) return;
+        clearTimeout(orderSyncTimer);
+        orderSyncTimer = setTimeout(() => {
+            if (activeProjectCode !== projectCode) return;
+            persistAssignmentOrder({ silent: true }).then(ok => { if (!ok) orderSyncFailedAt = Date.now(); });
+        }, 800);
     }
 
     // 순서 빠르게 정하기 모달 - 드래그가 번거로운 모바일에서, 원하는 순서대로 항목을 탭하면
