@@ -2223,11 +2223,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // 2. 기사 배정/취소 처리 (신규 활성화된 품목은 방금 받은 레코드 ID 사용)
-            const assignPromises = [];
+            //   - 이번에 끈 품목은 레코드가 방금 지워졌으므로 배정 취소를 보내지 않는다
+            //     (예전에는 지워진 레코드에 취소를 보내 '없는 레코드' 오류가 나고, 나머지는 다 저장됐는데도
+            //      '일부 저장 실패' 가 떠서 배정이 안 된 줄 알았다 - 2026-10-08)
+            //   - 하나가 실패해도 나머지는 그대로 보내고, 실패한 품목 이름을 알려준다
+            const assignJobs = [];
+            const failed = [];
             entries.forEach(([itemName, change]) => {
+                if (change.active === false) return;
                 const task = tasks.find(t => t.fields.시공품목 === itemName);
                 const recordId = newRecordIds[itemName] || (task && task.id);
-                if (!recordId) return;
+                const wantsAssign = ['밑작업', '시공'].some(stage => change[stage]);
+                if (!recordId) {
+                    if (wantsAssign) failed.push(`${itemName} (품목 켜기 확인 안 됨)`);
+                    return;
+                }
 
                 ['밑작업', '시공'].forEach(stage => {
                     if (change[stage] === undefined) return;
@@ -2237,23 +2247,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const body = change[stage]
                         ? { type: 'assign_worker', projectCode: activeProjectCode, recordId: recordId, workerName: change[stage], stage: stage }
                         : { type: 'unassign_worker', projectCode: activeProjectCode, recordId: recordId, stage: stage };
-                    assignPromises.push(
-                        fetchWithTimeout(API_SAVE_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(body)
-                        }).then(res => { if (!res.ok) throw new Error(`${itemName} ${stage} 배정 실패`); })
-                    );
+                    assignJobs.push({ label: `${itemName} ${stage}`, run: () => fetchWithTimeout(API_SAVE_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    }).then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); }) });
                 });
             });
-            await Promise.all(assignPromises);
+            const results = await Promise.allSettled(assignJobs.map(j => j.run()));
+            results.forEach((r, i) => { if (r.status === 'rejected') failed.push(assignJobs[i].label); });
 
-            showToast(`${entries.length}개 품목의 변경사항이 저장되었습니다!`);
             zonePendingChanges.clear();
+            if (failed.length) {
+                showToast(`저장 못 한 것: ${failed.join(', ')} — 다시 지정해 주세요. (나머지는 저장됨)`, "danger");
+            } else {
+                showToast(`${entries.length}개 품목의 변경사항이 저장되었습니다!`);
+            }
             await showProjectDetail(activeProjectCode);
         } catch (error) {
             console.error(error);
-            showToast("일부 변경사항 저장에 실패했습니다. 다시 확인해 주세요.", "danger");
+            showToast(`저장에 실패했습니다: ${error.message} — 다시 확인해 주세요.`, "danger");
             zonePendingChanges.clear();
             await showProjectDetail(activeProjectCode);
         } finally {
