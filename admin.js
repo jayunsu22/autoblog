@@ -1871,6 +1871,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 구역별 품목 활성화 + 기사 배정 매트릭스 (구역 탭 + 탭 내 품목 행 리스트)
     function renderZoneAssignBoard() {
+        // 저장 툴바는 맨 먼저 맞춘다 - 아래 '미완료' 탭·빈 구역은 중간에 return 해서, 예전엔 저장한 뒤에도
+        // 'N개 품목 변경사항 대기 중' 과 저장 버튼이 그대로 남아 있었다 (2026-10-09)
+        updateZoneSaveToolbar();
         const allItems = [...(currentDetailData.masterItems || [])];
         const activeItems = currentDetailData.activeItems || []; // 이미 현장에 개설 완료된 품목들
         const tasks = currentDetailData.tasks || [];
@@ -1997,8 +2000,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const task = tasks.find(t => t.fields.시공품목 === item.품목명);
             zoneAssignItemList.appendChild(createZoneItemRow(item, isActive, task, workers));
         });
-
-        updateZoneSaveToolbar();
     }
 
     function createZoneItemRow(item, isActive, task, workers, zoneLabel) {
