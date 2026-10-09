@@ -2954,10 +2954,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('orderPickModal').style.display = 'none';
     };
 
+    // 완료된 업무는 순서를 정할 필요가 없으니 목록에서 뺀다. 현장정리는 매일 하는 일이라 완료돼도 남긴다
+    function orderPickCards() {
+        return [...boardAssignmentList.querySelectorAll('.assignment-card')]
+            .filter(c => !c.classList.contains('completed') || c.classList.contains('stage-cleanup'));
+    }
+
     function renderOrderPickList() {
         const container = document.getElementById('orderPickBody');
         const statusEl = document.getElementById('orderPickStatus');
-        const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
+        const cards = orderPickCards();
 
         if (cards.length === 0) {
             container.innerHTML = `<div class="empty-state">배정된 작업이 없습니다.</div>`;
@@ -3003,8 +3009,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cardsByKey = new Map(cards.map(c => [`${c.dataset.recordId}__${c.dataset.stage}`, c]));
 
         // 탭한 순서대로 먼저 배치하고, 탭 안 한 나머지는 기존 화면 순서 그대로 뒤에 이어붙임
+        // (목록에 안 나온 완료 업무는 맨 뒤)
         const orderedKeys = [...orderPickSequence];
-        cards.forEach(c => {
+        const shown = new Set(orderPickCards());
+        [...cards.filter(c => shown.has(c)), ...cards.filter(c => !shown.has(c))].forEach(c => {
             const key = `${c.dataset.recordId}__${c.dataset.stage}`;
             if (!orderedKeys.includes(key)) orderedKeys.push(key);
         });
