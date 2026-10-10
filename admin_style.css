@@ -3049,3 +3049,40 @@ body {
     /* 제목 줄과 버튼들 사이에 구분선 */
     .detail-title-wrap { padding-bottom: 12px; border-bottom: 1px solid #d3dbe9; }
 }
+
+/* 품목 배정 ↔ 업무배정표 바로가기 탭 (모바일 전용: 두 구역이 세로로 길게 쌓여서 업무배정표까지 내려가기 힘들었다) */
+.board-jump-tabs { display: none; }
+@media (max-width: 900px) {
+    .board-jump-tabs {
+        display: flex;
+        gap: 8px;
+        position: sticky;
+        top: var(--admin-header-h, 0px);
+        z-index: 90;
+        padding: 8px 0;
+        margin-bottom: 8px;
+        background: var(--bg-body);
+    }
+    .board-jump-tab {
+        flex: 1 1 0;
+        padding: 11px 8px;
+        font-size: 14px;
+        font-weight: 800;
+        border-radius: 12px;
+        border: 1.5px solid var(--border-color);
+        background: #fff;
+        color: var(--text-muted);
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .board-jump-tab.active {
+        background: var(--primary-blue);
+        border-color: var(--primary-blue);
+        color: #fff;
+    }
+    /* 탭으로 이동했을 때 고정 헤더와 탭에 제목이 가려지지 않게 */
+    .items-column,
+    .assignment-column {
+        scroll-margin-top: calc(var(--admin-header-h, 0px) + var(--board-tabs-h, 0px) + 8px);
+    }
+}

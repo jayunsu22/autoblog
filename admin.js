@@ -258,6 +258,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // 모바일: 품목 배정이 길어서 업무배정표까지 내려가기 힘들다 → 두 구역 사이를 바로 오가는 탭.
+    // 넓은 화면(901px~)은 둘 다 보여서 탭을 CSS 가 숨긴다.
+    (function setupBoardJumpTabs() {
+        const bar = document.getElementById('boardJumpTabs');
+        const header = document.querySelector('.admin-header');
+        const itemsCol = document.querySelector('.items-column');
+        const assignCol = document.querySelector('.assignment-column');
+        if (!bar || !itemsCol || !assignCol) return;
+        // 고정 헤더 바로 밑에 탭을 붙이고, 이동했을 때 제목이 가려지지 않게 헤더·탭 높이를 CSS 변수로 알려준다
+        function syncHeights() {
+            const root = document.documentElement.style;
+            root.setProperty('--admin-header-h', (header ? header.offsetHeight : 0) + 'px');
+            root.setProperty('--board-tabs-h', bar.offsetHeight + 'px');
+        }
+        syncHeights();
+        window.addEventListener('resize', syncHeights);
+        const tabs = Array.from(bar.querySelectorAll('.board-jump-tab'));
+        function setActive(name) { tabs.forEach((t) => t.classList.toggle('active', t.dataset.target === name)); }
+        tabs.forEach((t) => t.addEventListener('click', () => {
+            const name = t.dataset.target;
+            if (name === 'assignment') assignCol.classList.add('open');   // 모바일에서 접혀 있던 업무배정표를 펼친다
+            syncHeights();
+            (name === 'assignment' ? assignCol : itemsCol).scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setActive(name);
+        }));
+        // 손으로 스크롤해도 지금 보고 있는 쪽 탭이 켜지게 (맨 아래까지 내려왔으면 업무배정표)
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+                ticking = false;
+                if (bar.offsetParent === null) return;   // 숨겨진 상태(넓은 화면)면 계산하지 않는다
+                const line = (header ? header.offsetHeight : 0) + bar.offsetHeight + 24;
+                const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+                setActive(atBottom || assignCol.getBoundingClientRect().top <= line ? 'assignment' : 'items');
+            });
+        }, { passive: true });
+    })();
+
     // 2. 유틸리티 기능
     function showLoading(text) {
         loadingText.textContent = text;
