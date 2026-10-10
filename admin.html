@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20261010a">
+    <link rel="stylesheet" href="admin_style.css?v=20261010b">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -127,12 +127,6 @@
                 </div>
             </div>
 
-            <!-- 모바일: 품목 배정이 길어서 업무배정표까지 내려가기 힘들다 → 두 구역을 바로 오가는 탭 (넓은 화면은 둘 다 보여서 CSS 가 숨김) -->
-            <div class="board-jump-tabs" id="boardJumpTabs">
-                <button type="button" class="board-jump-tab active" data-target="items">📦 품목 배정</button>
-                <button type="button" class="board-jump-tab" data-target="assignment">🤝 업무배정표</button>
-            </div>
-
             <!-- ★ 사장님 기획: 드래그 앤 드롭 3분할 업무 배분판 ★ -->
             <div class="drag-board-container">
                 <!-- 1열 (좌측): 시공 기사 목록 -->
@@ -147,6 +141,14 @@
                     <div class="column-body" id="boardWorkerList">
                         <!-- 기사 카드들이 세로로 생성됨 -->
                     </div>
+                </div>
+
+                <!-- 모바일: 품목 배정 | 업무배정표 탭. 탭을 누르면 같은 자리에서 내용이 바뀐다.
+                     넓은 화면은 두 구역이 나란히 보여서 CSS 가 탭을 숨기고 이 래퍼를 투명하게 만든다(원래 배치 그대로) -->
+                <div class="board-lower" id="boardLower" data-tab="items">
+                <div class="board-jump-tabs" id="boardJumpTabs">
+                    <button type="button" class="board-jump-tab active" data-target="items">📦 품목 배정 <span class="board-jump-count" id="boardTabItemCount"></span></button>
+                    <button type="button" class="board-jump-tab" data-target="assignment">🤝 업무배정표</button>
                 </div>
 
                 <!-- 3열 (우측): 구역별 품목 활성화 + 기사 배정 매트릭스 -->
@@ -194,6 +196,7 @@
                         <div class="drag-placeholder">우측의 품목 카드를 이곳이나 왼쪽 기사 카드 위로 드래그하여 배정하세요.</div>
                     </div>
                 </div>
+                </div><!-- /board-lower -->
             </div>
         </main>
     </div>
@@ -619,7 +622,7 @@
     </div>
 
     <script src="owner-key.js?v=20261006d"></script>
-    <script src="admin.js?v=20261010a"></script>
+    <script src="admin.js?v=20261010b"></script>
     <script src="app-switcher.js?v=20261006e" data-app-id="admin" data-hide-when-param="code"></script>
 </body>
 </html>

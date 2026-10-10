@@ -258,44 +258,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 모바일: 품목 배정이 길어서 업무배정표까지 내려가기 힘들다 → 두 구역 사이를 바로 오가는 탭.
-    // 넓은 화면(901px~)은 둘 다 보여서 탭을 CSS 가 숨긴다.
-    (function setupBoardJumpTabs() {
+    // 모바일: 품목 배정 | 업무배정표 탭 - 탭을 누르면 같은 자리에서 내용이 바뀐다.
+    // 넓은 화면(901px~)은 두 구역이 나란히 보여서 CSS 가 탭을 숨긴다.
+    (function setupBoardTabs() {
+        const lower = document.getElementById('boardLower');
         const bar = document.getElementById('boardJumpTabs');
         const header = document.querySelector('.admin-header');
-        const itemsCol = document.querySelector('.items-column');
-        const assignCol = document.querySelector('.assignment-column');
-        if (!bar || !itemsCol || !assignCol) return;
-        // 고정 헤더 바로 밑에 탭을 붙이고, 이동했을 때 제목이 가려지지 않게 헤더·탭 높이를 CSS 변수로 알려준다
-        function syncHeights() {
-            const root = document.documentElement.style;
-            root.setProperty('--admin-header-h', (header ? header.offsetHeight : 0) + 'px');
-            root.setProperty('--board-tabs-h', bar.offsetHeight + 'px');
+        if (!lower || !bar) return;
+        // 고정 헤더 바로 밑에 탭이 붙도록 헤더 높이를 CSS 변수로 알려준다 (화면 폭마다 높이가 다르다)
+        function syncHeaderHeight() {
+            document.documentElement.style.setProperty('--admin-header-h', (header ? header.offsetHeight : 0) + 'px');
         }
-        syncHeights();
-        window.addEventListener('resize', syncHeights);
+        syncHeaderHeight();
+        window.addEventListener('resize', syncHeaderHeight);
         const tabs = Array.from(bar.querySelectorAll('.board-jump-tab'));
-        function setActive(name) { tabs.forEach((t) => t.classList.toggle('active', t.dataset.target === name)); }
-        tabs.forEach((t) => t.addEventListener('click', () => {
-            const name = t.dataset.target;
-            if (name === 'assignment') assignCol.classList.add('open');   // 모바일에서 접혀 있던 업무배정표를 펼친다
-            syncHeights();
-            (name === 'assignment' ? assignCol : itemsCol).scrollIntoView({ behavior: 'smooth', block: 'start' });
-            setActive(name);
-        }));
-        // 손으로 스크롤해도 지금 보고 있는 쪽 탭이 켜지게 (맨 아래까지 내려왔으면 업무배정표)
-        let ticking = false;
-        window.addEventListener('scroll', () => {
-            if (ticking) return;
-            ticking = true;
-            requestAnimationFrame(() => {
-                ticking = false;
-                if (bar.offsetParent === null) return;   // 숨겨진 상태(넓은 화면)면 계산하지 않는다
-                const line = (header ? header.offsetHeight : 0) + bar.offsetHeight + 24;
-                const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-                setActive(atBottom || assignCol.getBoundingClientRect().top <= line ? 'assignment' : 'items');
-            });
-        }, { passive: true });
+        function show(name) {
+            // 내용이 바뀌면 화면 높이가 변해서 위치가 흔들리므로, 탭이 위에 붙어 있었는지는 바꾸기 전에 확인해 둔다
+            const wasStuck = bar.getBoundingClientRect().top <= (header ? header.offsetHeight : 0) + 1;
+            lower.dataset.tab = name;
+            tabs.forEach((t) => t.classList.toggle('active', t.dataset.target === name));
+            syncHeaderHeight();
+            // 품목을 길게 내려온 상태(탭이 위에 붙어 있는 상태)에서 바꾸면, 새 내용이 맨 위부터 보이게 탭 자리로 올린다
+            const headerH = header ? header.offsetHeight : 0;
+            if (wasStuck) {
+                window.scrollTo({ top: window.scrollY + lower.getBoundingClientRect().top - headerH, behavior: 'auto' });
+            }
+        }
+        tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.target)));
+        // 품목 수(예: 30개)는 탭 안에 보여준다 - 모바일에서는 원래 제목 옆 숫자 배지를 숨기기 때문
+        const countSrc = document.getElementById('zoneItemCountBadge');
+        const countDst = document.getElementById('boardTabItemCount');
+        if (countSrc && countDst) {
+            const sync = () => { const t = (countSrc.textContent || '').trim(); countDst.textContent = t ? '(' + t + ')' : ''; };
+            sync();
+            new MutationObserver(sync).observe(countSrc, { childList: true, characterData: true, subtree: true });
+        }
     })();
 
     // 2. 유틸리티 기능
