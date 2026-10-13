@@ -3153,3 +3153,7 @@ body {
 .notice-part-tab.loose.active { color: white; background: #64748b; border-color: #64748b; border-style: solid; }
 .notice-part-tab.add { color: var(--primary-blue); background: white; border-style: dashed; }
 .notice-text-edit-btn { flex: 0 0 auto; padding: 4px 7px; font-size: 13px; border: 1px solid var(--border-color); border-radius: 6px; background: white; cursor: pointer; }
+
+/* 공지사항 순서 정하기 (2026-10-14) */
+.notice-order-btn { width: 100%; margin-bottom: 8px; padding: 10px; font-size: 13.5px; font-weight: 800; color: var(--primary-blue); background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 10px; cursor: pointer; }
+.notice-order-btn small { font-size: 11.5px; font-weight: 700; color: #64748b; margin-left: 4px; }
