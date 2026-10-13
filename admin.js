@@ -4471,7 +4471,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 지침 줄/사진슬롯 목록을 받아서, 줄마다 [텍스트 + (핸들) + 샘플사진 썸네일 or 추가버튼] 행을 만들어줌
     // onReorder(newLines)가 주어지면 ✋ 핸들을 잡고 드래그해서 순서변경도 가능해짐 (현재는 공지사항에만 사용)
-    function buildSampleLineRows(구분, 품목명, lines, map, onDone, onReorder) {
+    // onRemove: 주면 줄마다 ✕(이 줄 빼기) 칸을 단다 - 현장 공지에서 쓴다
+    function buildSampleLineRows(구분, 품목명, lines, map, onDone, onReorder, onRemove) {
         const wrap = document.createElement('div');
         wrap.className = 'sample-photo-line-list';
 
@@ -4507,6 +4508,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 handle.title = '여기를 잡고 위아래로 드래그해서 순서 이동';
                 handle.textContent = '✋';
                 row.appendChild(handle);
+            }
+
+            if (onRemove) {
+                const rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'sample-photo-line-remove';
+                rm.title = '이 공지 빼기';
+                rm.textContent = '✕';
+                rm.addEventListener('click', () => onRemove(line));
+                row.appendChild(rm);
             }
 
             const existingUrl = getSamplePhotoUrl(map, 구분, 품목명, line);
@@ -4630,7 +4641,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             container.appendChild(btn);
         }
-        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos));
+        // ✕: 그 줄을 이 현장 공지에서 빼고 바로 저장한다 (템플릿은 그대로 - 칩을 다시 누르면 다시 들어간다)
+        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos, null, async (line) => {
+            if (!confirm(`"${line}"\n이 공지를 뺄까요?`)) return;
+            const all = noticeEl ? noticeEl.value.split('\n') : [];
+            const i = all.findIndex(l => l.trim() === line);
+            if (i === -1) return;
+            all.splice(i, 1);
+            noticeEl.value = all.map(l => l.trim()).filter(l => l !== '').join('\n');
+            renderNoticeSamplePhotos();
+            renderNoticeQuickTags();
+            await saveProjectNotice();
+        }));
     }
 
     const detailProjectNoticeEl = document.getElementById('detailProjectNotice');
