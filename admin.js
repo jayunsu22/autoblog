@@ -2408,7 +2408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function createGuidelineStageBtn(itemName, stage, task, label) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'zone-item-guideline-btn';
+        btn.className = 'zone-item-guideline-btn' + (label === '📋 지침' ? '' : (stage === '밑작업' ? ' stage-prep' : ' stage-construction'));
         btn.textContent = label;
         btn.disabled = !task;
         btn.title = task ? `${stage} 지침 편집` : '먼저 품목을 켜야 지침을 편집할 수 있습니다.';
@@ -2421,7 +2421,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function createZoneAssignSelect(itemName, stage, effectiveValue, effectiveActive, fields, workers, isActive, placeholder) {
         const select = document.createElement('select');
-        select.className = 'zone-assign-select';
+        // 밑작업은 파랑, 시공은 분홍 바탕 (뒷정리 담당 칸은 색 없음)
+        select.className = 'zone-assign-select' + (placeholder ? '' : (stage === '밑작업' ? ' stage-prep' : ' stage-construction'));
         // 매일 하는 뒷정리는 날마다 담당이 바뀔 수 있어 끝냈어도 잠그지 않는다
         const isDone = isActive && !is매일(itemName) && !!(stage === '밑작업' ? fields.밑작업완료 : fields.시공완료);
         select.disabled = !effectiveActive || isDone;
@@ -3329,7 +3330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const pickIdx = orderPickSequence.indexOf(key);
             const picked = pickIdx !== -1;
             return `
-                <div class="order-pick-item${picked ? ' picked' : ''}" onclick="toggleOrderPick('${key}')">
+                <div class="order-pick-item${picked ? ' picked' : ''} ${card.dataset.stage === '밑작업' ? 'stage-prep' : (card.classList.contains('stage-cleanup') ? 'stage-cleanup' : 'stage-construction')}" onclick="toggleOrderPick('${key}')">
                     <span class="order-pick-badge">${picked ? (pickIdx + 1) : ''}</span>
                     <span class="order-pick-name">${name}</span>
                 </div>
