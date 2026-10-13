@@ -3162,7 +3162,9 @@ body {
 .sample-photo-line-remove { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; font-size: 16px; font-weight: 900; line-height: 1; color: #dc2626; background: white; border: 2px solid #fca5a5; border-radius: 8px; cursor: pointer; }
 .sample-photo-line-remove:active { background: #fee2e2; }
 
-/* 밑작업·시공 글자에만 바탕색 (2026-10-15) - "방2문+틀 (밑작업)" 에서 '밑작업' 글자만.
+/* 밑작업·시공 글자에만 바탕색 (2026-10-15) - "방2문+틀 (밑작업)" 에서 '밑작업' 글자만. 기사님 앱과 같은 색(밑작업 주황, 시공 파랑).
    업무배정표 카드, 순서 빠르게 정하기 창 */
-.stage-prep .stage-word { background: #dbeafe; color: #1d4ed8; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
-.stage-construction .stage-word { background: #fce7f3; color: #be185d; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+/* 글자 바탕색으로 단계를 구분하므로 품목명 자체는 기본 글자색 (예전: 밑작업 파랑·시공 주황 글자 - 새 색과 반대라 헷갈림) */
+.assignment-card.stage-prep .assigned-item-name, .assignment-card.stage-construction .assigned-item-name { color: var(--text-main); }
+.stage-prep .stage-word { background: #fef3c7; color: #b45309; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.stage-construction .stage-word { background: #eff6ff; color: #1d4ed8; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
