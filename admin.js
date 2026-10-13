@@ -3268,8 +3268,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 순서 빠르게 정하기 모달 - 드래그가 번거로운 모바일에서, 원하는 순서대로 항목을 탭하면
     // 1,2,3...으로 번호가 매겨지고, 저장 시 그 순서대로 카드가 재배치됨 (탭 안 한 나머지는 기존 순서 유지)
     let orderPickSequence = [];
+    // 업무배정표 말고 다른 목록(공지사항 줄)도 같은 창으로 순서를 정한다 (2026-10-14).
+    // null 이면 업무배정표 카드, 아니면 { items: [{key, label}], onApply(keys) }
+    let orderPickCustom = null;
 
     window.openOrderPickModal = function() {
+        orderPickCustom = null;
         orderPickSequence = [];
         renderOrderPickList();
         document.getElementById('orderPickModal').style.display = 'flex';
@@ -3285,9 +3289,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             .filter(c => !c.classList.contains('completed') || c.classList.contains('stage-cleanup'));
     }
 
+    function openOrderPickCustom(items, onApply) {
+        orderPickCustom = { items, onApply };
+        orderPickSequence = [];
+        renderOrderPickList();
+        document.getElementById('orderPickModal').style.display = 'flex';
+    }
+
     function renderOrderPickList() {
         const container = document.getElementById('orderPickBody');
         const statusEl = document.getElementById('orderPickStatus');
+        if (orderPickCustom) {
+            const items = orderPickCustom.items;
+            const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            container.innerHTML = items.map(it => {
+                const pickIdx = orderPickSequence.indexOf(it.key);
+                const picked = pickIdx !== -1;
+                return `
+                <div class="order-pick-item${picked ? ' picked' : ''}" onclick="toggleOrderPick('${it.key}')">
+                    <span class="order-pick-badge">${picked ? (pickIdx + 1) : ''}</span>
+                    <span class="order-pick-name">${esc(it.label)}</span>
+                </div>`;
+            }).join('');
+            statusEl.textContent = `${orderPickSequence.length} / ${items.length}개 지정됨`;
+            return;
+        }
         const cards = orderPickCards();
 
         if (cards.length === 0) {
@@ -3330,6 +3356,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     window.applyOrderPick = async function() {
+        if (orderPickCustom) {
+            // 찍은 순서대로 먼저, 안 찍은 건 원래 순서대로 뒤에
+            const keys = [...orderPickSequence];
+            orderPickCustom.items.forEach(it => { if (!keys.includes(it.key)) keys.push(it.key); });
+            const onApply = orderPickCustom.onApply;
+            closeOrderPickModal();
+            orderPickCustom = null;
+            await onApply(keys);
+            return;
+        }
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
         const cardsByKey = new Map(cards.map(c => [`${c.dataset.recordId}__${c.dataset.stage}`, c]));
 
@@ -4575,11 +4611,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lines = noticeEl ? noticeEl.value.split('\n') : [];
         const map = (currentDetailData && currentDetailData.samplePhotos) || {};
         container.innerHTML = '';
-        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos, (newLines) => {
-            // 순서만 화면(텍스트박스)에 바로 반영 - 실제 저장은 기존 "공지사항 저장" 버튼을 눌러야 함(기존 수정 방식과 동일)
-            if (noticeEl) noticeEl.value = newLines.join('\n');
-            renderNoticeSamplePhotos();
-        }));
+        // 순서는 ✋ 끌기 대신 업무배정표처럼 '찍는 순서대로 번호' 로 정한다 (2026-10-14).
+        // 정하면 공지 칸에 바로 반영하고 서버에도 바로 저장한다 (업무배정표 순서 저장과 같은 방식)
+        const cleanLines = lines.map(l => l.trim()).filter(l => l !== '');
+        if (cleanLines.length >= 2) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'notice-order-btn';
+            btn.innerHTML = '🔢 순서 정하기 <small>찍는 순서대로 번호</small>';
+            btn.onclick = () => openOrderPickCustom(
+                cleanLines.map((l, i) => ({ key: 'n' + i, label: l })),
+                async (keys) => {
+                    const reordered = keys.map(k => cleanLines[Number(k.slice(1))]);
+                    if (noticeEl) noticeEl.value = reordered.join('\n');
+                    renderNoticeSamplePhotos();
+                    renderNoticeQuickTags();
+                    await saveProjectNotice();
+                });
+            container.appendChild(btn);
+        }
+        container.appendChild(buildSampleLineRows('공지사항', '', lines, map, renderNoticeSamplePhotos));
     }
 
     const detailProjectNoticeEl = document.getElementById('detailProjectNotice');
