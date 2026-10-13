@@ -4814,20 +4814,96 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    window.addWorkerPrompt = async function() {
+    // ===== 현장 시공기사 추가 =====
+    // 일정 앱(같은 주소 jayunsu22.github.io/sitenote) 설정 → 팀원 명단을 칩으로 보여주고 골라서 넣는다.
+    // 두 앱이 같은 주소라 이 기기에 저장된 일정 앱 데이터(localStorage 'sitenote.v1')를 바로 읽을 수 있다.
+    // 이 기기에서 일정 앱을 안 쓰면 명단이 비므로, 그때는 다른 현장에 넣었던 기사님 이름을 대신 보여준다.
+    // 여러 명을 한 번에 고를 수 있고, 명단에 없는 사람은 직접 입력한다 (2026-10-14)
+    let workerPickSelected = [];
+    let workerPickExtra = [];  // 직접 입력한 이름 (칩으로 붙어 같이 고른 상태가 된다)
+    function sitenoteTeam() {
+        try {
+            const raw = localStorage.getItem('sitenote.v1');
+            if (!raw) return { team: [], people: {} };
+            const st = (JSON.parse(raw) || {}).settings || {};
+            const team = (Array.isArray(st.team) ? st.team : []).map(n => String(n || '').trim()).filter(Boolean);
+            return { team: [...new Set(team)], people: (st.people && typeof st.people === 'object') ? st.people : {} };
+        } catch (e) { return { team: [], people: {} }; }
+    }
+    function pastProjectWorkers() {
+        const counts = new Map();
+        (globalProjectList || []).forEach(p => String((p.fields || {}).시공기사 || '').split(',').map(n => n.trim())
+            .filter(n => n && !/테스트/.test(n)).forEach(n => counts.set(n, (counts.get(n) || 0) + 1)));
+        return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    }
+    function renderWorkerPick() {
+        const { team, people } = sitenoteTeam();
+        const fromTeam = team.length > 0;
+        const base = fromTeam ? team : pastProjectWorkers();
+        const names = [...base, ...workerPickExtra.filter(n => !base.includes(n))];
+        const existing = currentDetailData.workers || [];
+        const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        document.getElementById('workerPickHint').textContent = fromTeam
+            ? '일정 앱 팀원 명단입니다. 넣을 사람을 눌러 고르세요 (여러 명 가능).'
+            : (base.length ? '이 기기에 일정 앱 팀원 명단이 없어, 다른 현장에 넣었던 기사님을 보여줍니다.' : '고를 이름이 없습니다. 아래에 직접 입력하세요.');
+        document.getElementById('workerPickChips').innerHTML = names.map(n => {
+            const added = existing.includes(n);
+            const on = workerPickSelected.includes(n);
+            const phone = people[n] && people[n].phone ? String(people[n].phone).slice(-4) : '';
+            return `<button type="button" class="worker-pick-chip${added ? ' added' : on ? ' on' : ''}" data-name="${esc(n)}"${added ? ' disabled' : ''}>` +
+                `${on ? '✓ ' : ''}${esc(n)}${added ? '<small>추가됨</small>' : phone ? `<small>${esc(phone)}</small>` : ''}</button>`;
+        }).join('');
+        document.getElementById('workerPickChips').querySelectorAll('.worker-pick-chip:not(.added)').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const n = btn.dataset.name;
+                workerPickSelected = workerPickSelected.includes(n) ? workerPickSelected.filter(x => x !== n) : [...workerPickSelected, n];
+                renderWorkerPick();
+            });
+        });
+        const saveBtn = document.getElementById('workerPickSave');
+        saveBtn.textContent = workerPickSelected.length ? `${workerPickSelected.length}명 추가하기` : '추가하기';
+        saveBtn.disabled = !workerPickSelected.length;
+        saveBtn.style.opacity = workerPickSelected.length ? '' : '0.5';
+    }
+    window.addWorkerPrompt = function() {
         if (!activeProjectCode) return;
-        const name = prompt("추가할 기사님 성함을 입력해 주세요:");
-        if (!name || !name.trim()) return;
-        const newName = name.trim();
+        workerPickSelected = [];
+        workerPickExtra = [];
+        document.getElementById('workerPickInput').value = '';
+        renderWorkerPick();
+        document.getElementById('workerPickModal').style.display = 'flex';
+    };
+    window.closeWorkerPickModal = function() {
+        document.getElementById('workerPickModal').style.display = 'none';
+    };
+    window.addWorkerPickTyped = function() {
+        const input = document.getElementById('workerPickInput');
+        const existing = currentDetailData.workers || [];
+        const typed = input.value.split(',').map(n => n.trim()).filter(Boolean);
+        if (!typed.length) return;
+        typed.forEach(n => {
+            if (existing.includes(n)) { showToast(`${n} 기사님은 이미 이 현장에 있습니다.`, 'warning'); return; }
+            if (!workerPickExtra.includes(n)) workerPickExtra.push(n);
+            if (!workerPickSelected.includes(n)) workerPickSelected.push(n);
+        });
+        input.value = '';
+        renderWorkerPick();
+    };
+    const workerPickInputEl = document.getElementById('workerPickInput');
+    if (workerPickInputEl) workerPickInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addWorkerPickTyped(); } });
 
+    window.saveWorkerPick = async function() {
+        if (!activeProjectCode) return;
+        // 입력칸에 적어 놓고 + 를 안 누른 이름도 같이 넣는다
+        if (document.getElementById('workerPickInput').value.trim()) addWorkerPickTyped();
         const existingWorkers = currentDetailData.workers || [];
-        if (existingWorkers.includes(newName)) {
-            showToast("이미 등록된 기사님입니다.", "warning");
-            return;
-        }
-        const updatedWorkers = [...existingWorkers, newName];
+        const adding = workerPickSelected.filter(n => !existingWorkers.includes(n));
+        if (!adding.length) return;
+        const updatedWorkers = [...existingWorkers, ...adding];
+        const label = adding.length === 1 ? `${adding[0]} 기사님` : `${adding.length}명`;
 
-        showLoading(`${newName} 기사님 추가 중...`);
+        closeWorkerPickModal();
+        showLoading(`${label} 추가 중...`);
         try {
             const response = await fetchWithTimeout(API_SAVE_URL, {
                 method: 'POST',
@@ -4841,7 +4917,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!response.ok) throw new Error("추가 오류");
 
-            showToast(`${newName} 기사님이 추가되었습니다!`);
+            showToast(`${adding.join(', ')} 기사님이 추가되었습니다!`);
             await showProjectDetail(activeProjectCode);
         } catch (error) {
             console.error(error);
