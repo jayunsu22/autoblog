@@ -25,7 +25,7 @@
     // 관리자 앱 (품질관리 워크플로우 안의 사장님 전용)
     'film-admin-get-v2', 'film-blog-publish', 'film-checkpoint-template-create',
     'film-journal-create', 'film-journal-list', 'film-journal-photo-upload', 'film-journal-photo-delete',
-    'film-notice-create', 'film-sample-photo-upload', 'film-sample-photo-delete', 'raw-photo-update', 'raw-photo-upload'
+    'film-notice-create', 'film-notice-parts', 'film-notice-parts-save', 'film-sample-photo-upload', 'film-sample-photo-delete', 'raw-photo-update', 'raw-photo-upload'
   ].forEach(function (p) { OWNER_PATHS[p] = true; });
 
   function readKey() { try { return localStorage.getItem(KEY_NAME) || ''; } catch (e) { return ''; } }
