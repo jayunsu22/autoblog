@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const SETTLE_APP_BASE_URL = "https://songil.netlify.app/settle.html";
 
     // 한 "층" 안에서의 방 이름 순서 (탭/버튼을 이 순서로 정렬할 때 기준으로만 쓰임 - 목록을 제한하지 않음)
-    const ROOM_ORDER = ['거실', '주방', '현관', '방1', '방2', '방3', '방4', '방5', '기타']; // 거실/주방/현관이 제일 많이 쓰여서 맨 앞으로
+    const ROOM_ORDER = ['거실', '주방', '현관', '방1', '방2', '방3', '방4', '방5', '방6', '방7', '기타']; // 거실/주방/현관이 제일 많이 쓰여서 맨 앞으로
 
     // "2층 거실" 같은 구역 문자열을 {floor, room}으로 분해. 층 표기가 없으면 1층으로 취급해서
     // 기존 데이터(층 구분 없던 시절)와 100% 호환되게 함
@@ -4319,6 +4319,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditRepeatInput').value = item.반복 === '매일' ? '매일' : '';
         document.getElementById('itemEditPhotoReqInput').checked = !!item.사진필수;
         applyItemEditModeUI();
+        document.getElementById('itemEditCopyWrap').style.display = 'none';
         editingItemSlots = (item.필수사진슬롯 || '').split(',').map(s => s.trim()).filter(s => s !== '');
         renderItemEditSlotTags();
         document.getElementById('itemEditModal').style.display = 'flex';
@@ -4345,6 +4346,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditRoomInput').value = g.room || '기타';
         document.getElementById('itemEditFloorInput').value = g.floor && Number(g.floor) <= 5 ? g.floor : '1';
     });
+    // 이름이 바뀌면 '비슷한 이름' 추천도 다시 고른다 (사용자가 직접 고른 건 그대로)
+    if (itemEditNameInputEl) itemEditNameInputEl.addEventListener('input', () => {
+        if (editingItemIdx !== null) return;
+        refreshItemCopyOptions(false);
+    });
     ['itemEditRoomInput', 'itemEditFloorInput'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', () => { newItemZoneTouched = true; });
@@ -4366,7 +4372,96 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyItemEditModeUI();
         editingItemSlots = [];
         renderItemEditSlotTags();
+        itemCopyPicked = false;
+        document.getElementById('itemEditCopyWrap').style.display = '';
+        refreshItemCopyOptions(true);
         document.getElementById('itemEditModal').style.display = 'flex';
+    };
+
+    // ===== 새 품목: 기존 품목 지침 불러오기 =====
+    // '방6문' 을 만들 때 방1문+틀·방2문+틀… 의 지침을 미리 보고 그대로 넣는다.
+    // 목록은 고른 카테고리의 품목만, 이름이 비슷한 것(방 이름을 뗀 나머지가 같은 것)을 위에 둔다.
+    // 미리보기만 보여주고, '이 지침 넣기' 를 눌러야 칸이 채워진다.
+    let itemCopyPicked = false; // 사용자가 목록에서 직접 골랐으면 이름을 고쳐도 추천으로 바꾸지 않는다
+    const 방떼기 = (name) => String(name || '')
+        .replace(/^\s*\d+층\s*/, '')
+        .replace(/^(거실|주방|현관|방\d+)/, '')
+        .replace(/\s*\d+$/, '')
+        .replace(/\+?틀$/, '')   // '문+틀' 과 '문' 은 같은 일로 본다
+        .trim();
+    const 방종류 = (name) => {
+        const m = String(name || '').replace(/^\s*\d+층\s*/, '').match(/^(거실|주방|현관|방\d+)/);
+        return m ? (/^방\d+$/.test(m[1]) ? '방' : m[1]) : '';
+    };
+    // 0 = 안 비슷함. 이름이 같은 일(2~3) 이면 '비슷한 이름' 묶음에 들고, 같은 종류 방(방6 ↔ 방1~5)이면 더 위로
+    function itemCopyScore(newName, item) {
+        const a = 방떼기(newName), b = 방떼기(item.품목명);
+        if (!a || !b) return 0;
+        const 이름 = a === b ? 3 : (b.startsWith(a) || a.startsWith(b)) ? 2 : 0;
+        if (!이름) return 0;
+        return 이름 * 2 + (방종류(newName) && 방종류(newName) === 방종류(item.품목명) ? 1 : 0);
+    }
+    function itemCopyCandidates() {
+        const category = document.getElementById('itemEditCategoryInput').value;
+        const newName = document.getElementById('itemEditNameInput').value.trim();
+        return globalMasterItems
+            .map((item, idx) => ({ item, idx }))
+            .filter(({ item }) => (item.카테고리 || '기타') === category && (String(item.밑작업지침 || '').trim() || String(item.시공후점검지침 || '').trim()))
+            .map(c => Object.assign(c, { score: itemCopyScore(newName, c.item) }))
+            .sort((x, y) => {
+                if (x.score !== y.score) return y.score - x.score;
+                const z = sortZones([x.item.구역 || '기타', y.item.구역 || '기타']);
+                if ((x.item.구역 || '기타') !== (y.item.구역 || '기타')) return z[0] === (x.item.구역 || '기타') ? -1 : 1;
+                return (x.item.품목명 || '').localeCompare(y.item.품목명 || '');
+            });
+    }
+    // reset: 모달을 새로 열었거나 카테고리를 바꿨을 때 (직접 고른 것도 초기화)
+    function refreshItemCopyOptions(reset) {
+        const select = document.getElementById('itemEditCopySelect');
+        if (!select) return;
+        if (reset) itemCopyPicked = false;
+        const prev = select.value;
+        const list = itemCopyCandidates();
+        const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const opt = ({ item, idx }) => `<option value="${idx}">${esc(item.품목명)}${item.구역 ? ' · ' + esc(item.구역) : ''}</option>`;
+        const similar = list.filter(c => c.score > 0), rest = list.filter(c => c.score === 0);
+        let html = `<option value="">${list.length ? `— 품목 고르기 (${list.length}개) —` : '— 이 카테고리에 지침이 있는 품목이 없습니다 —'}</option>`;
+        if (similar.length) html += `<optgroup label="비슷한 이름">${similar.map(opt).join('')}</optgroup>`;
+        if (rest.length) html += similar.length ? `<optgroup label="같은 카테고리">${rest.map(opt).join('')}</optgroup>` : rest.map(opt).join('');
+        select.innerHTML = html;
+        if (itemCopyPicked && list.some(c => String(c.idx) === prev)) select.value = prev;
+        else select.value = similar.length ? String(similar[0].idx) : '';
+        renderItemCopyPreview(true);
+    }
+    window.renderItemCopyPreview = function(fromRefresh) {
+        const select = document.getElementById('itemEditCopySelect');
+        const box = document.getElementById('itemEditCopyPreview');
+        if (fromRefresh !== true) itemCopyPicked = true;
+        const item = select.value === '' ? null : globalMasterItems[Number(select.value)];
+        if (!item) { box.innerHTML = ''; return; }
+        const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const block = (title, text) => `<h4>${title}</h4>` + (String(text || '').trim() ? `<pre>${esc(String(text).trim())}</pre>` : `<div class="empty">없음</div>`);
+        const 뒷정리 = item.작업방식 === '한번에';
+        const slots = String(item.필수사진슬롯 || '').split(',').map(x => x.trim()).filter(Boolean);
+        box.innerHTML = `<div class="item-copy-preview">` +
+            (뒷정리 ? '' : block('🔧 밑작업 지침', item.밑작업지침)) +
+            block(뒷정리 ? '✅ 할 일' : '🛠 시공 후 점검 지침', item.시공후점검지침) +
+            (slots.length ? `<h4>📸 필수 사진</h4><pre>${esc(slots.join(' · '))}</pre>` : '') +
+            `</div><button type="button" class="item-copy-apply" onclick="applyItemCopy()">✅ 이 지침 넣기</button>`;
+    };
+    window.applyItemCopy = function() {
+        const select = document.getElementById('itemEditCopySelect');
+        const item = select.value === '' ? null : globalMasterItems[Number(select.value)];
+        if (!item) return;
+        const prepEl = document.getElementById('itemEditPrepInput');
+        const inspEl = document.getElementById('itemEditInspInput');
+        if ((prepEl.value.trim() || inspEl.value.trim()) && !confirm('이미 적어 둔 지침이 있습니다. 불러온 지침으로 바꿀까요?')) return;
+        prepEl.value = item.밑작업지침 || '';
+        inspEl.value = item.시공후점검지침 || '';
+        const slots = String(item.필수사진슬롯 || '').split(',').map(x => x.trim()).filter(Boolean);
+        if (slots.length) { editingItemSlots = slots; renderItemEditSlotTags(); }
+        renderItemEditSamplePhotos();
+        showToast(`"${item.품목명}" 지침을 넣었습니다. 필요하면 고쳐서 저장하세요.`);
     };
 
     // 작업 방식이 '한 번에'(뒷정리) 이면 구역·밑작업 지침·사진 슬롯을 숨기고 반복·사진필수를 보인다.
@@ -4388,6 +4483,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('itemEditModeInput').value = '한번에';
             applyItemEditModeUI();
         }
+        if (editingItemIdx === null) refreshItemCopyOptions(true);
     };
 
     window.closeItemEditModal = function() {
