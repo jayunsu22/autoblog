@@ -572,6 +572,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 칩을 눌러 공지에 넣고 빼는 동작은 예전 그대로다.
     const NOTICE_PARTS_GET_URL = `${n8nBase}/webhook/film-notice-parts`;
     const NOTICE_PARTS_SAVE_URL = `${n8nBase}/webhook/film-notice-parts-save`;
+    const NOTICE_EDIT_URL = `${n8nBase}/webhook/film-notice-edit`;
+    // 지금 보고 있는 파트 탭 (두 화면이 같이 쓴다). 파트 id, 또는 '미분류'
+    let noticePartTab = (() => { try { return localStorage.getItem('noticePartTab') || ''; } catch (e) { return ''; } })();
     const NOTICE_PARTS_CACHE_KEY = 'noticePartConfig';
     let noticePartConfig = (() => {
         try { const c = JSON.parse(localStorage.getItem(NOTICE_PARTS_CACHE_KEY) || 'null'); if (c && Array.isArray(c.parts)) return c; } catch (e) { /* 무시 */ }
@@ -634,8 +637,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const prev = sel.value;
             sel.innerHTML = noticePartConfig.parts.map((p, i) => `<option value="${escNotice(p.id)}">${i + 1}. ${escNotice(p.name)} 에 등록</option>`).join('') + `<option value="">미분류 에 등록</option>`;
-            sel.value = noticePartConfig.parts.some(p => p.id === prev) || prev === '' && sel.dataset.touched ? prev : noticePartConfig.parts[0].id;
-            sel.onchange = () => { sel.dataset.touched = '1'; };
+            // 기본은 지금 보고 있는 파트 탭 (미분류 탭이면 미분류)
+            const tabPart = noticePartTab === '미분류' ? '' : (noticePartConfig.parts.some(p => p.id === noticePartTab) ? noticePartTab : null);
+            sel.value = tabPart !== null ? tabPart : (noticePartConfig.parts.some(p => p.id === prev) ? prev : noticePartConfig.parts[0].id);
         });
     }
 
@@ -683,76 +687,145 @@ document.addEventListener('DOMContentLoaded', async () => {
         const bar = document.createElement('div');
         bar.className = 'notice-part-bar';
         bar.innerHTML = noticePartEditMode
-            ? `<span class="notice-part-bar-hint">파트 이름·순서를 바꾸고, 템플릿 옆 칸에서 파트를 옮기세요.</span><button type="button" class="notice-part-edit-btn on">✅ 편집 끝</button>`
+            ? `<span class="notice-part-bar-hint">✏️ 로 글을 고치고, 오른쪽 칸에서 파트를 옮기세요.</span><button type="button" class="notice-part-edit-btn on">✅ 편집 끝</button>`
             : `<button type="button" class="notice-part-edit-btn">⚙️ 파트 편집</button>`;
         bar.querySelector('button').onclick = () => { noticePartEditMode = !noticePartEditMode; renderNoticeQuickTags(); };
         container.appendChild(bar);
 
-        const groups = parts.map(p => ({ part: p, texts: [] }));
+        const groups = parts.map(p => ({ id: p.id, part: p, texts: [] }));
         const loose = [];
         globalQuickNotices.forEach(text => {
             const id = noticePartOf(text);
-            const g = id && groups.find(x => x.part.id === id);
+            const g = id && groups.find(x => x.id === id);
             if (g) g.texts.push(text); else loose.push(text);
         });
         const all = [...groups];
-        if (loose.length) all.push({ part: null, texts: loose });
+        if (loose.length) all.push({ id: '미분류', part: null, texts: loose });
+        // 파트를 탭으로: 한 번에 한 파트만 보여서 길게 내려 읽지 않아도 된다 (2026-10-14)
+        if (!all.some(g => g.id === noticePartTab)) noticePartTab = all[0].id;
+        const cur = all.find(g => g.id === noticePartTab);
+        const gi = groups.indexOf(cur);
 
-        all.forEach(({ part, texts }, gi) => {
-            const box = document.createElement('div');
-            box.className = 'notice-part' + (part ? '' : ' loose');
-            const head = document.createElement('div');
-            head.className = 'notice-part-head';
-            head.innerHTML = `<span class="notice-part-name">${part ? `${gi + 1}. ${escNotice(part.name)}` : '미분류'}</span><span class="notice-part-count">${texts.length}</span>`;
-            if (noticePartEditMode && part) {
-                const tools = document.createElement('span');
-                tools.className = 'notice-part-tools';
-                tools.innerHTML = `<button type="button" title="이름 바꾸기">✏️</button><button type="button" title="위로" ${gi === 0 ? 'disabled' : ''}>▲</button><button type="button" title="아래로" ${gi === parts.length - 1 ? 'disabled' : ''}>▼</button><button type="button" title="파트 삭제">🗑</button>`;
-                const [bRename, bUp, bDown, bDel] = tools.querySelectorAll('button');
-                bRename.onclick = () => renameNoticePart(part.id);
-                bUp.onclick = () => moveNoticePart(part.id, -1);
-                bDown.onclick = () => moveNoticePart(part.id, 1);
-                bDel.onclick = () => deleteNoticePart(part.id, texts.length);
-                head.appendChild(tools);
-            }
-            box.appendChild(head);
-
-            if (noticePartEditMode) {
-                // 편집 중: 템플릿마다 옆에 파트 고르는 칸
-                const list = document.createElement('div');
-                list.className = 'notice-part-move-list';
-                texts.forEach(text => {
-                    const row = document.createElement('div');
-                    row.className = 'notice-part-move-row';
-                    const label = document.createElement('span');
-                    label.textContent = text;
-                    const sel = document.createElement('select');
-                    sel.innerHTML = parts.map((p, i) => `<option value="${escNotice(p.id)}">${i + 1}. ${escNotice(p.name)}</option>`).join('') + `<option value="">미분류</option>`;
-                    sel.value = part ? part.id : '';
-                    sel.onchange = () => moveNoticeToPart(text, sel.value);
-                    row.appendChild(label);
-                    row.appendChild(sel);
-                    list.appendChild(row);
-                });
-                if (!texts.length) list.innerHTML = `<div class="notice-part-empty">아직 템플릿이 없습니다.</div>`;
-                box.appendChild(list);
-            } else {
-                const chips = document.createElement('div');
-                chips.className = 'notice-quick-tags';
-                texts.forEach(text => chips.appendChild(makeChip(text)));
-                if (!texts.length) chips.innerHTML = `<span class="notice-part-empty">아직 템플릿이 없습니다. 위 칸에서 이 파트를 골라 등록하세요.</span>`;
-                box.appendChild(chips);
-            }
-            container.appendChild(box);
+        const tabs = document.createElement('div');
+        tabs.className = 'notice-part-tabs';
+        all.forEach((g, i) => {
+            const on = lines.filter(l => g.texts.some(t => t.trim() === l)).length;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'notice-part-tab' + (g === cur ? ' active' : '') + (g.part ? '' : ' loose');
+            btn.innerHTML = `${g.part ? `${i + 1}. ${escNotice(g.part.name)}` : '미분류'} <span class="cnt">${on ? `✓${on}/` : ''}${g.texts.length}</span>`;
+            btn.onclick = () => {
+                noticePartTab = g.id;
+                try { localStorage.setItem('noticePartTab', g.id); } catch (e) { /* 무시 */ }
+                renderNoticeQuickTags();
+            };
+            tabs.appendChild(btn);
         });
-
         if (noticePartEditMode) {
             const add = document.createElement('button');
             add.type = 'button';
-            add.className = 'notice-part-add-btn';
+            add.className = 'notice-part-tab add';
             add.textContent = '+ 파트 추가';
             add.onclick = addNoticePart;
-            container.appendChild(add);
+            tabs.appendChild(add);
+        }
+        container.appendChild(tabs);
+
+        const box = document.createElement('div');
+        box.className = 'notice-part' + (cur.part ? '' : ' loose');
+        if (noticePartEditMode && cur.part) {
+            const head = document.createElement('div');
+            head.className = 'notice-part-head';
+            head.innerHTML = `<span class="notice-part-name">${gi + 1}. ${escNotice(cur.part.name)}</span>`;
+            const tools = document.createElement('span');
+            tools.className = 'notice-part-tools';
+            tools.innerHTML = `<button type="button" title="이름 바꾸기">✏️ 이름</button><button type="button" title="앞으로" ${gi === 0 ? 'disabled' : ''}>◀</button><button type="button" title="뒤로" ${gi === parts.length - 1 ? 'disabled' : ''}>▶</button><button type="button" title="파트 삭제">🗑</button>`;
+            const [bRename, bUp, bDown, bDel] = tools.querySelectorAll('button');
+            bRename.onclick = () => renameNoticePart(cur.part.id);
+            bUp.onclick = () => moveNoticePart(cur.part.id, -1);
+            bDown.onclick = () => moveNoticePart(cur.part.id, 1);
+            bDel.onclick = () => deleteNoticePart(cur.part.id, cur.texts.length);
+            head.appendChild(tools);
+            box.appendChild(head);
+        }
+
+        if (noticePartEditMode) {
+            // 편집 중: 템플릿마다 ✏️(글 고치기) + 파트 고르는 칸
+            const list = document.createElement('div');
+            list.className = 'notice-part-move-list';
+            cur.texts.forEach(text => {
+                const row = document.createElement('div');
+                row.className = 'notice-part-move-row';
+                const label = document.createElement('span');
+                label.textContent = text;
+                const edit = document.createElement('button');
+                edit.type = 'button';
+                edit.className = 'notice-text-edit-btn';
+                edit.title = '글 고치기';
+                edit.textContent = '✏️';
+                edit.onclick = () => editNoticeTemplate(text);
+                const sel = document.createElement('select');
+                sel.innerHTML = parts.map((p, i) => `<option value="${escNotice(p.id)}">${i + 1}. ${escNotice(p.name)}</option>`).join('') + `<option value="">미분류</option>`;
+                sel.value = cur.part ? cur.part.id : '';
+                sel.onchange = () => moveNoticeToPart(text, sel.value);
+                row.appendChild(label);
+                row.appendChild(edit);
+                row.appendChild(sel);
+                list.appendChild(row);
+            });
+            if (!cur.texts.length) list.innerHTML = `<div class="notice-part-empty">아직 템플릿이 없습니다.</div>`;
+            box.appendChild(list);
+        } else {
+            const chips = document.createElement('div');
+            chips.className = 'notice-quick-tags';
+            cur.texts.forEach(text => {
+                const chip = makeChip(text);
+                // 탭에 '✓ 넣은 수' 가 바로 바뀌게 다시 그린다
+                chip.onclick = function() { toggleNoticeTag(this, text, textareaId); renderNoticeQuickTags(); };
+                chips.appendChild(chip);
+            });
+            if (!cur.texts.length) chips.innerHTML = `<span class="notice-part-empty">아직 템플릿이 없습니다. 위 칸에서 이 파트를 골라 등록하세요.</span>`;
+            box.appendChild(chips);
+        }
+        container.appendChild(box);
+    }
+
+    // 템플릿 글 고치기 (편집 중 ✏️). 서버의 템플릿 글을 바꾸고, 파트 배정과 지금 쓰고 있는 공지 칸의 같은 줄도 같이 바꾼다.
+    // 이미 다른 현장에 저장된 공지는 그 현장의 글이라 그대로 둔다.
+    async function editNoticeTemplate(oldText) {
+        const input = prompt('템플릿 글을 고쳐 주세요:', oldText.trim());
+        if (input === null) return;
+        const newText = input.trim();
+        if (!newText || newText === oldText.trim()) return;
+        if (globalQuickNotices.some(t => t !== oldText && t.trim() === newText)) { showToast('같은 글의 템플릿이 이미 있습니다.', 'warning'); return; }
+        showLoading('템플릿 고치는 중...');
+        try {
+            const res = await fetchWithTimeout(NOTICE_EDIT_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ oldText: oldText.trim(), newText })
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const i = globalQuickNotices.indexOf(oldText);
+            if (i !== -1) globalQuickNotices[i] = newText;
+            const oldKey = 공지키(oldText);
+            if (noticePartConfig.assign[oldKey]) {
+                noticePartConfig.assign[newText] = noticePartConfig.assign[oldKey];
+                delete noticePartConfig.assign[oldKey];
+                saveNoticeParts();
+            }
+            ['detailProjectNotice', 'newProjectNotice'].forEach(id => {
+                const ta = document.getElementById(id);
+                if (!ta || !ta.value) return;
+                ta.value = ta.value.split('\n').map(l => l.trim() === oldKey ? newText : l).join('\n');
+            });
+            refreshListCacheFromMemory();
+            renderNoticeQuickTags();
+            showToast('템플릿을 고쳤습니다.');
+        } catch (e) {
+            console.error(e);
+            showToast('템플릿을 고치지 못했습니다. 다시 시도해 주세요.', 'danger');
+        } finally {
+            hideLoading();
         }
     }
 
@@ -760,7 +833,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const name = (prompt('새 파트 이름을 입력해 주세요:') || '').trim();
         if (!name) return;
         if (noticePartConfig.parts.some(p => p.name === name)) { showToast('같은 이름의 파트가 이미 있습니다.', 'warning'); return; }
-        noticePartConfig.parts.push({ id: 'p' + Date.now().toString(36), name });
+        const id = 'p' + Date.now().toString(36);
+        noticePartConfig.parts.push({ id, name });
+        noticePartTab = id;  // 만든 파트 탭으로 바로 간다
+        try { localStorage.setItem('noticePartTab', id); } catch (e) { /* 무시 */ }
         renderNoticeQuickTags();
         saveNoticeParts();
     }

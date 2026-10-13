@@ -3143,3 +3143,13 @@ body {
 .notice-part-move-row span { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; color: #334155; }
 .notice-part-move-row select { flex: 0 0 auto; max-width: 46%; padding: 5px 6px; font-size: 12px; font-weight: 700; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; }
 .notice-part-add-btn { width: 100%; padding: 10px; font-size: 13px; font-weight: 800; color: var(--primary-blue); background: white; border: 1.5px dashed #93c5fd; border-radius: 10px; cursor: pointer; margin-bottom: 8px; }
+
+/* 공지 파트 탭 (2026-10-14) */
+.notice-part-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.notice-part-tab { padding: 8px 12px; font-size: 13px; font-weight: 800; color: #1e3a8a; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.notice-part-tab .cnt { font-size: 11px; font-weight: 800; opacity: 0.75; margin-left: 2px; }
+.notice-part-tab.active { color: white; background: var(--primary-blue); border-color: var(--primary-blue); }
+.notice-part-tab.loose { color: #64748b; background: #f8fafc; border-style: dashed; border-color: #cbd5e1; }
+.notice-part-tab.loose.active { color: white; background: #64748b; border-color: #64748b; border-style: solid; }
+.notice-part-tab.add { color: var(--primary-blue); background: white; border-style: dashed; }
+.notice-text-edit-btn { flex: 0 0 auto; padding: 4px 7px; font-size: 13px; border: 1px solid var(--border-color); border-radius: 6px; background: white; cursor: pointer; }
