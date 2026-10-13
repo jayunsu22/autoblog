@@ -3121,3 +3121,25 @@ body {
 .worker-pick-add { display: flex; gap: 8px; margin-top: 6px; }
 .worker-pick-add input { flex: 1; min-width: 0; padding: 10px 14px; font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--border-color); border-radius: 10px; outline: none; }
 .worker-pick-add button { padding: 0 16px; font-size: 18px; font-weight: 800; color: white; background: var(--primary-blue); border: none; border-radius: 10px; cursor: pointer; }
+
+/* 공지 템플릿 파트 (2026-10-14) */
+.notice-part-select { flex: 1 1 100%; padding: 8px 10px; font-size: 13px; font-weight: 700; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); outline: none; }
+.notice-part-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 2px 0 6px; }
+.notice-part-bar-hint { flex: 1; font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+.notice-part-edit-btn { padding: 6px 12px; font-size: 12.5px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; white-space: nowrap; }
+.notice-part-edit-btn.on { background: var(--primary-blue); border-color: var(--primary-blue); color: white; }
+.notice-part { border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 10px 10px 2px; margin-bottom: 10px; background: #fbfdff; }
+.notice-part.loose { border-style: dashed; background: #fafafa; }
+.notice-part-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.notice-part-name { font-size: 14px; font-weight: 800; color: #1e3a8a; }
+.notice-part.loose .notice-part-name { color: var(--text-muted); }
+.notice-part-count { font-size: 11px; font-weight: 800; color: #64748b; background: #e2e8f0; border-radius: 999px; padding: 1px 7px; }
+.notice-part-tools { margin-left: auto; display: flex; gap: 4px; }
+.notice-part-tools button { padding: 4px 8px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; background: white; cursor: pointer; }
+.notice-part-tools button:disabled { opacity: 0.35; cursor: default; }
+.notice-part-empty { font-size: 12px; color: var(--text-muted); padding: 2px 4px 8px; }
+.notice-part-move-list { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+.notice-part-move-row { display: flex; align-items: center; gap: 8px; }
+.notice-part-move-row span { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; color: #334155; }
+.notice-part-move-row select { flex: 0 0 auto; max-width: 46%; padding: 5px 6px; font-size: 12px; font-weight: 700; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; }
+.notice-part-add-btn { width: 100%; padding: 10px; font-size: 13px; font-weight: 800; color: var(--primary-blue); background: white; border: 1.5px dashed #93c5fd; border-radius: 10px; cursor: pointer; margin-bottom: 8px; }
