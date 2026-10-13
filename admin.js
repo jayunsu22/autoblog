@@ -3043,7 +3043,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
                     ${assigneeBadgeHtml}
-                    <span class="assigned-item-name">${fields.시공품목} (${stageLabel})</span>
+                    <span class="assigned-item-name">${fields.시공품목} (<span class="stage-word">${stageLabel}</span>)</span>
                     ${statusBadgeHtml}
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
@@ -3325,11 +3325,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         container.innerHTML = cards.map(card => {
             const key = `${card.dataset.recordId}__${card.dataset.stage}`;
             const nameEl = card.querySelector('.assigned-item-name');
-            const name = nameEl ? nameEl.textContent : '(이름없음)';
+            // 밑작업·시공 글자만 바탕색이 있게 카드의 글자 칸(stage-word)을 그대로 가져온다
+            const name = nameEl ? nameEl.innerHTML : '(이름없음)';
             const pickIdx = orderPickSequence.indexOf(key);
             const picked = pickIdx !== -1;
             return `
-                <div class="order-pick-item${picked ? ' picked' : ''}" onclick="toggleOrderPick('${key}')">
+                <div class="order-pick-item${picked ? ' picked' : ''} ${card.dataset.stage === '밑작업' ? 'stage-prep' : (card.classList.contains('stage-cleanup') ? 'stage-cleanup' : 'stage-construction')}" onclick="toggleOrderPick('${key}')">
                     <span class="order-pick-badge">${picked ? (pickIdx + 1) : ''}</span>
                     <span class="order-pick-name">${name}</span>
                 </div>
