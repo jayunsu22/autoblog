@@ -3043,7 +3043,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="assignment-card-header" onclick="toggleAssignmentCardBody(event, this)" style="cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 6px; user-select: none;">
                     ${assigneeBadgeHtml}
-                    <span class="assigned-item-name">${fields.시공품목} (<span class="stage-word">${stageLabel}</span>)</span>
+                    <span class="assigned-item-name">${fields.시공품목} <span class="stage-word">${stageLabel}</span></span>
                     ${statusBadgeHtml}
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
