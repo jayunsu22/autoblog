@@ -4324,6 +4324,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditModal').style.display = 'flex';
     };
 
+    // 새 품목: 이름에 '방2'·'거실'·'2층' 같은 말이 있으면 구역을 그걸로 미리 골라 둔다.
+    // 구역 기본값이 '기타' 라서, '방2샤시 2' 를 만들고 구역을 안 바꾸면 방2 탭에 안 나왔다 (2026-10-13)
+    // 사용자가 구역/층을 직접 고른 뒤에는 건드리지 않는다
+    let newItemZoneTouched = false;
+    function guessZoneFromName(name) {
+        const str = String(name || '');
+        let room = null, at = Infinity;
+        ROOM_ORDER.filter(r => r !== '기타').forEach(r => {
+            const i = str.indexOf(r);
+            if (i !== -1 && i < at) { room = r; at = i; }
+        });
+        const fm = str.match(/(\d)층/);
+        return { room, floor: fm ? fm[1] : null };
+    }
+    const itemEditNameInputEl = document.getElementById('itemEditNameInput');
+    if (itemEditNameInputEl) itemEditNameInputEl.addEventListener('input', () => {
+        if (editingItemIdx !== null || newItemZoneTouched) return;
+        const g = guessZoneFromName(itemEditNameInputEl.value);
+        document.getElementById('itemEditRoomInput').value = g.room || '기타';
+        document.getElementById('itemEditFloorInput').value = g.floor && Number(g.floor) <= 5 ? g.floor : '1';
+    });
+    ['itemEditRoomInput', 'itemEditFloorInput'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', () => { newItemZoneTouched = true; });
+    });
+
     window.openNewItemModal = function() {
         editingItemIdx = null;
         document.getElementById('itemEditModalTitle').textContent = '➕ 새 시공품목 추가';
@@ -4331,6 +4357,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('itemEditCategoryInput').value = '문+틀';
         document.getElementById('itemEditFloorInput').value = '1';
         document.getElementById('itemEditRoomInput').value = '기타';
+        newItemZoneTouched = false;
         document.getElementById('itemEditPrepInput').value = '';
         document.getElementById('itemEditInspInput').value = '';
         document.getElementById('itemEditModeInput').value = '';
