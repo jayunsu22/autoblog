@@ -3162,9 +3162,7 @@ body {
 .sample-photo-line-remove { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; font-size: 16px; font-weight: 900; line-height: 1; color: #dc2626; background: white; border: 2px solid #fca5a5; border-radius: 8px; cursor: pointer; }
 .sample-photo-line-remove:active { background: #fee2e2; }
 
-/* 밑작업·시공 글씨에 바탕색 (2026-10-15) - 카드 전체가 아니라 품목명 글씨에만.
+/* 밑작업·시공 글자에만 바탕색 (2026-10-15) - "방2문+틀 (밑작업)" 에서 '밑작업' 글자만.
    업무배정표 카드, 순서 빠르게 정하기 창 */
-.assignment-card.stage-prep .assigned-item-name,
-.order-pick-item.stage-prep .order-pick-name { background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.assignment-card.stage-construction .assigned-item-name,
-.order-pick-item.stage-construction .order-pick-name { background: #fce7f3; color: #be185d; padding: 2px 8px; border-radius: 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.stage-prep .stage-word { background: #dbeafe; color: #1d4ed8; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.stage-construction .stage-word { background: #fce7f3; color: #be185d; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
