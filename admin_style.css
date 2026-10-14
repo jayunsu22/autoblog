@@ -3168,3 +3168,11 @@ body {
 .assignment-card.stage-prep .assigned-item-name, .assignment-card.stage-construction .assigned-item-name { color: var(--text-main); }
 .stage-prep .stage-word { background: #fef3c7; color: #b45309; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
 .stage-construction .stage-word { background: #eff6ff; color: #1d4ed8; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+
+/* 업무 해제 버튼·담당자 고르기 (2026-10-15) */
+.btn-release { height: 34px; padding: 0 12px; font-size: 13px; font-weight: 800; color: #b45309; background: #fef3c7; border: 1.5px solid #fcd34d; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.btn-release:disabled { opacity: 0.5; }
+.release-select { height: 34px; max-width: 120px; padding: 0 6px; font-size: 13px; font-weight: 800; border: 2px solid #f59e0b; border-radius: 8px; background: #fffbeb; color: #92400e; }
+.assignment-card.released { opacity: 0.75; border-style: dashed; }
+/* 담당자 미지정 품목이 있는 구역 탭 */
+.zone-tab-alert { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 5px; border-radius: 50%; background: #dc2626; color: #fff; font-size: 12px; font-weight: 900; line-height: 1; vertical-align: middle; }

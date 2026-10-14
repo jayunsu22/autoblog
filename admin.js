@@ -2270,6 +2270,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             cleanupTab.type = 'button';
             cleanupTab.className = `item-category-tab cleanup-tab ${activeZoneTab === CLEANUP_TAB ? 'active' : ''}`;
             cleanupTab.textContent = 켜진것.length ? `🧹 현장정리 (${끝낸수}/${켜진것.length})` : `🧹 현장정리 (${cleanupItems.length})`;
+            if (zoneHasUnassigned(cleanupItems)) {
+                const mark = document.createElement('span');
+                mark.className = 'zone-tab-alert'; mark.textContent = '!';
+                mark.title = '담당자 미지정 품목이 있습니다';
+                cleanupTab.appendChild(mark);
+            }
             cleanupTab.addEventListener('click', () => {
                 activeZoneTab = CLEANUP_TAB;
                 renderZoneAssignBoard();
@@ -2282,6 +2288,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             tab.type = 'button';
             tab.className = `item-category-tab ${zone === activeZoneTab ? 'active' : ''}`;
             tab.textContent = `${zone} (${zoneMap.get(zone).length})`;
+            // 켜 놓고 담당자를 안 정한 품목이 있으면 빨간 ❗ (2026-10-15)
+            if (zoneHasUnassigned(zoneMap.get(zone))) {
+                const mark = document.createElement('span');
+                mark.className = 'zone-tab-alert'; mark.textContent = '!';
+                mark.title = '담당자 미지정 품목이 있습니다';
+                tab.appendChild(mark);
+            }
             tab.addEventListener('click', () => {
                 activeZoneTab = zone;
                 renderZoneAssignBoard();
@@ -2466,6 +2479,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.closeItemGuidelineModal = function() {
         document.getElementById('itemGuidelineModal').style.display = 'none';
     };
+
+    // 구역 안에 '켜져 있는데 담당자가 없는' 단계(아직 안 끝난 것)가 있는지 - 구역 탭 빨간 ❗ 용.
+    // 저장 전 변경(켜기·담당 고르기)도 반영한다. 현장정리(한 번에)는 담당 한 명(시공기사 칸)만 본다
+    function zoneHasUnassigned(items) {
+        const tasks = currentDetailData.tasks || [];
+        return (items || []).some(item => {
+            const name = item.품목명;
+            if (!getEffectiveActive(name)) return false;
+            const pending = zonePendingChanges.get(name) || {};
+            const f = (tasks.find(t => t.fields.시공품목 === name) || {}).fields || {};
+            const stages = item.작업방식 === '한번에' ? ['시공'] : ['밑작업', '시공'];
+            return stages.some(stage => {
+                const who = pending[stage] !== undefined ? pending[stage] : (f[stage + '기사'] || '');
+                const done = stage === '밑작업' ? f.밑작업완료 : f.시공완료;
+                return !who && !done;
+            });
+        });
+    }
 
     // 대기 중인 변경사항까지 반영한 "지금 화면에 보여줄" 활성화 여부 (서버 상태 + 아직 저장 안 한 토글)
     function getEffectiveActive(itemName) {
@@ -3052,8 +3083,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 4px;">
-                    <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'up')" title="위로 이동">▲</button>
-                    <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'down')" title="아래로 이동">▼</button>
+                    <span class="release-slot" onclick="event.stopPropagation();"><button class="btn-release" onclick="event.stopPropagation(); releaseAssignment('${recordId}', '${stage}', this)" title="이 기사님 담당에서 빼고, 다른 담당자를 고를 수 있습니다">해제</button></span>
                     <button class="btn-unassign" onclick="event.stopPropagation(); unassignWorker('${recordId}', '${stage}')" title="배정 취소">×</button>
                 </div>
             </div>
@@ -3430,6 +3460,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 배정 취소 실행
+    // 업무 해제 (2026-10-15): 순서 ▲▼ 자리에 둔다 (순서는 🔢 순서 빠르게 정하기로).
+    // 누르면 바로 이 기사님 담당에서 빼고, 그 자리에 담당자 고르기 칸이 뜬다 (기본 '담당자 미지정').
+    // 다른 기사님을 고르면 그분에게 넘어간다. 그대로 두면 미지정으로 남는다 → 품목 배정 구역 탭에 빨간 ❗
+    window.releaseAssignment = async function(recordId, stage, btn) {
+        const card = btn.closest('.assignment-card');
+        const slot = btn.parentElement;
+        btn.disabled = true;
+        try {
+            const response = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'unassign_worker', projectCode: activeProjectCode, recordId: recordId, stage: stage })
+            });
+            if (!response.ok) throw new Error('해제 실패');
+        } catch (error) {
+            console.error(error);
+            btn.disabled = false;
+            showToast('해제하지 못했습니다. 다시 눌러 주세요.', 'danger');
+            return;
+        }
+        // 화면 데이터도 미지정으로 (다시 그려도 맞게)
+        const task = (currentDetailData.tasks || []).find(t => t.id === recordId);
+        if (task) task.fields[stage + '기사'] = '';
+        if (card) card.classList.add('released');
+        const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const workers = currentDetailData.workers || [];
+        const sel = document.createElement('select');
+        sel.className = 'release-select';
+        sel.innerHTML = `<option value="" selected>담당자 미지정</option>` + workers.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
+        sel.onclick = (e) => e.stopPropagation();
+        sel.onchange = async () => {
+            const name = sel.value;
+            if (!name) return;
+            sel.disabled = true;
+            try {
+                const response = await fetchWithTimeout(API_SAVE_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'assign_worker', projectCode: activeProjectCode, recordId: recordId, workerName: name, stage: stage })
+                });
+                if (!response.ok) throw new Error('배정 실패');
+                showToast(`${name} 기사님에게 넘겼습니다.`);
+                await showProjectDetail(activeProjectCode);
+            } catch (error) {
+                console.error(error);
+                sel.disabled = false;
+                sel.value = '';
+                showToast('담당자를 지정하지 못했습니다. 다시 골라 주세요.', 'danger');
+            }
+        };
+        slot.innerHTML = '';
+        slot.appendChild(sel);
+        showToast('해제했습니다. 다른 담당자를 고르거나 미지정으로 두세요.');
+    };
+
     window.unassignWorker = async function(recordId, stage) {
         if (!confirm("업무 배정을 취소하고 품목 풀로 되돌리시겠습니까?")) return;
 
