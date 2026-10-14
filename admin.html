@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
-    <link rel="stylesheet" href="admin_style.css?v=20261015d">
+    <link rel="stylesheet" href="admin_style.css?v=20261015e">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -186,6 +186,7 @@
                         <select id="assignmentWorkerFilter" onclick="event.stopPropagation()" onchange="event.stopPropagation(); onAssignmentWorkerFilterChange()" style="width: 96px; flex: 0 0 auto; margin: 0 8px; padding: 5px 6px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main);">
                             <option value="">전체보기</option>
                         </select>
+                        <button type="button" id="boardSaveBtn" class="board-save-btn" onclick="event.stopPropagation(); saveBoardPending()" title="해제·담당 변경을 저장">💾 저장</button>
                         <button type="button" onclick="event.stopPropagation(); openOrderPickModal()" title="순서 빠르게 정하기" style="padding: 5px 8px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; flex-shrink: 0;">🔢</button>
                         <button type="button" onclick="event.stopPropagation(); refreshBoardData()" title="새로고침" style="padding: 5px 8px; font-size: 15px; font-weight: 800; border: 1.5px solid var(--border-color); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; flex-shrink: 0;">🔄</button>
                         <span class="count-badge" id="assignedCountBadge" style="display: none;">0개</span>
@@ -652,7 +653,7 @@
     </div>
 
     <script src="owner-key.js?v=20261014b"></script>
-    <script src="admin.js?v=20261015g"></script>
+    <script src="admin.js?v=20261015h"></script>
     <script src="app-switcher.js?v=20261014d" data-app-id="admin" data-hide-when-param="code"></script>
 </body>
 </html>
