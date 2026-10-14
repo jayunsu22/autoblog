@@ -2094,6 +2094,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             activeWorkerName = null;
             activeZoneTab = null;
             zonePendingChanges.clear();
+            boardPending.clear();
+            updateBoardSaveBtn();
         }
         activeProjectCode = recordId;
 
@@ -3084,7 +3086,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <div style="display: flex; align-items: center; gap: 4px;">
                     <span class="release-slot" onclick="event.stopPropagation();"><button class="btn-release" onclick="event.stopPropagation(); releaseAssignment('${recordId}', '${stage}', this)" title="이 기사님 담당에서 빼고, 다른 담당자를 고를 수 있습니다">해제</button></span>
-                    <button class="btn-unassign" onclick="event.stopPropagation(); unassignWorker('${recordId}', '${stage}')" title="배정 취소">×</button>
+                    <button class="btn-unassign" onclick="event.stopPropagation(); unassignWorker('${recordId}', '${stage}', this)" title="배정 취소 (저장을 눌러야 반영)">×</button>
                 </div>
             </div>
         `;
@@ -3096,6 +3098,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         card.innerHTML = `${headerHtml}${bodyHtml}`;
         boardAssignmentList.appendChild(card);
+        applyBoardPending(card);   // 저장 안 한 해제·담당 변경이 있으면 그대로 다시 보여준다
 
         // ✋ 손잡이(폰에서 끌어 옮기기)는 뺐다 - 순서는 위의 🔢 순서 빠르게 정하기와 ▲▼ 로 정한다 (2026-10-15)
     }
@@ -3460,86 +3463,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 배정 취소 실행
-    // 업무 해제 (2026-10-15): 순서 ▲▼ 자리에 둔다 (순서는 🔢 순서 빠르게 정하기로).
-    // 누르면 바로 이 기사님 담당에서 빼고, 그 자리에 담당자 고르기 칸이 뜬다 (기본 '담당자 미지정').
-    // 다른 기사님을 고르면 그분에게 넘어간다. 그대로 두면 미지정으로 남는다 → 품목 배정 구역 탭에 빨간 ❗
-    window.releaseAssignment = async function(recordId, stage, btn) {
-        const card = btn.closest('.assignment-card');
-        const slot = btn.parentElement;
-        btn.disabled = true;
-        try {
-            const response = await fetchWithTimeout(API_SAVE_URL, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'unassign_worker', projectCode: activeProjectCode, recordId: recordId, stage: stage })
-            });
-            if (!response.ok) throw new Error('해제 실패');
-        } catch (error) {
-            console.error(error);
-            btn.disabled = false;
-            showToast('해제하지 못했습니다. 다시 눌러 주세요.', 'danger');
-            return;
-        }
-        // 화면 데이터도 미지정으로 (다시 그려도 맞게)
-        const task = (currentDetailData.tasks || []).find(t => t.id === recordId);
-        if (task) task.fields[stage + '기사'] = '';
-        if (card) card.classList.add('released');
+    /* 업무 해제·배정 취소·담당 바꾸기 (2026-10-15) - 저장 버튼을 누를 때 한꺼번에 서버로 보낸다.
+       예전엔 누를 때마다 서버에 보내고 화면을 다시 불러와서 매번 기다려야 했다.
+       이제는 화면에만 표시해 두고(점선 카드 + 담당자 고르기 칸), 위의 💾 저장을 누르면 모아서 보내고 한 번만 다시 불러온다.
+       - 해제 / ✕ : 이 기사님 담당에서 뺄 예정 → 담당자 고르기 칸(기본 '미지정')
+       - 고르기 칸에서 다른 기사님 → 그분에게 넘길 예정
+       - ↩ : 그 카드의 예정 취소
+       기사님을 바꿔 봐도 예정은 남아 있다(그 카드가 있는 기사님 화면에서 다시 보인다) */
+    const boardPending = new Map();   // 'recordId__stage' → { recordId, stage, worker('' = 미지정) }
+    const boardKey = (recordId, stage) => `${recordId}__${stage}`;
+
+    function updateBoardSaveBtn() {
+        const btn = document.getElementById('boardSaveBtn');
+        if (!btn) return;
+        const n = boardPending.size;
+        btn.textContent = n ? `💾 저장 (${n})` : '💾 저장';
+        btn.classList.toggle('has-changes', n > 0);
+    }
+
+    function applyBoardPending(card) {
+        const key = boardKey(card.dataset.recordId, card.dataset.stage);
+        const p = boardPending.get(key);
+        const slot = card.querySelector('.release-slot');
+        const xBtn = card.querySelector('.btn-unassign');
+        if (!p || !slot) return;
+        card.classList.add('released');
         const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         const workers = currentDetailData.workers || [];
         const sel = document.createElement('select');
         sel.className = 'release-select';
-        sel.innerHTML = `<option value="" selected>미지정</option>` + workers.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
+        sel.innerHTML = `<option value="">미지정</option>` + workers.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
+        sel.value = p.worker || '';
         sel.onclick = (e) => e.stopPropagation();
-        sel.onchange = async () => {
-            const name = sel.value;
-            if (!name) return;
-            sel.disabled = true;
-            try {
-                const response = await fetchWithTimeout(API_SAVE_URL, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'assign_worker', projectCode: activeProjectCode, recordId: recordId, workerName: name, stage: stage })
-                });
-                if (!response.ok) throw new Error('배정 실패');
-                showToast(`${name} 기사님에게 넘겼습니다.`);
-                await showProjectDetail(activeProjectCode);
-            } catch (error) {
-                console.error(error);
-                sel.disabled = false;
-                sel.value = '';
-                showToast('담당자를 지정하지 못했습니다. 다시 골라 주세요.', 'danger');
-            }
-        };
+        sel.onchange = () => { p.worker = sel.value; updateBoardSaveBtn(); };
         slot.innerHTML = '';
         slot.appendChild(sel);
-        showToast('해제했습니다. 다른 담당자를 고르거나 미지정으로 두세요.');
+        if (xBtn) { xBtn.textContent = '↩'; xBtn.title = '되돌리기 (해제 취소)'; xBtn.classList.add('undo'); }
+    }
+
+    window.releaseAssignment = function(recordId, stage, btn) {
+        const key = boardKey(recordId, stage);
+        if (!boardPending.has(key)) boardPending.set(key, { recordId, stage, worker: '' });
+        const card = btn.closest('.assignment-card');
+        if (card) applyBoardPending(card);
+        updateBoardSaveBtn();
     };
 
-    window.unassignWorker = async function(recordId, stage) {
-        if (!confirm("업무 배정을 취소하고 품목 풀로 되돌리시겠습니까?")) return;
+    // ✕ : 처음 누르면 해제 예정(해제와 같음), 해제 예정인 카드에서 누르면(↩) 되돌리기
+    window.unassignWorker = function(recordId, stage, btn) {
+        const key = boardKey(recordId, stage);
+        if (boardPending.has(key)) {
+            boardPending.delete(key);
+            updateBoardSaveBtn();
+            renderBoardAssignments();
+            return;
+        }
+        window.releaseAssignment(recordId, stage, btn || boardAssignmentList);
+    };
 
-        showLoading("배정 취소 중...");
+    window.saveBoardPending = async function() {
+        if (!activeProjectCode) return;
+        const items = [...boardPending.values()];
+        if (!items.length) { showToast('바뀐 것이 없습니다.'); return; }
+        showLoading(`${items.length}건 저장 중...`);
         try {
-            const response = await fetchWithTimeout(API_SAVE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'unassign_worker',
-                    projectCode: activeProjectCode,
-                    recordId: recordId,
-                    stage: stage
-                })
+            const results = await Promise.allSettled(items.map(p => fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(p.worker
+                    ? { type: 'assign_worker', projectCode: activeProjectCode, recordId: p.recordId, workerName: p.worker, stage: p.stage }
+                    : { type: 'unassign_worker', projectCode: activeProjectCode, recordId: p.recordId, stage: p.stage })
+            }).then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); })));
+            let failed = 0;
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled') boardPending.delete(boardKey(items[i].recordId, items[i].stage));
+                else failed++;
             });
-
-            if (!response.ok) throw new Error("취소 실패");
-            
-            showToast("배정이 취소되었습니다.");
+            updateBoardSaveBtn();
+            if (failed) showToast(`${failed}건은 저장하지 못했습니다. 다시 저장을 눌러 주세요.`, 'danger');
+            else showToast(`${items.length}건 저장했습니다.`);
             await showProjectDetail(activeProjectCode);
         } catch (error) {
             console.error(error);
-            showToast("배정 취소 처리를 완료하지 못했습니다.", "danger");
+            showToast('저장하지 못했습니다. 다시 눌러 주세요.', 'danger');
         } finally {
             hideLoading();
         }
     };
+    window.addEventListener('beforeunload', (e) => {
+        if (boardPending.size) { e.preventDefault(); e.returnValue = ''; }
+    });
 
     // 개별 지침 온/오프 토글 저장
     window.toggleGuidelineItem = async function(recordId, stage, guidelineLine, currentActive) {
