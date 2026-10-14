@@ -7,6 +7,11 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>품질관리 및 블로그 자동화 - 관리자 대시보드</title>
+    <!-- 폰에 '앱 설치' 하면 따로 된 창으로 열린다 (크롬 바로가기는 크롬 탭이라 다른 앱과 창을 같이 써서 매번 다시 불러왔다) -->
+    <link rel="manifest" href="admin.webmanifest">
+    <meta name="theme-color" content="#1e293b">
+    <link rel="icon" href="admin-icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="admin-icon-192.png">
     <link rel="stylesheet" href="admin_style.css?v=20261015e">
 </head>
 <body>
@@ -653,6 +658,7 @@
     </div>
 
     <script src="owner-key.js?v=20261014b"></script>
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('admin-sw.js').catch(function () {});</script>
     <script src="admin.js?v=20261015h"></script>
     <script src="app-switcher.js?v=20261014d" data-app-id="admin" data-hide-when-param="code"></script>
 </body>

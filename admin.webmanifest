@@ -1,0 +1,17 @@
+{
+  "id": "./admin.html",
+  "name": "필름현장관리자",
+  "short_name": "현장관리자",
+  "description": "현장 품목 배정 · 업무배정표 · 공지 · 블로그 발행",
+  "start_url": "./admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1e293b",
+  "theme_color": "#1e293b",
+  "lang": "ko",
+  "icons": [
+    { "src": "admin-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "admin-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

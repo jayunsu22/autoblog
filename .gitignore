@@ -21,3 +21,7 @@
 !icon-180.png
 !icon-32.png
 !.gitignore
+!admin.webmanifest
+!admin-sw.js
+!admin-icon-192.png
+!admin-icon-512.png
