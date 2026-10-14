@@ -3487,7 +3487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const workers = currentDetailData.workers || [];
         const sel = document.createElement('select');
         sel.className = 'release-select';
-        sel.innerHTML = `<option value="" selected>담당자 미지정</option>` + workers.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
+        sel.innerHTML = `<option value="" selected>미지정</option>` + workers.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
         sel.onclick = (e) => e.stopPropagation();
         sel.onchange = async () => {
             const name = sel.value;
