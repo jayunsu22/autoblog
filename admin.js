@@ -2302,9 +2302,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const itemsInZone = [...(activeZoneTab === CLEANUP_TAB ? cleanupItems : (zoneMap.get(activeZoneTab) || []))];
         // 켜져 있는(활성화된) 품목이 위로 모이고, 꺼져있는 품목은 아래로 - 이미 시공할 걸로 골라둔 것부터 눈에 띄게
+        // 정렬은 '저장된' 상태로만 한다 - 체크하자마자 위로 튀면 담당자를 고르려고 다시 찾아야 했다.
+        // 저장 버튼을 눌러 서버에서 새로 받아오면 그때 위로 올라간다 (2026-10-15)
+        const savedActive = (name) => (currentDetailData.activeItems || []).includes(name);
         itemsInZone.sort((a, b) => {
-            const aActive = getEffectiveActive(a.품목명);
-            const bActive = getEffectiveActive(b.품목명);
+            const aActive = savedActive(a.품목명);
+            const bActive = savedActive(b.품목명);
             if (aActive !== bActive) return aActive ? -1 : 1;
             const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
             const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
@@ -2712,10 +2715,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         const tasks = currentDetailData.tasks || [];
-        // 여기도 매트릭스와 똑같이 켜진 품목이 위로 모이게 정렬
+        // 여기도 매트릭스와 똑같이 켜진 품목이 위로 모이게 정렬 (저장된 상태 기준 - 체크해도 자리는 그대로, 저장하면 이동)
+        const savedActive = (name) => (currentDetailData.activeItems || []).includes(name);
         const sorted = [...group.items].sort((a, b) => {
-            const aActive = getEffectiveActive(a.품목명);
-            const bActive = getEffectiveActive(b.품목명);
+            const aActive = savedActive(a.품목명);
+            const bActive = savedActive(b.품목명);
             if (aActive !== bActive) return aActive ? -1 : 1;
             const pA = a.우선순위 !== undefined ? a.우선순위 : 999;
             const pB = b.우선순위 !== undefined ? b.우선순위 : 999;
