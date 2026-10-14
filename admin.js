@@ -3047,7 +3047,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${statusBadgeHtml}
                     <span class="toggle-arrow" style="font-size: 11px; color: #888;">▼</span>
                 </div>
-                <span class="drag-handle" title="여기를 잡고 위아래로 드래그해서 순서 이동">✋</span>
                 <div style="display: flex; align-items: center; gap: 4px;">
                     <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'up')" title="위로 이동">▲</button>
                     <button class="btn-move-order" onclick="event.stopPropagation(); moveAssignmentCard('${recordId}', '${stage}', 'down')" title="아래로 이동">▼</button>
@@ -3064,33 +3063,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         card.innerHTML = `${headerHtml}${bodyHtml}`;
         boardAssignmentList.appendChild(card);
 
-        // 모바일 터치 드래그 (네이티브 HTML5 드래그앤드롭은 터치 기기에서 동작하지 않아 별도 구현)
-        // ✋ 손잡이를 잡고 위아래로 밀면, 마우스 드래그와 동일한 방식으로 순서를 끼워넣음
-        const dragHandle = card.querySelector('.drag-handle');
-        let touchDragging = false;
-        dragHandle.addEventListener('touchstart', () => {
-            touchDragging = true;
-            card.classList.add('dragging');
-        }, { passive: true });
-
-        dragHandle.addEventListener('touchmove', (e) => {
-            if (!touchDragging) return;
-            e.preventDefault();
-            const touch = e.touches[0];
-            const siblings = [...boardAssignmentList.querySelectorAll('.assignment-card:not(.dragging)')];
-            const nextSibling = siblings.find(sibling => {
-                const box = sibling.getBoundingClientRect();
-                return touch.clientY <= box.top + box.height / 2;
-            });
-            boardAssignmentList.insertBefore(card, nextSibling);
-        }, { passive: false });
-
-        dragHandle.addEventListener('touchend', async () => {
-            if (!touchDragging) return;
-            touchDragging = false;
-            card.classList.remove('dragging');
-            await persistAssignmentOrder();
-        });
+        // ✋ 손잡이(폰에서 끌어 옮기기)는 뺐다 - 순서는 위의 🔢 순서 빠르게 정하기와 ▲▼ 로 정한다 (2026-10-15)
     }
 
     // 뒷정리 카드 안의 완료 기록(누가 며칠에 했는지)과 올라온 사진
