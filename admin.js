@@ -2289,7 +2289,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const tab = document.createElement('button');
             tab.type = 'button';
             tab.className = `item-category-tab ${zone === activeZoneTab ? 'active' : ''}`;
-            tab.textContent = `${zone} (${zoneMap.get(zone).length})`;
+            // 괄호 안 숫자는 '이 구역에서 켜 둔(시공할) 품목 수' (2026-10-18).
+            // 예전엔 구역에 등록된 전체 품목 수라 30개처럼 늘 같은 수가 떠서 쓸모가 없었다.
+            // 저장 전 체크한 것도 바로 세어준다 (getEffectiveActive 가 대기 중 변경을 함께 본다)
+            const zoneItems = zoneMap.get(zone);
+            const 켜진수 = zoneItems.filter(it => getEffectiveActive(it.품목명)).length;
+            tab.textContent = `${zone} (${켜진수})`;
+            tab.title = `${zone} — 켜 둔 품목 ${켜진수}개 / 전체 ${zoneItems.length}개`;
             // 켜 놓고 담당자를 안 정한 품목이 있으면 빨간 ❗ (2026-10-15)
             if (zoneHasUnassigned(zoneMap.get(zone))) {
                 const mark = document.createElement('span');
