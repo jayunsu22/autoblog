@@ -12,7 +12,7 @@
     <meta name="theme-color" content="#1e293b">
     <link rel="icon" href="admin-icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="admin-icon-192.png">
-    <link rel="stylesheet" href="admin_style.css?v=20261015e">
+    <link rel="stylesheet" href="admin_style.css?v=20261018b">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -91,6 +91,8 @@
                     <button class="action-btn copy" onclick="openWorkerLink()">🔗 링크 열기</button>
                     <button class="action-btn copy" onclick="openRawPhotoGalleryForActiveProject()">📷 원본사진 보기</button>
                     <button class="action-btn copy" onclick="openRawPhotoCaptureForActiveProject()">📸 원본사진 찍기</button>
+                    <!-- 이 현장에 이어 둔 방문견적서 (일정 앱에서 연결한 것). 품목 체크할 때 보고 고른다 -->
+                    <button class="action-btn copy" id="quoteViewBtn" onclick="openQuoteForActiveProject()" title="길게 누르면 다른 견적서로 바꿉니다">📄 방문견적 보기</button>
                     <button class="action-btn publish" onclick="requestBlogPublish()">✍️ 블로그 원고 발행</button>
                 </div>
             </div>
@@ -659,7 +661,7 @@
 
     <script src="owner-key.js?v=20261014b"></script>
     <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('admin-sw.js').catch(function () {});</script>
-    <script src="admin.js?v=20261018a"></script>
+    <script src="admin.js?v=20261018b"></script>
     <script src="app-switcher.js?v=20261014d" data-app-id="admin" data-hide-when-param="code"></script>
 </body>
 </html>

@@ -446,8 +446,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         // 일정 앱에서 넘어오는 주인용 딥링크 (admin.html#site=<현장 id>). 현장소장 보기(?code=)에서는 무시한다.
         // 암호 확인이 끝난 뒤에만 이 함수가 불리므로 암호 화면을 건너뛰지 않는다.
-        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)$/.exec(location.hash);
+        // 일정 앱이 '#site=<현장 id>&quote=<견적코드>' 로도 들어온다 (2026-10-18) — 그 현장에 이어 둔 방문견적서
+        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)(?:&quote=([A-Za-z0-9_-]*))?$/.exec(location.hash);
         const hashCode = hashMatch ? hashMatch[1] : '';
+        if (hashMatch && hashMatch[2] !== undefined) 견적코드저장(hashCode, hashMatch[2]);
         if (hashMatch) history.replaceState(null, '', location.pathname + location.search);
         loadProjectList().then(() => {
             const targetCode = scopedProjectCode || hashCode || localStorage.getItem('lastActiveProjectCode');
@@ -1221,6 +1223,69 @@ document.addEventListener('DOMContentLoaded', async () => {
         showRawPhotoZoneStep();
         document.getElementById('rawPhotoZoneModal').style.display = 'flex';
     };
+
+    /* ---------- 방문견적서 보기 (2026-10-18) ----------
+       견적서는 일정 앱(현장관리)에서 현장에 이어 붙인다. 그 앱에서 [현장업무 열기] 로 넘어오면
+       주소(#site=…&quote=…)에 견적코드가 실려 오고, 여기서는 현장별로 기억해 뒀다가 버튼으로 연다.
+       코드가 없으면 버튼을 누를 때 물어본다 (길게 누르면 다른 견적서로 바꾼다). */
+    const QUOTE_MAP_KEY = 'filmAdminQuoteByProject';
+    const QUOTE_VIEW_BASE = 'https://songil.netlify.app/q/';
+    function 견적코드뽑기(값) {
+        const v = String(값 == null ? '' : 값).trim();
+        if (!v) return '';
+        const m = /\/q\/([A-Za-z0-9_-]+)/.exec(v);
+        if (m) return m[1];
+        return /^[A-Za-z0-9_-]+$/.test(v) ? v : '';
+    }
+    function 견적맵읽기() {
+        try { const j = JSON.parse(localStorage.getItem(QUOTE_MAP_KEY) || '{}'); return (j && typeof j === 'object') ? j : {}; }
+        catch (e) { return {}; }
+    }
+    function 견적코드저장(projectCode, code) {
+        if (!projectCode) return;
+        const map = 견적맵읽기();
+        const c = 견적코드뽑기(code);
+        if (c) map[projectCode] = c; else delete map[projectCode];
+        try { localStorage.setItem(QUOTE_MAP_KEY, JSON.stringify(map)); } catch (e) { /* 저장 못 해도 이번 한 번은 연다 */ }
+        갱신_견적버튼();
+    }
+    function 견적코드읽기(projectCode) { return 견적맵읽기()[projectCode] || ''; }
+    function 갱신_견적버튼() {
+        const btn = document.getElementById('quoteViewBtn');
+        if (!btn) return;
+        const code = 견적코드읽기(activeProjectCode);
+        btn.textContent = code ? '📄 방문견적 보기' : '📄 방문견적 연결';
+        btn.title = code ? '/q/' + code + ' · 길게 누르면 다른 견적서로 바꿉니다' : '견적코드나 /q/… 주소를 넣어 이 현장과 잇습니다';
+    }
+    function 견적물어보기(바꾸기) {
+        const 이전 = 견적코드읽기(activeProjectCode);
+        const v = prompt(바꾸기 ? '이 현장의 방문견적 코드(또는 /q/… 주소)를 다시 넣어 주세요.\n비우고 확인하면 연결이 끊깁니다.'
+            : '이 현장의 방문견적 코드(또는 /q/… 주소)를 넣어 주세요.\n일정 앱에서 [현장업무 열기] 로 들어오면 자동으로 들어옵니다.', 이전);
+        if (v === null) return '';
+        const code = 견적코드뽑기(v);
+        if (!code && String(v).trim()) { showToast('견적코드를 알아보지 못했습니다.'); return ''; }
+        견적코드저장(activeProjectCode, code);
+        showToast(code ? '방문견적서를 이 현장에 이었습니다.' : '방문견적 연결을 끊었습니다.');
+        return code;
+    }
+    window.openQuoteForActiveProject = function () {
+        if (!activeProjectCode) { showToast('현장을 먼저 여세요.'); return; }
+        const code = 견적코드읽기(activeProjectCode) || 견적물어보기(false);
+        if (!code) return;
+        window.open(QUOTE_VIEW_BASE + code, '_blank');
+    };
+    // 길게 누르면(500ms) 다른 견적서로 바꾸기
+    (function () {
+        let t = null, moved = false;
+        const btnId = 'quoteViewBtn';
+        const start = () => { moved = false; t = setTimeout(() => { t = null; if (!moved && activeProjectCode) 견적물어보기(true); }, 500); };
+        const cancel = () => { if (t) { clearTimeout(t); t = null; } };
+        document.addEventListener('touchstart', (e) => { if (e.target.closest && e.target.closest('#' + btnId)) start(); }, { passive: true });
+        document.addEventListener('touchmove', () => { moved = true; cancel(); }, { passive: true });
+        document.addEventListener('touchend', cancel);
+        document.addEventListener('mousedown', (e) => { if (e.target.closest && e.target.closest('#' + btnId)) start(); });
+        document.addEventListener('mouseup', cancel);
+    })();
 
     // 현장 상세화면 상단 "📸 원본사진 찍기" 버튼용 - 현재 열려있는 현장 기준으로 캡처 팝업을 엶
     window.openRawPhotoCaptureForActiveProject = function() {
@@ -2098,6 +2163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateBoardSaveBtn();
         }
         activeProjectCode = recordId;
+        갱신_견적버튼();   // 현장이 바뀌면 방문견적 버튼 글씨도 그 현장 기준으로
 
         const cached = useCache ? readDetailCache(recordId) : null;
         if (cached) {

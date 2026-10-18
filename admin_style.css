@@ -530,12 +530,14 @@ body {
         grid-column: span 2;
     }
 
+    /* 둘째 줄: 원본사진 보기 · 원본사진 찍기 · 방문견적 보기 (2026-10-18 에 한 칸 늘었다) */
     .detail-action-wrap .action-btn:nth-child(4),
-    .detail-action-wrap .action-btn:nth-child(5) {
-        grid-column: span 3;
+    .detail-action-wrap .action-btn:nth-child(5),
+    .detail-action-wrap .action-btn:nth-child(6) {
+        grid-column: span 2;
     }
 
-    .detail-action-wrap .action-btn:nth-child(6) {
+    .detail-action-wrap .action-btn:nth-child(7) {
         grid-column: span 6;
         padding: 14px 16px;
         font-size: 14.5px;
