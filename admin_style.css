@@ -3198,7 +3198,14 @@ body {
 #quotePickOverlay .qp-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 #quotePickOverlay .qp-row { display: block; width: 100%; text-align: left; border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 10px; background: #fff; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
-#quotePickOverlay .qp-row.on { border-color: #2563eb; background: #eff6ff; }
+#quotePickOverlay .qp-row.mine { background: #ecfdf5; border-color: #a7f3d0; }   /* 이 현장 거래처가 발행한 견적 */
+#quotePickOverlay .qp-row.on { border-color: #2563eb; background: #eff6ff; box-shadow: inset 0 0 0 1px #2563eb; }
+#quotePickOverlay .qp-group { margin: 2px 2px 8px; font-size: 12px; font-weight: 800; color: #64748b; }
+#quotePickOverlay .qp-group.mine { color: #166534; }
+#quotePickOverlay .qp-t em.now { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #dbeafe; color: #1e40af;
+    font-size: 11.5px; font-style: normal; font-weight: 800; }
+#quotePickOverlay .qp-menu .qp-menu-list { flex-direction: column; border-top: 0; padding-top: 4px; }
+#quotePickOverlay .qp-menu .qp-menu-list button { width: 100%; text-align: left; padding: 13px 14px; font-size: 14px; }
 #quotePickOverlay .qp-t { display: block; font-size: 14.5px; font-weight: 800; color: #0f172a; }
 #quotePickOverlay .qp-t em { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #dcfce7; color: #166534;
     font-size: 11.5px; font-style: normal; font-weight: 800; }

@@ -1307,6 +1307,128 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return list;
             });
     }
+    /* ---------- 견적서대로 시공품목 켜기 (2026-10-18) ----------
+       견적은 '구역 × 품목'(방1 / 방문), 여기는 품목명 하나(방1문+틀)라 이름 규칙으로 짝을 짓는다.
+       같은 규칙이 견적앱(songil/quote_to_site.js)·일정앱(sitenote/quote_link.js)에도 있다 —
+       한쪽을 고치면 세 곳을 같이 고친다. 없는 품목은 새로 만들지 않고 '짝없음' 으로 알린다. */
+    const QUOTE_API_URL = `${n8nBase}/webhook/pro-quote`;
+    const 몰딩류 = ['몰딩', '크라운몰딩', '걸레받이'];
+    function 견적_앞머리(구역) {
+        if (구역 === '세탁실') return '거실세탁실';
+        if (구역 === '실외기실') return '거실실외기실';
+        return 구역;
+    }
+    function 견적_기본이름(품목명) { return String(품목명 || '').split(' (')[0].trim(); }
+    function 견적_몰딩구역(방수) {
+        const n = Math.max(1, Math.min(5, parseInt(방수, 10) || 3));
+        const out = ['거실', '주방', '현관', '방1'];
+        for (let i = 2; i <= n; i++) out.push('방' + i);
+        return out;
+    }
+    function 견적_후보(구역, 품목명, 방수) {
+        const 이름 = 견적_기본이름(품목명);
+        const P = 견적_앞머리(구역);
+        if (몰딩류.indexOf(이름) >= 0) {
+            const 끝 = 이름 === '걸레받이' ? '걸레받이' : '몰딩';
+            if (구역 === '전체공통') return { 묶음: 견적_몰딩구역(방수).map((z) => z + 끝) };
+            return { 후보: [P + 끝] };
+        }
+        if (이름 === '방문' || 이름 === '문짝' || 이름 === '문틀') return { 후보: [P + '문+틀', P + '문'] };
+        if (이름 === '샤시1' || 이름 === '샤시2') return { 후보: [P + 이름, P + '샤시'] };
+        if (/^(붙박이장|수납장)/.test(이름)) return { 후보: [P + '수납장'] };
+        if (이름 === '등박스') return { 후보: [P + '등박스'] };
+        if (이름 === '화장실문' || 이름 === '화장실 문짝') return { 후보: [P + '화장실문+틀', P + '화장실문'] };
+        if (이름 === '화장대') return { 후보: ['화장대'] };
+        if (이름 === '거실베란다 통로문' || 이름 === '베란다 중문') return { 후보: ['거실베란다문'] };
+        if (이름 === '아치') return { 후보: [P + '아치문틀'] };
+        if (이름 === '아트월') return { 후보: ['아트월'] };
+        if (이름 === '가벽') return { 후보: 구역 === '거실' ? ['가벽', '거실가벽'] : [P + '가벽'] };
+        if (/^신발장(틀|문짝)$/.test(이름)) return { 후보: ['신발장1'] };
+        if (/^싱크대/.test(이름)) return { 후보: ['싱크대'] };
+        if (/^냉장고장/.test(이름)) return { 후보: ['냉장고장'] };
+        if (이름 === '세탁실문') return { 후보: ['거실세탁실문'] };
+        if (이름 === '실외기실문') return { 후보: ['거실실외기실문'] };
+        if (/^중문/.test(이름) && 구역 === '현관') return { 후보: ['현관중문'] };
+        if (이름 === '신발장1' || 이름 === '신발장2' || 이름 === '현관문') return { 후보: [이름] };
+        return { 후보: [P + 이름.replace(/\s+/g, '')] };
+    }
+    function 견적_방수추정(라인들) {
+        let n = 0;
+        (라인들 || []).forEach((l) => {
+            const m = /^방([1-5])/.exec(String((l && l.구역) || ''));
+            if (m) n = Math.max(n, +m[1]);
+        });
+        return n || 3;
+    }
+    function 견적_짝짓기(라인들, 현장품목명들) {
+        const 있음 = new Set((현장품목명들 || []).filter(Boolean));
+        const 방수 = 견적_방수추정(라인들);
+        const 짝 = [], 짝없음 = [], 넣은 = new Set(), 없은 = new Set();
+        (라인들 || []).forEach((l) => {
+            const 구역 = String((l && l.구역) || '').trim();
+            const 품목 = String((l && l.품목명) || '').trim();
+            if (!구역 || !품목) return;
+            const h = 견적_후보(구역, 품목, 방수);
+            let 찾은 = [];
+            if (h.묶음) 찾은 = h.묶음.filter((n) => 있음.has(n));
+            else { const 첫 = h.후보.find((n) => 있음.has(n)); if (첫) 찾은 = [첫]; }
+            if (!찾은.length) {
+                const k = 구역 + '|' + 품목;
+                if (!없은.has(k)) { 없은.add(k); 짝없음.push(구역 + ' ' + 품목); }
+                return;
+            }
+            찾은.forEach((n) => { if (!넣은.has(n)) { 넣은.add(n); 짝.push(n); } });
+        });
+        return { 짝, 짝없음 };
+    }
+    /* 견적서를 받아 그대로 품목을 켠다. 이미 켜진 품목은 건드리지 않는다(실수로 꺼지지 않게).
+       끝나면 현장 상세를 다시 받아 화면을 맞춘다. */
+    async function 견적대로품목켜기(code) {
+        if (!activeProjectCode || !code) return null;
+        showToast('견적서를 보고 시공품목을 켜는 중…');
+        let 견적;
+        try {
+            const res = await fetchWithTimeout(`${QUOTE_API_URL}?id=${encodeURIComponent(code)}`);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            let j = await res.json();
+            if (Array.isArray(j)) j = j[0];
+            if (!j || j.error) throw new Error('견적서를 찾지 못했습니다');
+            견적 = j;
+        } catch (e) {
+            showToast('견적서를 못 받았습니다 (' + e.message + ')', 'danger');
+            return null;
+        }
+        const 현장품목 = ((currentDetailData && currentDetailData.masterItems) || []).map((m) => m && m.품목명).filter(Boolean);
+        const 이미 = new Set(((currentDetailData && currentDetailData.activeItems) || []));
+        const r = 견적_짝짓기(견적.라인들, 현장품목);
+        const 새것 = r.짝.filter((n) => !이미.has(n));
+        let 성공 = 0, 실패 = 0;
+        for (let i = 0; i < 새것.length; i++) {
+            try {
+                const res = await fetchWithTimeout(API_SAVE_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'toggle_item_create', projectCode: activeProjectCode, itemName: 새것[i] }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                성공 += 1;
+            } catch (e) { 실패 += 1; }
+        }
+        if (성공) await showProjectDetail(activeProjectCode);   // 켠 품목이 화면에 바로 보이게 다시 받는다
+        const 말 = [
+            성공 ? `시공품목 ${성공}개를 켰습니다` : '새로 켤 품목이 없습니다',
+            r.짝.length - 새것.length ? `이미 ${r.짝.length - 새것.length}개` : '',
+            실패 ? `실패 ${실패}개` : '',
+            r.짝없음.length ? `짝 없는 품목 ${r.짝없음.length}개(${r.짝없음.slice(0, 3).join(', ')}${r.짝없음.length > 3 ? '…' : ''})는 직접 고르세요` : '',
+        ].filter(Boolean).join(' · ');
+        showToast(말, 실패 ? 'warning' : 'success');
+        return { 성공, 실패, 짝없음: r.짝없음 };
+    }
+    window.applyQuoteItemsForActiveProject = function () {
+        const code = 견적코드읽기(activeProjectCode);
+        if (!code) { showToast('먼저 방문견적서를 고르세요.'); 견적고르기(); return; }
+        견적대로품목켜기(code);
+    };
+
     // 가벼운 고르기 창 (관리자 앱에는 공용 모달이 없어 여기서 만든다)
     function 견적고르기창(list, info) {
         const old = document.getElementById('quotePickOverlay');
@@ -1315,6 +1437,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const 내거래처 = (p) => info && info.clientId && p.현장관리_거래처ID === info.clientId;
         const sorted = list.slice().sort((a, b) =>
             (내거래처(b) - 내거래처(a)) || String(b.발행일시 || '').localeCompare(String(a.발행일시 || '')));
+        const 이거래처수 = sorted.filter(내거래처).length;
         const 원 = (n) => Math.round(n || 0).toLocaleString('ko-KR') + '원';
         const 날 = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()}`; };
         const ov = document.createElement('div');
@@ -1338,19 +1461,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         const 그리기 = (찾는말) => {
             const q = String(찾는말 || '').trim();
             const rows = sorted.filter((p) => !q || String(p.현장명 || '').indexOf(q) >= 0).slice(0, 60);
-            listEl.innerHTML = rows.length ? rows.map((p, i) => `
-                <button type="button" class="qp-row${p.견적코드 === cur ? ' on' : ''}" data-i="${i}">
-                  <span class="qp-t">${(p.현장명 || '(이름 없음)').replace(/</g, '&lt;')}${내거래처(p) ? '<em>이 거래처</em>' : ''}</span>
+            // 이 거래처 것은 색이 다른 칸으로 위에 모으고, 다른 거래처 것과 줄로 가른다
+            let html = '', 머리냄 = { mine: false, other: false };
+            rows.forEach((p, i) => {
+                const mine = 내거래처(p);
+                if (mine && !머리냄.mine) { 머리냄.mine = true; html += `<div class="qp-group mine">${(info && info.clientName) ? String(info.clientName).replace(/</g, '&lt;') : '이 거래처'} 견적 ${이거래처수}건</div>`; }
+                if (!mine && !머리냄.other && 이거래처수) { 머리냄.other = true; html += '<div class="qp-group">다른 거래처 · 거래처 없음</div>'; }
+                html += `
+                <button type="button" class="qp-row${mine ? ' mine' : ''}${p.견적코드 === cur ? ' on' : ''}" data-i="${i}">
+                  <span class="qp-t">${(p.현장명 || '(이름 없음)').replace(/</g, '&lt;')}${p.견적코드 === cur ? '<em class="now">지금 연결됨</em>' : ''}</span>
                   <span class="qp-m">${[날(p.발행일시), p.총액 ? 원(p.총액) : '', '/q/' + p.견적코드,
-                      p.현장관리_거래처명 && !내거래처(p) ? String(p.현장관리_거래처명).replace(/</g, '&lt;') : ''].filter(Boolean).join(' · ')}</span>
-                </button>`).join('') : '<p class="qp-none">찾는 견적서가 없습니다.</p>';
+                      p.현장관리_거래처명 && !mine ? String(p.현장관리_거래처명).replace(/</g, '&lt;') : ''].filter(Boolean).join(' · ')}</span>
+                </button>`;
+            });
+            listEl.innerHTML = rows.length ? html : '<p class="qp-none">찾는 견적서가 없습니다.</p>';
             listEl.querySelectorAll('.qp-row').forEach((b) => {
-                b.onclick = () => {
+                b.onclick = async () => {
                     const p = rows[+b.dataset.i];
                     견적코드저장(activeProjectCode, p.견적코드);
                     ov.remove();
                     showToast('방문견적서를 이 현장에 이었습니다.');
                     window.open(QUOTE_VIEW_BASE + p.견적코드, '_blank');
+                    await 견적대로품목켜기(p.견적코드);   // 고른 견적서대로 시공품목까지 켠다
                 };
             });
         };
@@ -1374,11 +1506,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             견적물어보기(false);
         });
     }
+    // 이미 이어진 현장에서 버튼을 누르면 뜨는 작은 메뉴 — 잘못 골랐을 때 바로 바꾸거나 끊는다
+    function 견적메뉴(code) {
+        const old = document.getElementById('quotePickOverlay');
+        if (old) old.remove();
+        const ov = document.createElement('div');
+        ov.id = 'quotePickOverlay';
+        ov.innerHTML = `
+            <div class="qp-box qp-menu">
+              <div class="qp-head"><b>📄 방문견적</b><button type="button" class="qp-x" aria-label="닫기">✕</button></div>
+              <p class="qp-sub">이 현장에 이어 둔 견적서: <b>/q/${code}</b></p>
+              <div class="qp-foot qp-menu-list">
+                <button type="button" data-a="open">🔗 견적서 열기</button>
+                <button type="button" data-a="items">🛠 견적서대로 시공품목 켜기</button>
+                <button type="button" data-a="pick">🔁 다른 견적서 고르기</button>
+                <button type="button" class="qp-clear" data-a="clear">✕ 연결 해제</button>
+              </div>
+            </div>`;
+        document.body.appendChild(ov);
+        ov.querySelector('.qp-x').onclick = () => ov.remove();
+        ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+        ov.querySelectorAll('button[data-a]').forEach((b) => {
+            b.onclick = () => {
+                const a = b.dataset.a;
+                ov.remove();
+                if (a === 'open') window.open(QUOTE_VIEW_BASE + code, '_blank');
+                else if (a === 'items') 견적대로품목켜기(code);
+                else if (a === 'pick') 견적고르기();
+                else if (a === 'clear') { 견적코드저장(activeProjectCode, ''); showToast('방문견적 연결을 끊었습니다.'); }
+            };
+        });
+    }
     window.openQuoteForActiveProject = function () {
         if (!activeProjectCode) { showToast('현장을 먼저 여세요.'); return; }
         const code = 견적코드읽기(activeProjectCode);
-        if (code) { window.open(QUOTE_VIEW_BASE + code, '_blank'); return; }
-        견적고르기();   // 아직 안 이어진 현장이면 목록에서 고른다
+        if (code) { 견적메뉴(code); return; }   // 이미 이어졌으면 열기·품목 켜기·바꾸기·해제 메뉴
+        견적고르기();                            // 아직이면 목록에서 고른다
     };
     window.pickQuoteForActiveProject = 견적고르기;
     // 길게 누르면(500ms) 다른 견적서로 바꾸기
