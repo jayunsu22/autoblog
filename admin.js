@@ -1268,17 +1268,124 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast(code ? '방문견적서를 이 현장에 이었습니다.' : '방문견적 연결을 끊었습니다.');
         return code;
     }
+    /* 견적 목록 고르기 (2026-10-18)
+       일정 앱(현장관리)과 같은 주소(jayunsu22.github.io)라 그 앱이 저장해 둔 백업키를 그대로 읽어
+       발행 견적 목록을 받아 온다. 이 현장이 일정 앱 현장과 이어져 있으면 그 거래처 것을 맨 위로 올린다.
+       정산견적은 다른 표(settle-*)에 있어 여기 목록에 섞이지 않지만, 혹시 섞여 와도 걸러 낸다. */
+    const BOX_RESTORE_URL = `${n8nBase}/webhook/pro-box-restore`;
+    let 발행목록캐시 = null;   // { 시각, list }
+    function 일정앱자료() {
+        try {
+            const j = JSON.parse(localStorage.getItem('sitenote.v1') || 'null');
+            if (!j || typeof j !== 'object') return null;
+            return { sites: j.sites || [], clients: j.clients || [], key: (j.settings && j.settings.backupKey) || '' };
+        } catch (e) { return null; }
+    }
+    // 이 현장업무와 이어진 일정 앱 현장 → 그 거래처 (목록을 거래처로 추리는 데 쓴다)
+    function 이어진현장() {
+        const d = 일정앱자료();
+        if (!d) return null;
+        const site = d.sites.find((x) => x && x.adminId === activeProjectCode);
+        if (!site) return null;
+        const client = d.clients.find((c) => c && c.id === site.clientId);
+        return { site: site, clientId: site.clientId || '', clientName: (client && client.name) || '', key: d.key };
+    }
+    function 정산견적인가(p) {
+        const t = String((p && (p.종류 || p.구분 || p.유형)) || '');
+        return t.indexOf('정산') >= 0;
+    }
+    function 발행목록받기() {
+        if (발행목록캐시 && Date.now() - 발행목록캐시.시각 < 2 * 60 * 1000) return Promise.resolve(발행목록캐시.list);
+        const info = 이어진현장();
+        const key = (info && info.key) || '';
+        if (!key) return Promise.reject(new Error('일정 앱 백업키를 찾지 못했습니다'));
+        return fetchWithTimeout(`${BOX_RESTORE_URL}?key=${encodeURIComponent(key)}`)
+            .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+            .then((j) => {
+                const list = ((j && j.published) || []).filter((p) => p && p.견적코드 && !정산견적인가(p));
+                발행목록캐시 = { 시각: Date.now(), list: list };
+                return list;
+            });
+    }
+    // 가벼운 고르기 창 (관리자 앱에는 공용 모달이 없어 여기서 만든다)
+    function 견적고르기창(list, info) {
+        const old = document.getElementById('quotePickOverlay');
+        if (old) old.remove();
+        const cur = 견적코드읽기(activeProjectCode);
+        const 내거래처 = (p) => info && info.clientId && p.현장관리_거래처ID === info.clientId;
+        const sorted = list.slice().sort((a, b) =>
+            (내거래처(b) - 내거래처(a)) || String(b.발행일시 || '').localeCompare(String(a.발행일시 || '')));
+        const 원 = (n) => Math.round(n || 0).toLocaleString('ko-KR') + '원';
+        const 날 = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()}`; };
+        const ov = document.createElement('div');
+        ov.id = 'quotePickOverlay';
+        ov.innerHTML = `
+            <div class="qp-box">
+              <div class="qp-head">
+                <b>📄 방문견적 고르기</b>
+                <button type="button" class="qp-x" aria-label="닫기">✕</button>
+              </div>
+              <p class="qp-sub">${info && info.clientName ? `이 현장의 거래처: <b>${info.clientName}</b> (위에 먼저 나옵니다)` : '일정 앱과 이어진 현장이 아니라 최신순으로 보여줍니다'}</p>
+              <input type="text" class="qp-find" placeholder="현장명으로 찾기" autocomplete="off">
+              <div class="qp-list"></div>
+              <div class="qp-foot">
+                <button type="button" class="qp-manual">코드 직접 입력</button>
+                ${cur ? '<button type="button" class="qp-clear">연결 끊기</button>' : ''}
+              </div>
+            </div>`;
+        document.body.appendChild(ov);
+        const listEl = ov.querySelector('.qp-list');
+        const 그리기 = (찾는말) => {
+            const q = String(찾는말 || '').trim();
+            const rows = sorted.filter((p) => !q || String(p.현장명 || '').indexOf(q) >= 0).slice(0, 60);
+            listEl.innerHTML = rows.length ? rows.map((p, i) => `
+                <button type="button" class="qp-row${p.견적코드 === cur ? ' on' : ''}" data-i="${i}">
+                  <span class="qp-t">${(p.현장명 || '(이름 없음)').replace(/</g, '&lt;')}${내거래처(p) ? '<em>이 거래처</em>' : ''}</span>
+                  <span class="qp-m">${[날(p.발행일시), p.총액 ? 원(p.총액) : '', '/q/' + p.견적코드,
+                      p.현장관리_거래처명 && !내거래처(p) ? String(p.현장관리_거래처명).replace(/</g, '&lt;') : ''].filter(Boolean).join(' · ')}</span>
+                </button>`).join('') : '<p class="qp-none">찾는 견적서가 없습니다.</p>';
+            listEl.querySelectorAll('.qp-row').forEach((b) => {
+                b.onclick = () => {
+                    const p = rows[+b.dataset.i];
+                    견적코드저장(activeProjectCode, p.견적코드);
+                    ov.remove();
+                    showToast('방문견적서를 이 현장에 이었습니다.');
+                    window.open(QUOTE_VIEW_BASE + p.견적코드, '_blank');
+                };
+            });
+        };
+        그리기('');
+        ov.querySelector('.qp-find').addEventListener('input', (e) => 그리기(e.target.value));
+        ov.querySelector('.qp-x').onclick = () => ov.remove();
+        ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+        ov.querySelector('.qp-manual').onclick = () => { ov.remove(); const c = 견적물어보기(!!cur); if (c) window.open(QUOTE_VIEW_BASE + c, '_blank'); };
+        const clearBtn = ov.querySelector('.qp-clear');
+        if (clearBtn) clearBtn.onclick = () => { 견적코드저장(activeProjectCode, ''); ov.remove(); showToast('방문견적 연결을 끊었습니다.'); };
+    }
+    function 견적고르기() {
+        if (!activeProjectCode) { showToast('현장을 먼저 여세요.'); return; }
+        const info = 이어진현장();
+        showToast('견적 목록을 불러오는 중…');
+        발행목록받기().then((list) => {
+            if (!list.length) { showToast('발행된 방문견적서가 없습니다.'); 견적물어보기(false); return; }
+            견적고르기창(list, info);
+        }, (e) => {
+            showToast('견적 목록을 못 받았습니다 (' + e.message + ') — 코드를 직접 넣어 주세요.');
+            견적물어보기(false);
+        });
+    }
     window.openQuoteForActiveProject = function () {
         if (!activeProjectCode) { showToast('현장을 먼저 여세요.'); return; }
-        const code = 견적코드읽기(activeProjectCode) || 견적물어보기(false);
-        if (!code) return;
-        window.open(QUOTE_VIEW_BASE + code, '_blank');
+        const code = 견적코드읽기(activeProjectCode);
+        if (code) { window.open(QUOTE_VIEW_BASE + code, '_blank'); return; }
+        견적고르기();   // 아직 안 이어진 현장이면 목록에서 고른다
     };
+    window.pickQuoteForActiveProject = 견적고르기;
     // 길게 누르면(500ms) 다른 견적서로 바꾸기
     (function () {
         let t = null, moved = false;
         const btnId = 'quoteViewBtn';
-        const start = () => { moved = false; t = setTimeout(() => { t = null; if (!moved && activeProjectCode) 견적물어보기(true); }, 500); };
+        const start = () => { moved = false; t = setTimeout(() => { t = null; if (!moved && activeProjectCode) 견적고르기(); }, 500); };
         const cancel = () => { if (t) { clearTimeout(t); t = null; } };
         document.addEventListener('touchstart', (e) => { if (e.target.closest && e.target.closest('#' + btnId)) start(); }, { passive: true });
         document.addEventListener('touchmove', () => { moved = true; cancel(); }, { passive: true });
