@@ -11,6 +11,10 @@
 (function () {
   var STORAGE_KEY = 'myAppSwitcherList_v1';
   var POS_KEY = 'myAppSwitcherPos_v1';   // { side: 'left'|'right', y: 0~1 (화면 높이 비율) }
+  /* 나중에 기본 목록에 더한 앱(2026-10-20 현장사진~). 목록을 한 번이라도 고친 기기는 저장된 목록만 쓰므로
+     새 앱이 안 보인다. 한 번만 끼워 넣고 SEEN_KEY 에 적어 둔다 - 사용자가 지운 앱이 다시 살아나면 안 된다. */
+  var ADDED_LATER = [{ id: 'sitephotos', after: 'quotepro' }];
+  var SEEN_KEY = 'myAppSwitcherSeen_v1';
 
   var DEFAULT_APPS = [
     { id: 'admin', name: '필름현장관리자', icon: '🏢', url: 'https://jayunsu22.github.io/autoblog/admin.html' },
@@ -21,6 +25,7 @@
     { id: 'apply', name: '1분견적 무료가입', icon: '✍️', url: 'https://songil.netlify.app/apply.html' },
     { id: 'partners', name: '1분견적 파트너스', icon: '🤝', url: 'https://songil.netlify.app/dashboard_index.html' },
     { id: 'quotepro', name: '현장방문견적', icon: '🏠', url: 'https://songil.netlify.app/quote_pro.html' },
+    { id: 'sitephotos', name: '현장사진', icon: '📷', url: 'https://songil.netlify.app/p' },
     { id: 'schedule', name: '현장 일정관리', icon: '📅', url: 'https://jayunsu22.github.io/sitenote/schedule.html' },
     { id: 'goals', name: '삶의 목표', icon: '🎯', url: 'https://claude.ai/artifact/Uf2gMJz2KhDvLq1WxdER7c' }
   ];
@@ -38,10 +43,29 @@
       parsed.forEach(function (a) {
         if (a && /^https:\/\/songil\.netlify\.app\/?$/.test(a.url || '')) a.url = 'https://songil.netlify.app/songil';
       });
+      addLaterApps(parsed);
       return parsed;
     } catch (e) {
       return DEFAULT_APPS.slice();
     }
+  }
+  function addLaterApps(list) {
+    var seen = [];
+    try { seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]') || []; } catch (e) { seen = []; }
+    var changed = false;
+    ADDED_LATER.forEach(function (x) {
+      if (seen.indexOf(x.id) >= 0) return;
+      seen.push(x.id);
+      changed = true;
+      if (list.some(function (a) { return a && a.id === x.id; })) return;
+      var app = DEFAULT_APPS.filter(function (a) { return a.id === x.id; })[0];
+      if (!app) return;
+      var at = -1;
+      list.forEach(function (a, i) { if (a && a.id === x.after) at = i; });
+      list.splice(at >= 0 ? at + 1 : list.length, 0, app);
+      saveList(list);
+    });
+    if (changed) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch (e) { /* 무시 */ } }
   }
   function saveList(list) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (e) { /* 시크릿 모드 등 */ }
@@ -315,7 +339,7 @@
 
   // 사장님만 쓰는 앱에서만 버튼을 단다. 팀원·고객·가맹점이 보는 화면은 data-app-id 가 여기 없어서
   // 예전 화면(이미 저장돼 있던 HTML)이 이 파일을 불러와도 버튼이 안 생긴다 (2026-10-06).
-  var OWNER_APPS = ['admin', 'settle', 'quotepro', 'schedule'];
+  var OWNER_APPS = ['admin', 'settle', 'quotepro', 'sitephotos', 'schedule'];
 
   function init() {
     if (OWNER_APPS.indexOf(currentAppId) === -1) {
