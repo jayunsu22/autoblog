@@ -3317,8 +3317,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const guidelinesText = stage === '밑작업' ? itemInfo.밑작업지침 : itemInfo.시공후점검지침;
 
         let bodyHtml = "";
-        const excludedLines = (fields.제외된지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
-        const importantLines = (fields.중요지침 || '').split('\n').map(s => s.trim()).filter(Boolean);
+        // 이 단계 몫만 (단계지침 - '[밑작업] …' / '[시공] …', 앞머리 없는 예전 줄은 두 단계 모두)
+        const excludedLines = [...단계지침(fields.제외된지침, stage)];
+        const importantLines = [...단계지침(fields.중요지침, stage)];
         const siteNoteValue = fields.현장특이사항 || '';
         const siteNoteImportant = !!fields.특이사항중요;
 
@@ -3926,17 +3927,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    /* 제외된지침·중요지침은 품목 레코드에 칸이 하나뿐인데, 밑작업 카드와 시공 카드가 따로 저장한다.
-       예전에는 저장할 때 그 카드(단계)의 줄만 보내서, 시공 카드를 저장하면 밑작업에서 꺼 둔 지침이
-       지워지고(반대도 같다) 일괄적용한 것도 다른 단계를 저장하는 순간 사라졌다 (2026-10-21 고침).
-       저장할 때는 기존 칸에서 '이 단계 줄' 만 바꾸고 나머지(다른 단계 줄)는 그대로 둔다.
-       기존텍스트: 지금 저장된 칸 / 단계줄들: 이 카드에 보이는 이 단계 지침 전부 / 고른줄들: 그중 제외(또는 중요)인 줄 */
-    function 단계줄합치기(기존텍스트, 단계줄들, 고른줄들) {
-        const 이단계 = new Set((단계줄들 || []).map(s => String(s).trim()));
-        const 남길 = String(기존텍스트 || '').split('\n').map(s => s.trim()).filter(s => s && !이단계.has(s));
+    /* 제외된지침·중요지침은 품목 레코드에 칸이 하나뿐인데, 밑작업과 시공은 따로 켜고 끈다 (2026-10-21).
+       줄 앞에 단계를 붙여 저장한다: '[밑작업] 문장' / '[시공] 문장'. 같은 문장이 두 단계에 다 있어도 따로 논다.
+       앞머리 없는 줄은 이 방식 전에 저장한 것이라 두 단계 모두에 적용된다(읽을 때). 그 단계를 저장할 때
+       새 방식으로 바뀐다 - 다른 단계 지침에도 있는 문장이면 '[다른단계] 문장' 으로 남겨서 그쪽은 그대로다.
+       기사님 앱(songil worker/app.js)도 같은 규칙으로 읽는다. 바꿀 때는 둘 다 바꾼다. */
+    const 단계머리 = /^\[(밑작업|시공)\]\s*(.*)$/;
+
+    // 칸에서 이 단계에 해당하는 문장들 (Set)
+    function 단계지침(텍스트, stage) {
+        const out = new Set();
+        String(텍스트 || '').split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
+            const m = line.match(단계머리);
+            if (m) { if (m[1] === stage) out.add(m[2].trim()); }
+            else out.add(line);
+        });
+        return out;
+    }
+
+    /* 이 단계 몫만 바꿔 새 칸 글을 만든다.
+       기존텍스트: 지금 저장된 칸 / 고른줄들: 이 단계에서 제외(또는 중요)인 문장 / 다른단계줄들: 다른 단계 지침 문장 전부 */
+    function 단계저장(기존텍스트, stage, 고른줄들, 다른단계줄들) {
+        const 다른 = stage === '밑작업' ? '시공' : '밑작업';
+        const 다른줄 = new Set((다른단계줄들 || []).map(s => String(s).trim()));
         const out = [];
-        남길.concat((고른줄들 || []).map(s => String(s).trim())).forEach(s => { if (s && !out.includes(s)) out.push(s); });
+        const 넣기 = (v) => { if (v && !out.includes(v)) out.push(v); };
+        String(기존텍스트 || '').split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
+            const m = line.match(단계머리);
+            if (m) { if (m[1] === 다른) 넣기(line); return; }       // 다른 단계 줄은 그대로, 이 단계 줄은 새로 쓴다
+            if (다른줄.has(line)) 넣기('[' + 다른 + '] ' + line);   // 예전 줄: 다른 단계 몫으로 남긴다
+        });
+        (고른줄들 || []).forEach(v => { v = String(v).trim(); if (v) 넣기('[' + stage + '] ' + v); });
         return out.join('\n');
+    }
+
+    // 품목의 다른 단계 지침 문장들
+    function 다른단계지침줄(품목명, stage) {
+        const info = (currentDetailData.items || {})[품목명] || {};
+        const 글 = stage === '밑작업' ? info.시공후점검지침 : info.밑작업지침;
+        return String(글 || '').split('\n').map(s => s.trim()).filter(Boolean);
     }
 
     // 지침 체크박스(포함/제외) + 특이사항 텍스트를 한 번에 일괄 저장 - 체크박스 클릭마다 서버로 안 보내고
@@ -3949,10 +3978,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const noteImportant = noteStarBtn ? noteStarBtn.classList.contains('active') : false;
         const excludedLines = [];
         const importantLines = [];
-        const stageLines = [];
         if (cardBody) {
             cardBody.querySelectorAll('.guideline-include-input').forEach(input => {
-                stageLines.push(input.dataset.line);
                 if (!input.checked) excludedLines.push(input.dataset.line);
             });
             // .site-note-star-btn도 시각적 재사용을 위해 guideline-star-btn 클래스를 같이 쓰지만
@@ -3961,11 +3988,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 importantLines.push(btn.dataset.line);
             });
         }
-        // 다른 단계(밑작업↔시공)에서 꺼 둔·별표한 지침은 그대로 둔다 (단계줄합치기)
+        // 이 단계 몫만 바꾸고 다른 단계(밑작업↔시공)에서 꺼 둔·별표한 지침은 그대로 둔다 (단계저장)
         const task = (currentDetailData.tasks || []).find(t => t.id === recordId);
         const f = (task && task.fields) || {};
-        const excludedText = 단계줄합치기(f.제외된지침, stageLines, excludedLines);
-        const importantText = 단계줄합치기(f.중요지침, stageLines, importantLines);
+        const 다른줄 = 다른단계지침줄(f.시공품목, stage);
+        const excludedText = 단계저장(f.제외된지침, stage, excludedLines, 다른줄);
+        const importantText = 단계저장(f.중요지침, stage, importantLines, 다른줄);
 
         showLoading("저장 중...");
         try {
@@ -4013,7 +4041,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ===== 지침 체크 상태 일괄 적용 (같은 카테고리 품목들에게 한번에 복사) =====
     // 예: "방2문+틀" 밑작업 카드에서 지침 몇 개를 체크 해제한 뒤, 이 버튼으로 같은 "문+틀" 카테고리의
     // 방1문+틀/방3문+틀/... 등 다른 품목에도 그대로 적용 - 하나씩 들어가서 반복 체크할 필요 없게 함.
-    let bulkApplySourceState = null; // { recordId, stage, stageLines, excludedLines, importantLines, noteText, noteImportant }
+    let bulkApplySourceState = null; // { recordId, stage, excludedLines, importantLines, noteText, noteImportant }
 
     window.openBulkApplyGuidelinesModal = function(recordId, stage, sourceEl) {
         const task = currentDetailData.tasks.find(t => t.id === recordId);
@@ -4029,12 +4057,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         })();
         const excludedLines = [];
         const importantLines = [];
-        const stageLines = [];
         let noteText = fields.현장특이사항 || '';
         let noteImportant = !!fields.특이사항중요;
         if (cardBody) {
             cardBody.querySelectorAll('.guideline-include-input').forEach(input => {
-                stageLines.push(input.dataset.line);
                 if (!input.checked) excludedLines.push(input.dataset.line);
             });
             // .site-note-star-btn도 시각적 재사용을 위해 guideline-star-btn 클래스를 같이 쓰지만
@@ -4056,9 +4082,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // 지침 체크 상태뿐 아니라 특이사항 텍스트/중요표시도 같이 넘겨서 다른 품목에 그대로 적용할 수 있게 함
-        // 대상마다 그 품목의 다른 단계 줄은 남기고 이 단계 줄만 바꿔 넣는다 (applyBulk 에서 단계줄합치기)
+        // 대상마다 그 품목의 다른 단계 몫은 남기고 이 단계 몫만 바꿔 넣는다 (applyBulk 에서 단계저장)
         bulkApplySourceState = {
-            recordId, stage, stageLines, excludedLines, importantLines,
+            recordId, stage, excludedLines, importantLines,
             noteText, noteImportant
         };
 
@@ -4095,15 +4121,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('적용할 품목을 선택해 주세요.', 'danger');
             return;
         }
-        const { recordId, stage, stageLines, excludedLines, importantLines, noteText, noteImportant } = bulkApplySourceState;
+        const { recordId, stage, excludedLines, importantLines, noteText, noteImportant } = bulkApplySourceState;
 
         showLoading(`적용 중... (0/${targetIds.length})`);
         let done = 0;
         for (const targetId of targetIds) {
             const target = (currentDetailData.tasks || []).find(t => t.id === targetId);
             const tf = (target && target.fields) || {};
-            const excludedText = 단계줄합치기(tf.제외된지침, stageLines, excludedLines);
-            const importantText = 단계줄합치기(tf.중요지침, stageLines, importantLines);
+            const 다른줄 = 다른단계지침줄(tf.시공품목, stage);
+            const excludedText = 단계저장(tf.제외된지침, stage, excludedLines, 다른줄);
+            const importantText = 단계저장(tf.중요지침, stage, importantLines, 다른줄);
             try {
                 const response = await fetchWithTimeout(API_SAVE_URL, {
                     method: 'POST',
