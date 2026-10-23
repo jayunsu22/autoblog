@@ -3246,3 +3246,5 @@ body {
 .worker-card-timed-btn.on { opacity: 1; filter: none; }
 .ztm-size { flex: 1; min-width: 0; padding: 6px 8px; border: 1.5px solid #e2e8f0; border-radius: 8px; background: #fff; font-size: 13px; font-weight: 800; color: #0f172a; }
 .ztm-len small { color: #7c3aed; font-weight: 800; white-space: nowrap; }
+.ztm-len { flex-wrap: nowrap; }
+.ztm-len .ztm-save { flex-shrink: 0; }

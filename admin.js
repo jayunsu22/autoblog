@@ -2873,21 +2873,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         opts.push('<option value="__custom">직접 입력 (가로x세로)</option>');
         sel.innerHTML = opts.join('');
         sel.addEventListener('click', (e) => e.stopPropagation());
-        sel.addEventListener('change', async () => {
-            let v = sel.value;
-            if (v === '__len') return;
+        // 고르기만 해서는 저장하지 않는다 — 오른쪽 [💾 저장] 을 눌러야 저장 (2026-10-24 사장님: 눌러야 안심)
+        let 고른값 = 지금;   // 저장 전 고른 크기
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'ztm-save';
+        const 칠하기 = () => {
+            const 저장됨 = 고른값 === 지금 && !!지금;
+            saveBtn.textContent = 저장됨 ? '✓ 저장됨' : '💾 저장';
+            saveBtn.classList.toggle('done', 저장됨);
+            saveBtn.disabled = 고른값 === 지금 && !지금;
+            mEl.textContent = 고른값 ? `= ${샤시크기합(고른값)}m` : (f.길이m > 0 ? `= ${f.길이m}m` : '');
+        };
+        sel.addEventListener('change', () => {
+            const v = sel.value;
+            if (v === '__len') { 고른값 = 지금; 칠하기(); return; }
             if (v === '__custom') {
-                const 입력 = prompt('샤시 크기를 가로x세로(m)로 적어 주세요.\n예: 2.2x1.8', 지금 || '');
-                v = 샤시크기글(입력);
-                if (!v) { if (입력 != null && String(입력).trim()) showToast('가로x세로 로 적어 주세요 (예: 2.2x1.8)', 'warning'); sel.value = 지금 || (f.길이m > 0 && !지금 ? '__len' : ''); return; }
-            }
+                const 입력 = prompt('샤시 크기를 가로x세로(m)로 적어 주세요.\n예: 2.2x1.8', 고른값 || '');
+                const c = 샤시크기글(입력);
+                if (!c) {
+                    if (입력 != null && String(입력).trim()) showToast('가로x세로 로 적어 주세요 (예: 2.2x1.8)', 'warning');
+                    sel.value = 고른값 && sel.querySelector(`option[value="${고른값}"]`) ? 고른값 : (!지금 && f.길이m > 0 ? '__len' : '');
+                    return;
+                }
+                if (!sel.querySelector(`option[value="${c}"]`)) {
+                    const o = document.createElement('option');
+                    o.value = c; o.textContent = c.replace('x', ' × ') + ' (직접)';
+                    sel.insertBefore(o, sel.querySelector('option[value="__custom"]'));
+                }
+                sel.value = c;
+                고른값 = c;
+            } else 고른값 = v;
+            칠하기();
+        });
+        saveBtn.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const v = 고른값;
             delete f.시간정보출처;
             const 합 = 샤시크기합(v);
+            saveBtn.disabled = true; saveBtn.textContent = '저장 중…';
             const ok = await 시간정보저장(task, { 샤시크기: v, 길이m: 합 || '' });
-            if (ok) { box.replaceWith(createTimeMetaBox(task)); showToast(v ? `${f.시공품목} ${v.replace('x', '×')} (길이 ${합}m) 저장` : `${f.시공품목} 크기를 지웠습니다`); }
+            if (ok) { box.replaceWith(createTimeMetaBox(task)); showToast(v ? `${f.시공품목} ${v.replace('x', '×')} (길이 ${합}m) 저장했습니다` : `${f.시공품목} 크기를 지웠습니다`); }
+            else 칠하기();
         });
         len.appendChild(sel);
-        if (f.길이m > 0) { const m = document.createElement('small'); m.textContent = `= ${f.길이m}m`; len.appendChild(m); }
+        const mEl = document.createElement('small');
+        len.appendChild(mEl);
+        len.appendChild(saveBtn);
+        칠하기();
         box.appendChild(len);
         return box;
     }
