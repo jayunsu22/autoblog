@@ -1248,6 +1248,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (c) map[projectCode] = c; else delete map[projectCode];
         try { localStorage.setItem(QUOTE_MAP_KEY, JSON.stringify(map)); } catch (e) { /* 저장 못 해도 이번 한 번은 연다 */ }
         갱신_견적버튼();
+        // 지금 보는 현장에 견적서를 새로 이으면, 빈 샤시 종류·길이를 견적에서 채운다 (시간 기록용, 2026-10-24)
+        if (c && projectCode === activeProjectCode && currentDetailData && 견적시간채운현장) 견적으로시간정보채우기(projectCode);
     }
     function 견적코드읽기(projectCode) { return 견적맵읽기()[projectCode] || ''; }
     function 갱신_견적버튼() {
@@ -2396,7 +2398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tasks = (data.tasks || []).map(t => {
             const f = t.fields || {};
             return [t.id, f.시공품목, f.밑작업기사, f.시공기사, !!f.밑작업완료, !!f.시공완료,
-                    f.작업우선순위, f.시공우선순위, f.현장특이사항].join('|');
+                    f.작업우선순위, f.시공우선순위, f.현장특이사항, f.샤시종류, f.시공면, f.길이m].join('|');
         });
         return JSON.stringify([p.현장명, p.시공일자, p.공지사항, p.중점체크사항,
                                (data.workers || []).join(','), (data.activeItems || []).join(','), tasks]);
@@ -2463,6 +2465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 캐시로 이미 띄워둔 화면은, 실제로 내용이 바뀌었을 때만 다시 그림
             if (boardChanged) renderDetailSection();
+            견적으로시간정보채우기(recordId);   // 이어 둔 견적서가 있으면 빈 샤시 종류·길이를 채운다 (시간 기록용)
             if (!cached) {
                 showSection('projectDetailSection');
                 // 마지막으로 보던 현장을 기억해뒀다가, 앱을 다시 열면 이 현장 화면으로 바로 복귀
@@ -2753,6 +2756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         row.appendChild(nameSpan);
         row.appendChild(guidelineBtnWrap);
         row.appendChild(assignWrap);
+        if (!뒷정리 && 시간기록샤시인가(itemName) && isActive && task) row.appendChild(createTimeMetaBox(task));
 
         if (isFullyCompleted) {
             const badge = document.createElement('span');
@@ -2763,6 +2767,123 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         return row;
+    }
+
+    /* ===== 작업시간 기록용 샤시 정보 (2026-10-24 사장님) =====
+       팀원 성장(밑작업 시간)을 '1m당 몇 분' 으로 비교하려면 샤시가 단창/이중창/시스템인지, 앞면만/앞뒤인지,
+       길이가 몇 m 인지 알아야 한다. 기사앱에는 안 보이고 여기서만 고른다 (누르는 즉시 저장).
+       방문견적서가 이어져 있으면 비어 있는 샤시에 견적의 종류·길이를 자동으로 채운다. */
+    const 샤시종류들 = ['단창', '이중창', '시스템'];
+    const 시공면들 = ['앞면만', '앞뒤'];
+    function 시간기록샤시인가(itemName) { return /샤시/.test(String(itemName || '')); }
+    async function 시간정보저장(task, patch) {
+        Object.assign(task.fields, patch);
+        try {
+            const res = await fetchWithTimeout(API_SAVE_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ type: 'update_time_meta', projectCode: activeProjectCode, recordId: task.id }, patch)),
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return true;
+        } catch (e) {
+            showToast('샤시 정보 저장 실패 — 다시 눌러 주세요 (' + e.message + ')', 'danger');
+            return false;
+        }
+    }
+    function createTimeMetaBox(task) {
+        const f = task.fields;
+        const box = document.createElement('div');
+        box.className = 'zone-time-meta';
+        const head = document.createElement('div');
+        head.className = 'ztm-head';
+        const 빈칸 = !f.샤시종류 || !f.시공면 || !(f.길이m > 0);
+        head.innerHTML = '🔒 시간 기록용 — 기사앱엔 안 보임' +
+            (f.시간정보출처 === '견적' ? '<em>견적에서 자동</em>' : 빈칸 ? '<em class="need">골라 주세요</em>' : '');
+        box.appendChild(head);
+        const seg = (choices, key) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'ztm-seg';
+            choices.forEach(c => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = c;
+                b.className = f[key] === c ? 'on' : '';
+                b.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const v = f[key] === c ? '' : c;   // 다시 누르면 지운다
+                    delete f.시간정보출처;
+                    if (await 시간정보저장(task, { [key]: v })) box.replaceWith(createTimeMetaBox(task));
+                });
+                wrap.appendChild(b);
+            });
+            return wrap;
+        };
+        box.appendChild(seg(샤시종류들, '샤시종류'));
+        box.appendChild(seg(시공면들, '시공면'));
+        const len = document.createElement('label');
+        len.className = 'ztm-len';
+        len.innerHTML = '길이 <input type="number" inputmode="decimal" step="0.1" min="0" placeholder="—"> m';
+        const input = len.querySelector('input');
+        input.value = f.길이m > 0 ? f.길이m : '';
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('change', async () => {
+            const n = parseFloat(input.value);
+            delete f.시간정보출처;
+            await 시간정보저장(task, { 길이m: n > 0 ? Math.round(n * 10) / 10 : '' });
+        });
+        box.appendChild(len);
+        return box;
+    }
+    // '샤시1 (샤시(2중창))' · '샤시1 (시스템샤시)' → 이중창 / 시스템 / 단창
+    function 견적_샤시종류(품목명) {
+        const t = String(품목명 || '');
+        if (/2중창|이중창/.test(t)) return '이중창';
+        if (/시스템/.test(t)) return '시스템';
+        if (/단창/.test(t)) return '단창';
+        return '';
+    }
+    /* 이어 둔 방문견적서에서 샤시 줄을 찾아, 종류·길이가 빈 샤시 작업에 채운다 (이미 적힌 값은 안 건드림).
+       현장을 열 때 한 번. 품목 짝짓기는 '견적대로 품목 켜기' 와 같은 규칙(견적_후보) */
+    var 견적시간채운현장 = new Set();   // var: 견적코드저장(앞쪽, 초기화 중에도 불림)에서 불러도 되게
+    async function 견적으로시간정보채우기(projectCode) {
+        const code = 견적코드읽기(projectCode);
+        if (!code || 견적시간채운현장.has(projectCode + '|' + code)) return;
+        const tasks = ((currentDetailData && currentDetailData.tasks) || []).filter(t => 시간기록샤시인가(t.fields.시공품목));
+        const 빈 = tasks.filter(t => !t.fields.샤시종류 || !(t.fields.길이m > 0));
+        견적시간채운현장.add(projectCode + '|' + code);
+        if (!빈.length) return;
+        let 견적;
+        try {
+            const res = await fetchWithTimeout(`${QUOTE_API_URL}?id=${encodeURIComponent(code)}`);
+            if (!res.ok) return;
+            let j = await res.json();
+            if (Array.isArray(j)) j = j[0];
+            if (!j || j.error) return;
+            견적 = j;
+        } catch (e) { return; }
+        const 라인들 = 견적.라인들 || [];
+        const 방수 = 견적_방수추정(라인들);
+        let 채움 = 0;
+        for (const t of 빈) {
+            const 이름 = t.fields.시공품목;
+            const l = 라인들.find(x => {
+                const h = 견적_후보(String(x.구역 || '').trim(), String(x.품목명 || '').trim(), 방수);
+                return (h.후보 || h.묶음 || []).indexOf(이름) >= 0;
+            });
+            if (!l) continue;
+            const patch = {};
+            const 종류 = 견적_샤시종류(l.품목명);
+            if (!t.fields.샤시종류 && 종류) patch.샤시종류 = 종류;
+            const m = parseFloat(l.수량);
+            if (!(t.fields.길이m > 0) && l.단위 === 'm' && m > 0) patch.길이m = m;
+            if (!Object.keys(patch).length) continue;
+            if (projectCode !== activeProjectCode) return;   // 그사이 다른 현장으로 넘어갔으면 그만
+            if (await 시간정보저장(t, patch)) { t.fields.시간정보출처 = '견적'; 채움 += 1; }
+        }
+        if (채움 && projectCode === activeProjectCode) {
+            renderZoneAssignBoard();
+            showToast(`견적서에서 샤시 ${채움}개의 종류·길이를 채웠습니다 (시간 기록용)`);
+        }
     }
 
     function createGuidelineStageBtn(itemName, stage, task, label) {
