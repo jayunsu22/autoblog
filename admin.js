@@ -2756,7 +2756,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         row.appendChild(nameSpan);
         row.appendChild(guidelineBtnWrap);
         row.appendChild(assignWrap);
-        if (!뒷정리 && 시간기록품목인가(itemName) && isActive && task) row.appendChild(createTimeMetaBox(task));
+        // 측정 대상 기사(⏱)에게 밑작업이 배정된 품목에만 (2026-10-24 사장님: 윤인재 작업에만)
+        if (!뒷정리 && 시간기록품목인가(itemName) && isActive && task && 측정대상인가(effectivePrep)) row.appendChild(createTimeMetaBox(task));
 
         if (isFullyCompleted) {
             const badge = document.createElement('span');
@@ -2773,9 +2774,23 @@ document.addEventListener('DOMContentLoaded', async () => {
        팀원 성장(밑작업 시간)을 '1m당 몇 분' 으로 비교하려면 샤시가 단창/이중창/시스템인지, 앞면만/앞뒤인지,
        길이가 몇 m 인지 알아야 한다. 기사앱에는 안 보이고 여기서만 고른다 (누르는 즉시 저장).
        방문견적서가 이어져 있으면 비어 있는 샤시에 견적의 종류·길이를 자동으로 채운다. */
-    const 샤시종류들 = ['단창', '이중창', '시스템'];
-    const 시공면들 = ['앞면만', '앞뒤'];
+    var 샤시종류들 = ['단창', '이중창', '시스템'];
+    var 시공면들 = ['앞면만', '앞뒤'];
     function 시간기록샤시인가(itemName) { return /샤시/.test(String(itemName || '')); }
+    // 측정 대상 기사 — 이 폰(관리자앱)에 기억. 처음엔 윤인재. 현장 시공기사 목록의 ⏱ 로 켜고 끈다
+    var 측정대상키 = 'timedWorkers';   // var: 첫 화면(캐시)이 이 줄보다 먼저 그려질 수 있다
+    function 측정대상목록() {
+        try { const v = JSON.parse(localStorage.getItem(측정대상키) || 'null'); if (Array.isArray(v)) return v; } catch (e) { /* 처음 */ }
+        return ['윤인재'];
+    }
+    function 측정대상인가(name) { const n = String(name || '').replace(/\s+/g, ''); return !!n && 측정대상목록().some(x => String(x).replace(/\s+/g, '') === n); }
+    function 측정대상바꾸기(name) {
+        const list = 측정대상목록().filter(x => x !== name);
+        const on = !측정대상인가(name);
+        if (on) list.push(name);
+        try { localStorage.setItem(측정대상키, JSON.stringify(list)); } catch (e) { /* 저장 못 해도 이번엔 반영 */ }
+        return on;
+    }
     // 시간을 재는 품목: 샤시 + 문+틀 (사장님: 가장 많은 두 품목). 문+틀은 1개 단위라 '측정 필요없음' 만 고른다
     function 시간기록품목인가(itemName) { return 시간기록샤시인가(itemName) || /문\+틀/.test(String(itemName || '')); }
     async function 시간정보저장(task, patch) {
@@ -2839,14 +2854,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         box.appendChild(seg(시공면들, '시공면'));
         const len = document.createElement('label');
         len.className = 'ztm-len';
-        len.innerHTML = '길이 <input type="number" inputmode="decimal" step="0.1" min="0" placeholder="—"> m';
+        len.innerHTML = '길이 <input type="number" inputmode="decimal" step="0.1" min="0" placeholder="—"> m <button type="button" class="ztm-save">💾 저장</button>';
         const input = len.querySelector('input');
+        const saveBtn = len.querySelector('.ztm-save');
         input.value = f.길이m > 0 ? f.길이m : '';
+        const 저장값 = () => { const n = parseFloat(input.value); return n > 0 ? Math.round(n * 10) / 10 : ''; };
+        const 칠하기 = () => {
+            const same = 저장값() === (f.길이m > 0 ? f.길이m : '');
+            saveBtn.textContent = same && f.길이m > 0 ? '✓ 저장됨' : '💾 저장';
+            saveBtn.classList.toggle('done', same && f.길이m > 0);
+        };
+        칠하기();
         input.addEventListener('click', (e) => e.stopPropagation());
-        input.addEventListener('change', async () => {
-            const n = parseFloat(input.value);
+        input.addEventListener('input', 칠하기);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveBtn.click(); } });
+        // 길이는 [💾 저장] 을 눌러야 저장 (2026-10-24 사장님: 칸에서 나가기만 하면 저장된 건지 몰랐다)
+        saveBtn.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
             delete f.시간정보출처;
-            await 시간정보저장(task, { 길이m: n > 0 ? Math.round(n * 10) / 10 : '' });
+            saveBtn.disabled = true; saveBtn.textContent = '저장 중…';
+            const ok = await 시간정보저장(task, { 길이m: 저장값() });
+            saveBtn.disabled = false;
+            if (ok) { box.replaceWith(createTimeMetaBox(task)); showToast(`${f.시공품목} 길이 ${f.길이m || '—'}m 저장`); }
+            else 칠하기();
         });
         box.appendChild(len);
         return box;
@@ -3306,10 +3336,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="worker-card-toolbar">
                     <button type="button" class="worker-card-move-btn" data-dir="-1" title="위로 이동" ${idx === 0 ? 'disabled' : ''}>▲</button>
                     <button type="button" class="worker-card-move-btn" data-dir="1" title="아래로 이동" ${idx === workers.length - 1 ? 'disabled' : ''}>▼</button>
+                    <button type="button" class="worker-card-timed-btn${측정대상인가(worker) ? ' on' : ''}" title="작업시간 측정 대상 (켜면 이 기사의 밑작업 샤시·문+틀에 시간 기록 칸이 나옵니다)">⏱</button>
                     <button type="button" class="worker-card-edit-btn" title="이름 수정">✎</button>
                     <button type="button" class="worker-card-delete-btn" title="삭제">🗑</button>
                 </div>
             `;
+
+            card.querySelector('.worker-card-timed-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const on = 측정대상바꾸기(worker);
+                showToast(on ? `⏱ ${worker} — 작업시간 측정 대상` : `${worker} — 측정 대상에서 뺐습니다`);
+                renderBoardWorkers();
+                renderZoneAssignBoard();
+            });
 
             const editBtn = card.querySelector('.worker-card-edit-btn');
             editBtn.addEventListener('click', (e) => {
