@@ -2398,7 +2398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tasks = (data.tasks || []).map(t => {
             const f = t.fields || {};
             return [t.id, f.시공품목, f.밑작업기사, f.시공기사, !!f.밑작업완료, !!f.시공완료,
-                    f.작업우선순위, f.시공우선순위, f.현장특이사항, f.샤시종류, f.시공면, f.길이m].join('|');
+                    f.작업우선순위, f.시공우선순위, f.현장특이사항, f.샤시종류, f.시공면, f.길이m, !!f.시간측정제외].join('|');
         });
         return JSON.stringify([p.현장명, p.시공일자, p.공지사항, p.중점체크사항,
                                (data.workers || []).join(','), (data.activeItems || []).join(','), tasks]);
@@ -2756,7 +2756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         row.appendChild(nameSpan);
         row.appendChild(guidelineBtnWrap);
         row.appendChild(assignWrap);
-        if (!뒷정리 && 시간기록샤시인가(itemName) && isActive && task) row.appendChild(createTimeMetaBox(task));
+        if (!뒷정리 && 시간기록품목인가(itemName) && isActive && task) row.appendChild(createTimeMetaBox(task));
 
         if (isFullyCompleted) {
             const badge = document.createElement('span');
@@ -2776,6 +2776,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const 샤시종류들 = ['단창', '이중창', '시스템'];
     const 시공면들 = ['앞면만', '앞뒤'];
     function 시간기록샤시인가(itemName) { return /샤시/.test(String(itemName || '')); }
+    // 시간을 재는 품목: 샤시 + 문+틀 (사장님: 가장 많은 두 품목). 문+틀은 1개 단위라 '측정 필요없음' 만 고른다
+    function 시간기록품목인가(itemName) { return 시간기록샤시인가(itemName) || /문\+틀/.test(String(itemName || '')); }
     async function 시간정보저장(task, patch) {
         Object.assign(task.fields, patch);
         try {
@@ -2792,14 +2794,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     function createTimeMetaBox(task) {
         const f = task.fields;
+        const 샤시 = 시간기록샤시인가(f.시공품목);
+        const 제외 = !!f.시간측정제외;
         const box = document.createElement('div');
-        box.className = 'zone-time-meta';
+        box.className = 'zone-time-meta' + (제외 ? ' off' : '') + (샤시 ? '' : ' slim');
         const head = document.createElement('div');
         head.className = 'ztm-head';
-        const 빈칸 = !f.샤시종류 || !f.시공면 || !(f.길이m > 0);
-        head.innerHTML = '🔒 시간 기록용 — 기사앱엔 안 보임' +
-            (f.시간정보출처 === '견적' ? '<em>견적에서 자동</em>' : 빈칸 ? '<em class="need">골라 주세요</em>' : '');
+        const 빈칸 = 샤시 && (!f.샤시종류 || !f.시공면 || !(f.길이m > 0));
+        head.innerHTML = '🔒 시간 기록용' + (샤시 ? ' — 기사앱엔 안 보임' : '') +
+            (제외 ? '' : f.시간정보출처 === '견적' ? '<em>견적에서 자동</em>' : 빈칸 ? '<em class="need">골라 주세요</em>' : '');
+        // 측정 필요없음 (2026-10-24): 켜면 이 품목은 작업시간 통계에서 빠진다 (남이 도와줬다 등)
+        const skip = document.createElement('label');
+        skip.className = 'ztm-skip';
+        skip.innerHTML = '<input type="checkbox"> 측정 필요없음';
+        const sk = skip.querySelector('input');
+        sk.checked = 제외;
+        skip.addEventListener('click', (e) => e.stopPropagation());
+        sk.addEventListener('change', async () => {
+            if (await 시간정보저장(task, { 시간측정제외: sk.checked })) box.replaceWith(createTimeMetaBox(task));
+            else sk.checked = !sk.checked;
+        });
+        head.appendChild(skip);
         box.appendChild(head);
+        if (!샤시 || 제외) return box;
         const seg = (choices, key) => {
             const wrap = document.createElement('div');
             wrap.className = 'ztm-seg';
