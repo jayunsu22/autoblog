@@ -2398,7 +2398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tasks = (data.tasks || []).map(t => {
             const f = t.fields || {};
             return [t.id, f.시공품목, f.밑작업기사, f.시공기사, !!f.밑작업완료, !!f.시공완료,
-                    f.작업우선순위, f.시공우선순위, f.현장특이사항, f.샤시종류, f.시공면, f.길이m, !!f.시간측정제외].join('|');
+                    f.작업우선순위, f.시공우선순위, f.현장특이사항, f.샤시종류, f.시공면, f.길이m, !!f.시간측정제외, f.샤시크기].join('|');
         });
         return JSON.stringify([p.현장명, p.시공일자, p.공지사항, p.중점체크사항,
                                (data.workers || []).join(','), (data.activeItems || []).join(','), tasks]);
@@ -2776,6 +2776,13 @@ document.addEventListener('DOMContentLoaded', async () => {
        방문견적서가 이어져 있으면 비어 있는 샤시에 견적의 종류·길이를 자동으로 채운다. */
     var 샤시종류들 = ['단창', '이중창', '시스템'];
     var 시공면들 = ['앞면만', '앞뒤'];
+    var 샤시크기들 = ['1.5x2.5', '2.5x2.5', '3.5x2.5', '4.5x2.5', '5.5x2.5', '1.5x2', '2.5x2', '3.5x2', '4.5x2', '5.5x2'];
+    // '2.2 x 1.8' · '2.2*1.8' · '2.2×1.8' → '2.2x1.8' (못 읽으면 '')
+    function 샤시크기글(v) {
+        const m = /^\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)\s*$/.exec(String(v || ''));
+        return m && +m[1] > 0 && +m[2] > 0 ? (+m[1]) + 'x' + (+m[2]) : '';
+    }
+    function 샤시크기합(v) { const s = 샤시크기글(v); if (!s) return 0; const [a, b] = s.split('x').map(Number); return Math.round((a + b) * 10) / 10; }
     function 시간기록샤시인가(itemName) { return /샤시/.test(String(itemName || '')); }
     // 측정 대상 기사 — 이 폰(관리자앱)에 기억. 처음엔 윤인재. 현장 시공기사 목록의 ⏱ 로 켜고 끈다
     var 측정대상키 = 'timedWorkers';   // var: 첫 화면(캐시)이 이 줄보다 먼저 그려질 수 있다
@@ -2852,32 +2859,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         box.appendChild(seg(샤시종류들, '샤시종류'));
         box.appendChild(seg(시공면들, '시공면'));
+        // 샤시 크기 (2026-10-24 사장님): 자주 쓰는 크기를 드롭다운으로. 1m당 시간은 견적처럼 가로+세로를 길이로 쓴다
         const len = document.createElement('label');
         len.className = 'ztm-len';
-        len.innerHTML = '길이 <input type="number" inputmode="decimal" step="0.1" min="0" placeholder="—"> m <button type="button" class="ztm-save">💾 저장</button>';
-        const input = len.querySelector('input');
-        const saveBtn = len.querySelector('.ztm-save');
-        input.value = f.길이m > 0 ? f.길이m : '';
-        const 저장값 = () => { const n = parseFloat(input.value); return n > 0 ? Math.round(n * 10) / 10 : ''; };
-        const 칠하기 = () => {
-            const same = 저장값() === (f.길이m > 0 ? f.길이m : '');
-            saveBtn.textContent = same && f.길이m > 0 ? '✓ 저장됨' : '💾 저장';
-            saveBtn.classList.toggle('done', same && f.길이m > 0);
-        };
-        칠하기();
-        input.addEventListener('click', (e) => e.stopPropagation());
-        input.addEventListener('input', 칠하기);
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveBtn.click(); } });
-        // 길이는 [💾 저장] 을 눌러야 저장 (2026-10-24 사장님: 칸에서 나가기만 하면 저장된 건지 몰랐다)
-        saveBtn.addEventListener('click', async (e) => {
-            e.preventDefault(); e.stopPropagation();
+        len.appendChild(document.createTextNode('크기 '));
+        const sel = document.createElement('select');
+        sel.className = 'ztm-size';
+        const 지금 = 샤시크기글(f.샤시크기);
+        const opts = ['<option value="">— 골라 주세요</option>'];
+        if (!지금 && f.길이m > 0) opts.push(`<option value="__len" selected>견적 길이 ${f.길이m}m (가로+세로)</option>`);
+        샤시크기들.forEach(v => opts.push(`<option value="${v}"${지금 === v ? ' selected' : ''}>${v.replace('x', ' × ')}</option>`));
+        if (지금 && 샤시크기들.indexOf(지금) < 0) opts.push(`<option value="${지금}" selected>${지금.replace('x', ' × ')} (직접)</option>`);
+        opts.push('<option value="__custom">직접 입력 (가로x세로)</option>');
+        sel.innerHTML = opts.join('');
+        sel.addEventListener('click', (e) => e.stopPropagation());
+        sel.addEventListener('change', async () => {
+            let v = sel.value;
+            if (v === '__len') return;
+            if (v === '__custom') {
+                const 입력 = prompt('샤시 크기를 가로x세로(m)로 적어 주세요.\n예: 2.2x1.8', 지금 || '');
+                v = 샤시크기글(입력);
+                if (!v) { if (입력 != null && String(입력).trim()) showToast('가로x세로 로 적어 주세요 (예: 2.2x1.8)', 'warning'); sel.value = 지금 || (f.길이m > 0 && !지금 ? '__len' : ''); return; }
+            }
             delete f.시간정보출처;
-            saveBtn.disabled = true; saveBtn.textContent = '저장 중…';
-            const ok = await 시간정보저장(task, { 길이m: 저장값() });
-            saveBtn.disabled = false;
-            if (ok) { box.replaceWith(createTimeMetaBox(task)); showToast(`${f.시공품목} 길이 ${f.길이m || '—'}m 저장`); }
-            else 칠하기();
+            const 합 = 샤시크기합(v);
+            const ok = await 시간정보저장(task, { 샤시크기: v, 길이m: 합 || '' });
+            if (ok) { box.replaceWith(createTimeMetaBox(task)); showToast(v ? `${f.시공품목} ${v.replace('x', '×')} (길이 ${합}m) 저장` : `${f.시공품목} 크기를 지웠습니다`); }
         });
+        len.appendChild(sel);
+        if (f.길이m > 0) { const m = document.createElement('small'); m.textContent = `= ${f.길이m}m`; len.appendChild(m); }
         box.appendChild(len);
         return box;
     }
