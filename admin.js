@@ -71,6 +71,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.lockAdminApp = function() {
         localStorage.removeItem(ADMIN_UNLOCK_KEY);
+        localStorage.removeItem('cachedAdminListData');   // 잠그면 기기에 저장해 둔 현장 목록·상세도 지운다
+        clearDetailCaches();
         location.reload();
     };
 
@@ -79,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 현장목록 캐시도 같이 지워서, 다시 열렸을 때 무조건 서버에서 진짜 최신 데이터를 새로 받아오게 함
     window.forceRefreshApp = function() {
         sessionStorage.removeItem('cachedAdminListData');
+        localStorage.removeItem('cachedAdminListData');
         clearDetailCaches(); // 현장 상세 캐시도 같이 비워서, 🔄를 누르면 목록/상세 모두 서버에서 새로 받아오게 함
         // 기존 쿼리스트링(예: 현장소장 링크의 ?code=...)은 그대로 유지한 채 캐시버스팅용 _r만 갱신 -
         // 예전처럼 pathname만으로 새로 만들면 ?code=가 날아가서 현장소장 링크의 범위 제한이 풀려버림
@@ -94,6 +97,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // V1/V2 응답이 완전히 동일한지 꼼꼼히 검증(구조 비교, 신규 현장 생성/작업추가/완료 시나리오,
     // 동시요청 스트레스 테스트, 실제 화면 렌더링)한 뒤에 이 한 줄만 바꿔서 전환함.
     const API_ADMIN_GET_URL = `${n8nBase}/webhook/film-admin-get-v2`;
+    // film-admin-get-v3 (2026-11-01): V2가 실제로는 시공품목(모든 칸) -> 5개 표 -> 작업목록을 하나씩 차례로 받아
+    // 5~13초 걸렸다. V3는 왕복 2번에 동시에 다 받는다. V3가 실패하면 V2로 다시 받는다 (V2는 롤백용으로 그대로 둠)
+    const API_ADMIN_GET_URL_V3 = `${n8nBase}/webhook/film-admin-get-v3`;
     // film-quality-get-v2: Airtable 조회를 동시에 보내도록 바꾼 버전 (2.2~2.4초 -> 약 1.3초).
     // 응답 모양은 기존과 완전히 동일하고, 현장명이 겹치는 현장끼리 서로의 작업을 끌어오던 문제도 같이 해결됨
     const API_DETAIL_URL = `${n8nBase}/webhook/film-quality-get-v2`;
@@ -476,45 +482,81 @@ document.addEventListener('DOMContentLoaded', async () => {
     let globalMasterItems = [];
     let globalSamplePhotos = {}; // "구분|품목명|텍스트" -> 사진URL (품목설정 모달에서 사용)
 
-    // 세션 안에서(탭을 완전히 닫기 전까지는) 현장목록을 다시 조회하지 않고 캐시로 즉시 복원 -
-    // 다른 앱 갔다 오거나 화면 전환할 때마다 매번 서버 재조회하며 지체되는 것 방지.
-    // 진짜 최신 데이터가 필요하면 상단 🔄 버튼으로 명시적으로 새로고침함
+    // 현장목록은 이 기기(localStorage)에 저장해 두고, 앱을 열면 저장해 둔 목록을 로딩창 없이 바로 그린 뒤
+    // 최신 목록은 뒤에서 조용히 받아 바뀐 게 있을 때만 다시 그린다 (2026-11-01, 전에는 탭을 새로 열 때마다
+    // 서버 응답 5~13초를 로딩창으로 기다렸다). 뒤에서 받는 건 앱을 열 때 한 번만 한다.
+    // 진짜 최신 데이터가 바로 필요하면 상단 🔄 버튼으로 새로고침
     const ADMIN_LIST_CACHE_KEY = 'cachedAdminListData';
+    let listRefreshedThisLoad = false;
+
+    function readListCache() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(ADMIN_LIST_CACHE_KEY) || 'null');
+            // 현장이 0개로 저장된 건 일시적인 조회 오류였을 수 있어 못 믿고 다시 조회함
+            return parsed && (parsed.projects || []).length > 0 ? parsed : null;
+        } catch (e) {
+            return null;   // 깨져 있으면 없는 셈 치고 새로 조회
+        }
+    }
+
+    function writeListCache(data) {
+        try { localStorage.setItem(ADMIN_LIST_CACHE_KEY, JSON.stringify(data)); } catch (e) { /* 저장공간이 꽉 차면 캐시만 포기 */ }
+    }
+
+    // V3 를 먼저 부르고, 안 되면(서버 오류 등) V2 로 한 번 더
+    async function fetchAdminList() {
+        listRefreshedThisLoad = true;
+        const get = (url) => fetchWithTimeout(`${url}?_t=${Date.now()}`, { cache: "no-store" });
+        let response;
+        try {
+            response = await get(API_ADMIN_GET_URL_V3);
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+        } catch (e) {
+            console.warn('현장목록 V3 실패 - V2로 다시 받습니다', e);
+            response = await get(API_ADMIN_GET_URL);
+        }
+        if (!response.ok) throw new Error("서버에서 목록 로드 실패");
+        let data = await response.json();
+        if (Array.isArray(data)) data = data[0] || {};
+        return data;
+    }
+
+    // 화면에 그려지는 것만 비교 (사진 주소는 받을 때마다 바뀌므로 뺀다)
+    function listSignature(d) {
+        return JSON.stringify([d.projects, d.progress, d.quickNotices, d.checkpointQuickList, d.masterItems]);
+    }
+
+    async function refreshProjectListQuietly(cached) {
+        try {
+            const data = await fetchAdminList();
+            if (!(data.projects || []).length) return;   // 빈 응답은 못 믿음 - 저장해 둔 화면 그대로
+            writeListCache(data);
+            if (listSignature(data) !== listSignature(cached)) {
+                applyProjectListData(data, true);
+            } else {
+                globalSamplePhotos = data.samplePhotos || {};   // 사진 주소만 새것으로
+            }
+        } catch (e) {
+            console.warn('현장 목록 최신화 실패 - 저장해 둔 목록을 보여줍니다', e);
+        }
+    }
 
     // forceRefresh: true면 캐시 무시하고 무조건 서버에서 새로 조회 (데이터가 실제로 바뀐 직후에만 사용)
     async function loadProjectList(forceRefresh = false) {
         if (!forceRefresh) {
-            const cached = sessionStorage.getItem(ADMIN_LIST_CACHE_KEY);
+            const cached = readListCache();
             if (cached) {
-                try {
-                    const parsed = JSON.parse(cached);
-                    // 현장이 0개로 캐싱된 경우는 일시적인 조회 오류였을 가능성이 있어 못 믿고 다시 조회함
-                    // (한번 빈 값으로 캐싱되면 실제 데이터가 있어도 계속 빈 화면만 보이는 문제 방지)
-                    if ((parsed.projects || []).length > 0) {
-                        applyProjectListData(parsed, false);
-                        return;
-                    }
-                } catch (e) {
-                    // 캐시가 깨져있으면 무시하고 아래에서 정상적으로 새로 조회
-                }
+                applyProjectListData(cached, false);
+                if (!listRefreshedThisLoad) refreshProjectListQuietly(cached);   // 기다리지 않는다
+                return;
             }
         }
 
         showLoading("현장 목록을 조회하는 중...");
         try {
-            const response = await fetchWithTimeout(`${API_ADMIN_GET_URL}?_t=${Date.now()}`, {
-                cache: "no-store"
-            });
-            if (!response.ok) throw new Error("서버에서 목록 로드 실패");
-
-            let data = await response.json();
-            if (Array.isArray(data)) {
-                data = data[0] || {};
-            }
-
-            sessionStorage.setItem(ADMIN_LIST_CACHE_KEY, JSON.stringify(data));
+            const data = await fetchAdminList();
+            writeListCache(data);
             applyProjectListData(data, true);
-
         } catch (error) {
             console.error(error);
             showToast("현장 목록을 불러오지 못했습니다.", "danger");
@@ -548,14 +590,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         projectProgressCache.forEach((val, id) => {
             if (val && val !== 'error') progress[id] = val;
         });
-        sessionStorage.setItem(ADMIN_LIST_CACHE_KEY, JSON.stringify({
+        writeListCache({
             projects: globalProjectList,
             progress,
             quickNotices: globalQuickNotices,
             checkpointQuickList: globalCheckpointQuickList,
             masterItems: globalMasterItems,
             samplePhotos: globalSamplePhotos
-        }));
+        });
     }
 
     // 자주쓰는공지 칩 동적 렌더링 (신규 현장 등록 모달 + 기존 현장 상세 화면, 두 군데 모두에 반영)
@@ -2360,33 +2402,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 그래서 상세 데이터도 목록처럼 세션에 저장해두고, 다시 들어올 땐 저장해둔 화면을 먼저 즉시 띄운 뒤
     // 최신 데이터는 뒤에서 조용히 받아와 바뀐 게 있을 때만 다시 그림.
     const DETAIL_CACHE_PREFIX = 'cachedProjectDetail_';
-    const DETAIL_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 탭을 하루 종일 열어둔 경우 어제 화면이 잠깐 보이는 것 방지
+    // (2026-11-01) 세션 대신 이 기기(localStorage)에 저장 - 앱을 새로 열어도 바로 뜨게. 최근 본 5곳만 남긴다.
+    const DETAIL_CACHE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 너무 오래된 화면은 안 띄움
+    const DETAIL_CACHE_KEEP = 5;
+    // 에어테이블 사진 주소는 몇 시간 뒤 만료된다 - 이보다 오래된 캐시는 내용이 같아도 새 데이터로 다시 그린다
+    const DETAIL_PHOTO_URL_FRESH_MS = 60 * 60 * 1000;
 
     function readDetailCache(recordId) {
         try {
-            const raw = sessionStorage.getItem(DETAIL_CACHE_PREFIX + recordId);
+            const raw = localStorage.getItem(DETAIL_CACHE_PREFIX + recordId);
             if (!raw) return null;
             const parsed = JSON.parse(raw);
             if (!parsed || !parsed.data || !parsed.data.project) return null;
             if (Date.now() - (parsed.savedAt || 0) > DETAIL_CACHE_MAX_AGE_MS) return null;
-            return parsed.data;
+            return parsed;   // { savedAt, data }
         } catch (e) {
             return null; // 캐시가 깨져있으면 없는 셈 치고 정상 조회
         }
     }
 
     function writeDetailCache(recordId, data) {
+        const key = DETAIL_CACHE_PREFIX + recordId;
+        const save = () => localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data }));
         try {
-            sessionStorage.setItem(DETAIL_CACHE_PREFIX + recordId, JSON.stringify({ savedAt: Date.now(), data }));
+            save();
         } catch (e) {
-            // 저장공간이 꽉 찬 경우 - 캐시만 포기하고 기능은 그대로 진행
+            // 저장공간이 꽉 찬 경우 - 다른 현장 캐시를 비우고 한 번만 더, 그래도 안 되면 캐시만 포기
+            clearDetailCaches();
+            try { save(); } catch (e2) { /* 무시 */ }
         }
+        // 최근 본 DETAIL_CACHE_KEEP 곳만 남긴다
+        try {
+            Object.keys(localStorage)
+                .filter(k => k.startsWith(DETAIL_CACHE_PREFIX))
+                .map(k => { let t = 0; try { t = JSON.parse(localStorage.getItem(k)).savedAt || 0; } catch (e) { /* 깨진 건 먼저 지움 */ } return [k, t]; })
+                .sort((a, b) => b[1] - a[1])
+                .slice(DETAIL_CACHE_KEEP)
+                .forEach(([k]) => localStorage.removeItem(k));
+        } catch (e) { /* 무시 */ }
     }
 
     function clearDetailCaches() {
-        Object.keys(sessionStorage)
+        [localStorage, sessionStorage].forEach(store => Object.keys(store)
             .filter(k => k.startsWith(DETAIL_CACHE_PREFIX))
-            .forEach(k => sessionStorage.removeItem(k));
+            .forEach(k => store.removeItem(k)));
     }
 
     // 배정표 화면에 실제로 그려지는 값들만 추려낸 요약본.
@@ -2437,7 +2496,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         activeProjectCode = recordId;
         갱신_견적버튼();   // 현장이 바뀌면 방문견적 버튼 글씨도 그 현장 기준으로
 
-        const cached = useCache ? readDetailCache(recordId) : null;
+        const cachedEntry = useCache ? readDetailCache(recordId) : null;
+        const cached = cachedEntry ? cachedEntry.data : null;
         if (cached) {
             // 저장해둔 화면을 로딩창 없이 먼저 보여주고, 최신화는 아래에서 뒤따라 진행
             applyDetailData(recordId, cached);
@@ -2460,7 +2520,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (activeProjectCode !== recordId) return;
 
             writeDetailCache(recordId, data);
-            const boardChanged = !cached || detailBoardSignature(cached) !== detailBoardSignature(data);
+            const boardChanged = !cached || detailBoardSignature(cached) !== detailBoardSignature(data)
+                || Date.now() - (cachedEntry.savedAt || 0) > DETAIL_PHOTO_URL_FRESH_MS;   // 오래된 캐시는 사진 주소 때문에 다시 그림
             applyDetailData(recordId, data);
 
             // 캐시로 이미 띄워둔 화면은, 실제로 내용이 바뀌었을 때만 다시 그림

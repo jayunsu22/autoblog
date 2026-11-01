@@ -23,7 +23,7 @@
     'pro-master', 'pro-publish', 'pro-photo', 'pro-box-sync', 'pro-box-restore', 'pro-box-photo', 'pro-box-photos',
     'settle-master', 'settle-publish', 'settle-settings', 'owner-check',
     // 관리자 앱 (품질관리 워크플로우 안의 사장님 전용)
-    'film-admin-get-v2', 'film-blog-publish', 'film-checkpoint-template-create',
+    'film-admin-get-v2', 'film-admin-get-v3', 'film-blog-publish', 'film-checkpoint-template-create',
     'film-journal-create', 'film-journal-list', 'film-journal-photo-upload', 'film-journal-photo-delete',
     'film-notice-create', 'film-notice-parts', 'film-notice-parts-save', 'film-notice-edit', 'film-sample-photo-upload', 'film-sample-photo-delete', 'raw-photo-update', 'raw-photo-upload'
   ].forEach(function (p) { OWNER_PATHS[p] = true; });
