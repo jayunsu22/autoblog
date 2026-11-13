@@ -1345,7 +1345,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         n = String(n || '').trim(); if (!n) return;
                         p[n] = [parseInt(SN.personOf(people, n).pay, 10) || 0, ((p[n] || [0, 0])[1]) + 1];
                     }));
-                    const lp = SN.laborPlan(Object.assign({}, site, { quoteLabor: { code, labor: SN.quoteLaborOf(q).labor } }), settings);
+                    const qlo = SN.quoteLaborOf(q);
+                    const lp = SN.laborPlan(Object.assign({}, site, { quoteLabor: { code, labor: qlo.labor, adj: qlo.adj } }), settings);
                     return { r: SN.profitRateOf(site, settings), p, v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
                         miss: pv.짝없음, budget: lp, code, site: SN.titleLine(site) };
                 }
@@ -1426,9 +1427,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (bud) {
             const over = bud.left < 0;
             const own = list.filter(w => w.owner).reduce((a, w) => a + w.value, 0);
-            const gain = Math.round((bud.labor - bud.paid) * 10) / 10;   // 실제 이득 = 견적 인건비 − 기사 페이 (사장님 몫 포함)
+            const adj = bud.adj || 0;   // 업체 할인(음수) — 이득에서만 뺀다 (기사 기준은 그대로, 11/13)
+            const gain = Math.round((bud.labor - bud.paid + adj) * 10) / 10;   // 실제 이득 = 견적 인건비 − 기사 페이 + 할인 (사장님 몫 포함)
             html += '<div class="llb-bud' + (over ? ' over' : '') + '">💰 견적 인건비 <b>' + bud.labor + '만</b> → 페이 예산 <b>' + bud.budget + '만</b> · 기사 페이 <b>' + bud.paid + '만</b> → 이득 <b>' +
-                gain + '만</b>' + (own ? ' (👑 사장님 직접 몫 ' + 만(own) + ' 포함)' : '') + (over ? ' ⚠ 예산 넘음' : '') + '</div>';
+                gain + '만</b>' + (own ? ' (👑 사장님 직접 몫 ' + 만(own) + ' 포함)' : '') + (over ? ' ⚠ 예산 넘음' : '') +
+                (adj ? '<br>' + (adj < 0 ? '🎁 업체 할인 ' + (-adj) + '만 — 이득에서만 뺐어요 (기사 기준은 그대로)' : '➕ 견적 조정 +' + adj + '만 — 이득에 더했어요') : '') + '</div>';
         }
         if (!list.length) html += '<div class="llb-empty">일정 앱에서 이 현장 날마다 인원을 넣으면 기사마다 기준이 나와요</div>';
         const LAB = { over: '⚠ 많음', ok: '적당', low: '여유', nopay: '일당?' };
