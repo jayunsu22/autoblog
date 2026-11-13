@@ -1379,9 +1379,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const rate = Number(plan.r) >= 0 ? Number(plan.r) : 50;
         const out = {};
+        // 👑 사장님(김정헌)이 직접 한 일은 페이 비용이 아니라 이득 — 기준·경고·추천에서 뺀다 (11/13 A안)
+        const isOwner = (n) => window.Share && window.Share.isOwnerName ? window.Share.isOwnerName(n) : n === '김정헌';
         Object.keys(Object.assign({}, plan.p || {}, by)).forEach(n => {
-            const pd = (plan.p || {})[n] || [0, 1];
-            out[n] = { value: by[n] || 0, pay: pd[0] || 0, days: pd[1] || 1, goal: (pd[0] || 0) * 10000 * (pd[1] || 1) * (1 + rate / 100) };
+            const pd = (plan.p || {})[n] || [0, 1], owner = isOwner(n), pay = owner ? 0 : (pd[0] || 0);
+            out[n] = { value: by[n] || 0, pay, days: pd[1] || 1, goal: pay * 10000 * (pd[1] || 1) * (1 + rate / 100), owner };
         });
         return { rate, by: out, plan };
     }
@@ -1394,13 +1396,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const r = 기사일감();
         if (!r) { bar.style.display = 'none'; return; }
         const k = (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
-        const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => b.value - a.value);
+        const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => (a.owner - b.owner) || (b.value - a.value));
         const bud = r.plan && r.plan.budget;
         let html = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × 날수 × ' + k + ' (이득 ' + r.rate + '%) · 밑작업 ⅓ · 시공 ⅔</span></div>';
         if (bud) {
             const over = bud.left < 0;
-            html += '<div class="llb-bud' + (over ? ' over' : '') + '">💰 견적 인건비 <b>' + bud.labor + '만</b> → 페이 예산 <b>' + bud.budget + '만</b> · 배정 페이 <b>' + bud.paid + '만</b> → 이득 <b>' +
-                Math.round((bud.profit + Math.min(0, bud.left)) * 10) / 10 + '만</b>' + (over ? ' ⚠' : '') + '</div>';
+            const own = list.filter(w => w.owner).reduce((a, w) => a + w.value, 0);
+            const gain = Math.round((bud.labor - bud.paid) * 10) / 10;   // 실제 이득 = 견적 인건비 − 기사 페이 (사장님 몫 포함)
+            html += '<div class="llb-bud' + (over ? ' over' : '') + '">💰 견적 인건비 <b>' + bud.labor + '만</b> → 페이 예산 <b>' + bud.budget + '만</b> · 기사 페이 <b>' + bud.paid + '만</b> → 이득 <b>' +
+                gain + '만</b>' + (own ? ' (👑 사장님 직접 몫 ' + 만(own) + ' 포함)' : '') + (over ? ' ⚠ 예산 넘음' : '') + '</div>';
         }
         if (!list.length) html += '<div class="llb-empty">일정 앱에서 이 현장 날마다 인원을 넣으면 기사마다 기준이 나와요</div>';
         const LAB = { over: '⚠ 많음', ok: '적당', low: '여유', nopay: '일당?' };
@@ -1420,6 +1424,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             else { put(who('밑작업'), '밑작업', won / 3); put(who('시공'), '시공', won * 2 / 3); }
         });
         html += list.map(w => {
+            if (w.owner) {
+                const its = (items[w.name] || []).map(x => '<div class="llb-it"><span>' + x[0] + ' ' + x[1] + '</span><em>' + 만(x[2]) + '</em></div>').join('');
+                return '<div class="llb-card owner"><div class="llb-top"><b>👑 ' + w.name + '</b><span class="llb-pay">사장님 몫</span><span class="llb-st owner">이득</span></div>' +
+                    '<div class="llb-num">직접 한 일 <b>' + 만(w.value) + '</b> → 이득에 더해짐 (페이 비용 없음)</div>' +
+                    (its ? '<details class="llb-its"><summary>맡은 품목 ' + (items[w.name] || []).length + '개</summary>' + its + '</details>' : '') + '</div>';
+            }
             const st = !w.pay ? 'nopay' : w.value > w.goal * 1.05 ? 'over' : w.value < w.goal * 0.85 ? 'low' : 'ok';
             const max = Math.max(w.goal * 1.35, w.value * 1.05, 1);
             const d = w.value - w.goal;
@@ -1441,10 +1451,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const r = 기사일감([itemName, stage, who]);
         if (!r) return true;
         const w = r.by[who];
-        if (!w || !w.pay || w.value <= w.goal * 1.05) return true;
+        if (!w || w.owner || !w.pay || w.value <= w.goal * 1.05) return true;
         const before = (기사일감() || { by: {} }).by[who] || { value: 0 };
         if (before.value > w.goal * 1.05 && w.value <= before.value) return true;   // 이미 넘은 상태에서 줄이는 쪽은 묻지 않는다
-        const room = Object.keys(r.by).filter(n => n !== who && r.by[n].pay).map(n => ({ n, left: r.by[n].goal - r.by[n].value }))
+        const room = Object.keys(r.by).filter(n => n !== who && r.by[n].pay && !r.by[n].owner).map(n => ({ n, left: r.by[n].goal - r.by[n].value }))
             .filter(x => x.left > 0).sort((a, b) => b.left - a.left)[0];
         return confirm('⚠ ' + who + '님 일이 많아요\n\n' + itemName + ' ' + stage + '을(를) 더하면 ' + 만(w.value) + ' — 기준 ' + 만(w.goal) +
             '(페이 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') + ' × ' + (1 + r.rate / 100) + ')보다 ' + 만(w.value - w.goal) + ' 많아요.' +

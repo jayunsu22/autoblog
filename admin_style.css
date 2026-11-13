@@ -3276,3 +3276,4 @@ body {
 .llb-num { font-size: 12px; color: #334155; } .llb-card.over .llb-num b { color: #dc2626; }
 .llb-its summary { font-size: 12px; color: #1d4ed8; cursor: pointer; margin-top: 4px; }
 .llb-it { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; } .llb-it em { font-style: normal; color: var(--text-muted, #64748b); }
+.llb-card.owner { border-left-color: #a16207; background: #fffbeb; } .llb-st.owner { background: #fef3c7; color: #92400e; }
