@@ -1312,13 +1312,52 @@ document.addEventListener('DOMContentLoaded', async () => {
             localStorage.setItem(LABOR_PLAN_KEY, JSON.stringify(all));
         } catch (e) { /* 계획 없이도 배정은 된다 */ }
     }
+    /* 일감 계획은 이 폰의 일정 앱(현장관리) 데이터에서 바로 만든다 (2026-11-13 사장님: 배정 화면에서 보면서 조정).
+       두 앱이 같은 주소(jayunsu22.github.io)라 일정 앱 저장소(localStorage 'sitenote.v1')를 읽을 수 있다:
+       이 현장(adminId)과 이은 일정 앱 현장 → 견적서·이득 비율·날마다 인원, 설정 › 팀원 일당.
+       견적서는 받아서 일정 앱과 같은 코드(sitenote share.js · quote_link.js)로 품목 값을 낸다. 일정 앱 현장이 없으면 주소로 받은 계획(&plan=) */
+    const 견적값캐시 = {};   // 견적코드 → { at, q, busy }
+    function 일정앱현장(projectCode) {
+        try {
+            const st = JSON.parse(localStorage.getItem('sitenote.v1') || '{}');
+            const site = (st.sites || []).find(x => x && x.adminId === projectCode && !x.deleted);
+            return site ? { site, settings: st.settings || {} } : null;
+        } catch (e) { return null; }
+    }
     function 일감계획(projectCode) {
+        const SN = window.Share, QL = window.QuoteLink, link = 일정앱현장(projectCode);
+        if (SN && QL && link && currentDetailData) {
+            const { site, settings } = link;
+            const code = site.quoteCode || 견적코드읽기(projectCode);
+            if (code) {
+                const c = 견적값캐시[code];
+                if (!c || (!c.busy && Date.now() - c.at > 10 * 60000)) {
+                    견적값캐시[code] = Object.assign({}, c || {}, { busy: true, at: Date.now() });
+                    QL.견적받기(code, { fetchFn: (u, o) => fetch(u, o) }).then(q => { 견적값캐시[code] = { at: Date.now(), q }; renderZoneAssignBoard(); })
+                        .catch(() => { 견적값캐시[code] = { at: Date.now(), err: true }; });
+                }
+                const q = c && c.q;
+                if (q) {
+                    const masters = currentDetailData.masterItems || [];
+                    const pv = QL.품목값(q.라인들, masters.map(m => m && m.품목명), SN.quoteLaborOf(q).factor);
+                    const p = {}, people = settings.people || {};
+                    (site.days || []).forEach(d => (d && d.staff || []).forEach(n => {
+                        n = String(n || '').trim(); if (!n) return;
+                        p[n] = [parseInt(SN.personOf(people, n).pay, 10) || 0, ((p[n] || [0, 0])[1]) + 1];
+                    }));
+                    const lp = SN.laborPlan(Object.assign({}, site, { quoteLabor: { code, labor: SN.quoteLaborOf(q).labor } }), settings);
+                    return { r: SN.profitRateOf(site, settings), p, v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
+                        miss: pv.짝없음, budget: lp, code, site: SN.titleLine(site) };
+                }
+                return { loading: true };
+            }
+        }
         try { return (JSON.parse(localStorage.getItem(LABOR_PLAN_KEY) || '{}'))[projectCode] || null; } catch (e) { return null; }
     }
     // 저장 전 변경(zonePendingChanges)까지 반영한 기사별 { 이름: { value 원, goal 원, pay, days } }. extra = [품목, 단계, 이름] 하나를 더 해 본다
     function 기사일감(extra) {
         const plan = 일감계획(activeProjectCode);
-        if (!plan || !currentDetailData) return null;
+        if (!plan || plan.loading || !currentDetailData) return null;
         const once = new Set(plan.o || []), by = {};
         const add = (who, won) => { if (!who || !(won > 0)) return; by[who] = (by[who] || 0) + won; };
         const names = new Set((currentDetailData.tasks || []).map(t => t.fields.시공품목));
@@ -1344,25 +1383,57 @@ document.addEventListener('DOMContentLoaded', async () => {
             const pd = (plan.p || {})[n] || [0, 1];
             out[n] = { value: by[n] || 0, pay: pd[0] || 0, days: pd[1] || 1, goal: (pd[0] || 0) * 10000 * (pd[1] || 1) * (1 + rate / 100) };
         });
-        return { rate, by: out };
+        return { rate, by: out, plan };
     }
     const 만 = (won) => Math.round(won / 1000) / 10 + '만';
     function 일감막대그리기() {
         const bar = document.getElementById('laborLoadBar');
         if (!bar) return;
+        const raw = 일감계획(activeProjectCode);
+        if (raw && raw.loading) { bar.style.display = ''; bar.className = 'labor-load-bar'; bar.innerHTML = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>견적서 읽는 중…</span></div>'; return; }
         const r = 기사일감();
         if (!r) { bar.style.display = 'none'; return; }
+        const k = (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
         const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => b.value - a.value);
-        if (!list.length) { bar.style.display = 'none'; return; }
+        const bud = r.plan && r.plan.budget;
+        let html = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × 날수 × ' + k + ' (이득 ' + r.rate + '%) · 밑작업 ⅓ · 시공 ⅔</span></div>';
+        if (bud) {
+            const over = bud.left < 0;
+            html += '<div class="llb-bud' + (over ? ' over' : '') + '">💰 견적 인건비 <b>' + bud.labor + '만</b> → 페이 예산 <b>' + bud.budget + '만</b> · 배정 페이 <b>' + bud.paid + '만</b> → 이득 <b>' +
+                Math.round((bud.profit + Math.min(0, bud.left)) * 10) / 10 + '만</b>' + (over ? ' ⚠' : '') + '</div>';
+        }
+        if (!list.length) html += '<div class="llb-empty">일정 앱에서 이 현장 날마다 인원을 넣으면 기사마다 기준이 나와요</div>';
+        const LAB = { over: '⚠ 많음', ok: '적당', low: '여유', nopay: '일당?' };
+        // 기사마다 맡은 품목 (저장 전 변경까지)
+        const items = {};
+        const plan = r.plan || {}, once = new Set(plan.o || []);
+        const names = new Set((currentDetailData.tasks || []).map(t => t.fields.시공품목));
+        zonePendingChanges.forEach((_, n) => names.add(n));
+        names.forEach(item => {
+            if (!getEffectiveActive(item)) return;
+            const won = Number((plan.v || {})[item]) || 0; if (!won) return;
+            const f = ((currentDetailData.tasks || []).find(t => t.fields.시공품목 === item) || {}).fields || {};
+            const pend = zonePendingChanges.get(item) || {};
+            const who = st => pend[st] !== undefined ? pend[st] : (f[st + '기사'] || '');
+            const put = (w, st, v) => { if (w) (items[w] = items[w] || []).push([item, st, v]); };
+            if (once.has(item)) put(who('시공'), '시공', won);
+            else { put(who('밑작업'), '밑작업', won / 3); put(who('시공'), '시공', won * 2 / 3); }
+        });
+        html += list.map(w => {
+            const st = !w.pay ? 'nopay' : w.value > w.goal * 1.05 ? 'over' : w.value < w.goal * 0.85 ? 'low' : 'ok';
+            const max = Math.max(w.goal * 1.35, w.value * 1.05, 1);
+            const d = w.value - w.goal;
+            const note = !w.pay ? '일정 앱 › 설정 › 팀원에서 일당을 넣어 주세요' : st === 'over' ? 만(d) + ' 넘음' : st === 'low' ? 만(-d) + ' 더 줄 수 있음' : '알맞음';
+            const its = (items[w.name] || []).map(x => '<div class="llb-it"><span>' + x[0] + ' ' + x[1] + '</span><em>' + 만(x[2]) + '</em></div>').join('');
+            return '<div class="llb-card ' + st + '"><div class="llb-top"><b>' + w.name + '</b><span class="llb-pay">' + (w.pay ? '페이 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') : '') + '</span><span class="llb-st ' + st + '">' + LAB[st] + '</span></div>' +
+                '<div class="llb-g"><i style="width:' + (w.value / max * 100) + '%"></i>' + (w.pay ? '<em style="left:' + (w.goal / max * 100) + '%"></em>' : '') + '</div>' +
+                '<div class="llb-num">맡은 일 <b>' + 만(w.value) + '</b>' + (w.pay ? ' / 기준 ' + 만(w.goal) : '') + ' · ' + note + '</div>' +
+                (its ? '<details class="llb-its"><summary>맡은 품목 ' + (items[w.name] || []).length + '개</summary>' + its + '</details>' : '') + '</div>';
+        }).join('');
+        if (plan.miss && plan.miss.length) html += '<div class="llb-empty">현장업무 품목과 짝이 없는 견적 품목은 빠졌어요: ' + plan.miss.map(x => x.구역 + ' ' + x.견적품목).join(', ') + '</div>';
         bar.style.display = '';
         bar.className = 'labor-load-bar';
-        bar.innerHTML = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × ' + (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '') + ' · 밑작업 ⅓ 시공 ⅔</span></div>' +
-            list.map(w => {
-                const st = !w.pay ? 'nopay' : w.value > w.goal * 1.05 ? 'over' : w.value < w.goal * 0.85 ? 'low' : 'ok';
-                const pct = w.goal ? Math.min(100, w.value / (w.goal * 1.35) * 100) : 0, mk = 100 / 1.35;
-                return '<div class="llb-row ' + st + '"><b>' + w.name + '</b><span class="llb-g"><i style="width:' + pct + '%"></i>' + (w.pay ? '<em style="left:' + mk + '%"></em>' : '') + '</span>' +
-                    '<span class="llb-n">' + 만(w.value) + (w.pay ? ' / ' + 만(w.goal) : ' · 일당?') + (st === 'over' ? ' ⚠' : '') + '</span></div>';
-            }).join('');
+        bar.innerHTML = html;
     }
     // 배정하려는 기사가 기준을 넘으면 묻는다 — 여유 있는 사람을 같이 알려 준다. true = 그대로 배정
     function 일감경고통과(itemName, stage, who) {
