@@ -1298,7 +1298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function 견적코드읽기(projectCode) { return 견적맵읽기()[projectCode] || ''; }
 
     /* 🧑‍🔧 기사별 일감·배정 경고 (2026-11-13 사장님: 필름 시공 하자율을 낮추려고 시공량을 페이에 맞춘다).
-       기사 한 사람의 일 = 품목 값(견적 인건비) 중 밑작업 ⅓ · 시공 ⅔ (한 번에 하는 품목은 담당 한 명이 다).
+       기사 한 사람의 일 = 품목 값(견적 인건비) 중 밑작업 ⅓ · 시공 ⅔ — 현장마다 바꿀 수 있다 (밑작업비율) (한 번에 하는 품목은 담당 한 명이 다).
        기준 = 페이 × 이 현장 날수 × (1 + 이득 비율). 값·페이·비율은 일정 앱이 계산해 주소(&plan=)로 넘긴다 — 현장마다 기억.
        { r: 이득 비율 %, p: { 이름: [페이 만, 날수] }, v: { 품목: 원 }, o: [한 번에 품목] } */
     const LABOR_PLAN_KEY = 'filmAdminLaborPlan';
@@ -1374,8 +1374,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return pend[stage] !== undefined ? pend[stage] : (f[stage + '기사'] || '');
             };
             if (once.has(item)) { add(who('시공'), won); return; }
-            add(who('밑작업'), won / 3);
-            add(who('시공'), won * 2 / 3);
+            add(who('밑작업'), won * 밑몫());
+            add(who('시공'), won * (1 - 밑몫()));
         });
         const rate = Number(plan.r) >= 0 ? Number(plan.r) : 50;
         const out = {};
@@ -1389,6 +1389,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         return { rate, by: out, plan };
     }
     const 만 = (won) => Math.round(won / 1000) / 10 + '만';
+    /* 밑작업 몫 (2026-11-13 사장님: 현장 상태에 따라 밑작업이 더 걸린다) — 현장마다, 품목 배정 화면에서 −＋ 5% 씩. 기본 ⅓ (33%).
+       이 기기에 현장별로 기억한다 (filmAdminBaseShare) */
+    const BASE_SHARE_KEY = 'filmAdminBaseShare', BASE_DEFAULT = 33;
+    function 밑작업비율(projectCode) {
+        try { const v = (JSON.parse(localStorage.getItem(BASE_SHARE_KEY) || '{}'))[projectCode]; return v >= 5 && v <= 95 ? v : BASE_DEFAULT; } catch (e) { return BASE_DEFAULT; }
+    }
+    function 밑작업비율저장(projectCode, v) {
+        try {
+            const all = JSON.parse(localStorage.getItem(BASE_SHARE_KEY) || '{}');
+            if (v === BASE_DEFAULT) delete all[projectCode]; else all[projectCode] = Math.max(5, Math.min(95, v));
+            localStorage.setItem(BASE_SHARE_KEY, JSON.stringify(all));
+        } catch (e) { /* 이번 화면에서만 */ }
+    }
+    // 33 → ⅓ 그대로 (33.3%), 나머지는 % 그대로
+    const 밑몫 = () => { const v = 밑작업비율(activeProjectCode); return v === BASE_DEFAULT ? 1 / 3 : v / 100; };
+    window.changeBaseShare = function (d) {
+        const cur = 밑작업비율(activeProjectCode);
+        밑작업비율저장(activeProjectCode, d === 0 ? BASE_DEFAULT : Math.max(5, Math.min(95, (cur === BASE_DEFAULT && d > 0 ? 35 : cur === BASE_DEFAULT ? 30 : cur + d))));
+        renderZoneAssignBoard();
+    };
     function 일감막대그리기() {
         const bar = document.getElementById('laborLoadBar');
         if (!bar) return;
@@ -1399,7 +1419,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const k = (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
         const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => b.value - a.value);
         const bud = r.plan && r.plan.budget;
-        let html = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × 날수 × ' + k + ' (이득 ' + r.rate + '%) · 밑작업 ⅓ · 시공 ⅔</span></div>';
+        const bv = 밑작업비율(activeProjectCode), bTxt = bv === BASE_DEFAULT ? '⅓' : bv + '%', sTxt = bv === BASE_DEFAULT ? '⅔' : (100 - bv) + '%';
+        let html = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × 날수 × ' + k + ' (이득 ' + r.rate + '%)</span></div>' +
+            '<div class="llb-share"><span>밑작업 몫</span><button type="button" onclick="changeBaseShare(-5)">−</button><b>' + bTxt + '</b><button type="button" onclick="changeBaseShare(5)">＋</button>' +
+            '<span class="llb-share-s">시공 ' + sTxt + '</span>' + (bv !== BASE_DEFAULT ? '<button type="button" class="llb-reset" onclick="changeBaseShare(0)">기본(⅓)</button>' : '<em>상태가 나쁘면 밑작업을 올리세요</em>') + '</div>';
         if (bud) {
             const over = bud.left < 0;
             const own = list.filter(w => w.owner).reduce((a, w) => a + w.value, 0);
@@ -1422,7 +1445,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const who = st => pend[st] !== undefined ? pend[st] : (f[st + '기사'] || '');
             const put = (w, st, v) => { if (w) (items[w] = items[w] || []).push([item, st, v]); };
             if (once.has(item)) put(who('시공'), '시공', won);
-            else { put(who('밑작업'), '밑작업', won / 3); put(who('시공'), '시공', won * 2 / 3); }
+            else { put(who('밑작업'), '밑작업', won * 밑몫()); put(who('시공'), '시공', won * (1 - 밑몫())); }
         });
         html += list.map(w => {
             const st = !w.pay ? 'nopay' : w.value > w.goal * 1.05 ? 'over' : w.value < w.goal * 0.85 ? 'low' : 'ok';
