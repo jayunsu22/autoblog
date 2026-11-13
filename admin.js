@@ -453,9 +453,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 일정 앱에서 넘어오는 주인용 딥링크 (admin.html#site=<현장 id>). 현장소장 보기(?code=)에서는 무시한다.
         // 암호 확인이 끝난 뒤에만 이 함수가 불리므로 암호 화면을 건너뛰지 않는다.
         // 일정 앱이 '#site=<현장 id>&quote=<견적코드>' 로도 들어온다 (2026-10-18) — 그 현장에 이어 둔 방문견적서
-        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)(?:&quote=([A-Za-z0-9_-]*))?$/.exec(location.hash);
+        // &plan= (2026-11-13) — 일정 앱이 계산한 품목 값·기사 페이·이득 비율 (기사별 일감·배정 경고)
+        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)(?:&quote=([A-Za-z0-9_-]*))?(?:&plan=([A-Za-z0-9_-]*))?$/.exec(location.hash);
         const hashCode = hashMatch ? hashMatch[1] : '';
         if (hashMatch && hashMatch[2] !== undefined) 견적코드저장(hashCode, hashMatch[2]);
+        if (hashMatch && hashMatch[3]) 일감계획저장(hashCode, hashMatch[3]);
         if (hashMatch) history.replaceState(null, '', location.pathname + location.search);
         loadProjectList().then(() => {
             const targetCode = scopedProjectCode || hashCode || localStorage.getItem('lastActiveProjectCode');
@@ -1294,6 +1296,89 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (c && projectCode === activeProjectCode && currentDetailData && 견적시간채운현장) 견적으로시간정보채우기(projectCode);
     }
     function 견적코드읽기(projectCode) { return 견적맵읽기()[projectCode] || ''; }
+
+    /* 🧑‍🔧 기사별 일감·배정 경고 (2026-11-13 사장님: 필름 시공 하자율을 낮추려고 시공량을 페이에 맞춘다).
+       기사 한 사람의 일 = 품목 값(견적 인건비) 중 밑작업 ⅓ · 시공 ⅔ (한 번에 하는 품목은 담당 한 명이 다).
+       기준 = 페이 × 이 현장 날수 × (1 + 이득 비율). 값·페이·비율은 일정 앱이 계산해 주소(&plan=)로 넘긴다 — 현장마다 기억.
+       { r: 이득 비율 %, p: { 이름: [페이 만, 날수] }, v: { 품목: 원 }, o: [한 번에 품목] } */
+    const LABOR_PLAN_KEY = 'filmAdminLaborPlan';
+    function 일감계획저장(projectCode, b64) {
+        try {
+            const bin = atob(String(b64).replace(/-/g, '+').replace(/_/g, '/'));
+            const plan = JSON.parse(decodeURIComponent(escape(bin)));
+            if (!plan || typeof plan !== 'object' || !plan.v) return;
+            const all = JSON.parse(localStorage.getItem(LABOR_PLAN_KEY) || '{}');
+            all[projectCode] = Object.assign(plan, { at: Date.now() });
+            localStorage.setItem(LABOR_PLAN_KEY, JSON.stringify(all));
+        } catch (e) { /* 계획 없이도 배정은 된다 */ }
+    }
+    function 일감계획(projectCode) {
+        try { return (JSON.parse(localStorage.getItem(LABOR_PLAN_KEY) || '{}'))[projectCode] || null; } catch (e) { return null; }
+    }
+    // 저장 전 변경(zonePendingChanges)까지 반영한 기사별 { 이름: { value 원, goal 원, pay, days } }. extra = [품목, 단계, 이름] 하나를 더 해 본다
+    function 기사일감(extra) {
+        const plan = 일감계획(activeProjectCode);
+        if (!plan || !currentDetailData) return null;
+        const once = new Set(plan.o || []), by = {};
+        const add = (who, won) => { if (!who || !(won > 0)) return; by[who] = (by[who] || 0) + won; };
+        const names = new Set((currentDetailData.tasks || []).map(t => t.fields.시공품목));
+        zonePendingChanges.forEach((_, n) => names.add(n));
+        if (extra) names.add(extra[0]);
+        names.forEach(item => {
+            if (!getEffectiveActive(item)) return;
+            const won = Number((plan.v || {})[item]) || 0;
+            if (!won) return;
+            const f = ((currentDetailData.tasks || []).find(t => t.fields.시공품목 === item) || {}).fields || {};
+            const pend = zonePendingChanges.get(item) || {};
+            const who = (stage) => {
+                if (extra && extra[0] === item && extra[1] === stage) return extra[2];
+                return pend[stage] !== undefined ? pend[stage] : (f[stage + '기사'] || '');
+            };
+            if (once.has(item)) { add(who('시공'), won); return; }
+            add(who('밑작업'), won / 3);
+            add(who('시공'), won * 2 / 3);
+        });
+        const rate = Number(plan.r) >= 0 ? Number(plan.r) : 50;
+        const out = {};
+        Object.keys(Object.assign({}, plan.p || {}, by)).forEach(n => {
+            const pd = (plan.p || {})[n] || [0, 1];
+            out[n] = { value: by[n] || 0, pay: pd[0] || 0, days: pd[1] || 1, goal: (pd[0] || 0) * 10000 * (pd[1] || 1) * (1 + rate / 100) };
+        });
+        return { rate, by: out };
+    }
+    const 만 = (won) => Math.round(won / 1000) / 10 + '만';
+    function 일감막대그리기() {
+        const bar = document.getElementById('laborLoadBar');
+        if (!bar) return;
+        const r = 기사일감();
+        if (!r) { bar.style.display = 'none'; return; }
+        const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => b.value - a.value);
+        if (!list.length) { bar.style.display = 'none'; return; }
+        bar.style.display = '';
+        bar.className = 'labor-load-bar';
+        bar.innerHTML = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × ' + (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '') + ' · 밑작업 ⅓ 시공 ⅔</span></div>' +
+            list.map(w => {
+                const st = !w.pay ? 'nopay' : w.value > w.goal * 1.05 ? 'over' : w.value < w.goal * 0.85 ? 'low' : 'ok';
+                const pct = w.goal ? Math.min(100, w.value / (w.goal * 1.35) * 100) : 0, mk = 100 / 1.35;
+                return '<div class="llb-row ' + st + '"><b>' + w.name + '</b><span class="llb-g"><i style="width:' + pct + '%"></i>' + (w.pay ? '<em style="left:' + mk + '%"></em>' : '') + '</span>' +
+                    '<span class="llb-n">' + 만(w.value) + (w.pay ? ' / ' + 만(w.goal) : ' · 일당?') + (st === 'over' ? ' ⚠' : '') + '</span></div>';
+            }).join('');
+    }
+    // 배정하려는 기사가 기준을 넘으면 묻는다 — 여유 있는 사람을 같이 알려 준다. true = 그대로 배정
+    function 일감경고통과(itemName, stage, who) {
+        if (!who) return true;
+        const r = 기사일감([itemName, stage, who]);
+        if (!r) return true;
+        const w = r.by[who];
+        if (!w || !w.pay || w.value <= w.goal * 1.05) return true;
+        const before = (기사일감() || { by: {} }).by[who] || { value: 0 };
+        if (before.value > w.goal * 1.05 && w.value <= before.value) return true;   // 이미 넘은 상태에서 줄이는 쪽은 묻지 않는다
+        const room = Object.keys(r.by).filter(n => n !== who && r.by[n].pay).map(n => ({ n, left: r.by[n].goal - r.by[n].value }))
+            .filter(x => x.left > 0).sort((a, b) => b.left - a.left)[0];
+        return confirm('⚠ ' + who + '님 일이 많아요\n\n' + itemName + ' ' + stage + '을(를) 더하면 ' + 만(w.value) + ' — 기준 ' + 만(w.goal) +
+            '(페이 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') + ' × ' + (1 + r.rate / 100) + ')보다 ' + 만(w.value - w.goal) + ' 많아요.' +
+            (room ? '\n' + room.n + '님은 ' + 만(room.left) + ' 더 받을 수 있어요.' : '') + '\n\n그래도 배정할까요?');
+    }
     function 갱신_견적버튼() {
         const btn = document.getElementById('quoteViewBtn');
         if (!btn) return;
@@ -2600,6 +2685,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 저장 툴바는 맨 먼저 맞춘다 - 아래 '미완료' 탭·빈 구역은 중간에 return 해서, 예전엔 저장한 뒤에도
         // 'N개 품목 변경사항 대기 중' 과 저장 버튼이 그대로 남아 있었다 (2026-10-09)
         updateZoneSaveToolbar();
+        일감막대그리기();
         const allItems = [...(currentDetailData.masterItems || [])];
         const activeItems = currentDetailData.activeItems || []; // 이미 현장에 개설 완료된 품목들
         const tasks = currentDetailData.tasks || [];
@@ -3068,6 +3154,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         select.addEventListener('change', () => {
             const serverValue = isActive ? (fields[stage + '기사'] || "") : "";
+            // 🧑‍🔧 기준을 넘으면 묻는다 (11/13) — [취소] 면 원래 사람으로
+            if (!일감경고통과(itemName, stage, select.value)) { select.value = effectiveValue || ""; return; }
             setZonePending(itemName, stage, select.value, serverValue);
             renderZoneAssignBoard();
         });

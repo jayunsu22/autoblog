@@ -12,7 +12,7 @@
     <meta name="theme-color" content="#1e293b">
     <link rel="icon" href="admin-icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="admin-icon-192.png">
-    <link rel="stylesheet" href="admin_style.css?v=20261024e">
+    <link rel="stylesheet" href="admin_style.css?v=20261113a">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -173,6 +173,8 @@
                         <button type="button" onclick="cancelZonePendingChanges()" style="padding: 6px 12px; font-size: 12px; font-weight: 700; background: var(--accent-gray); color: var(--text-main); border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">취소</button>
                         <button type="button" onclick="saveZonePendingChanges()" style="padding: 6px 14px; font-size: 12px; font-weight: 800; background: var(--primary-blue); color: white; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;">💾 저장</button>
                     </div>
+                    <!-- 🧑‍🔧 기사별 일감 (2026-11-13) — 일정 앱이 넘겨준 견적 인건비·페이로 기사마다 맡은 일의 값 / 기준 -->
+                    <div id="laborLoadBar" style="display: none;"></div>
                     <div class="item-category-tabs" id="zoneAssignTabs">
                         <!-- 구역 탭 버튼들이 동적으로 렌더링됨 -->
                     </div>
@@ -661,7 +663,7 @@
 
     <script src="owner-key.js?v=20261101a"></script>
     <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('admin-sw.js').catch(function () {});</script>
-    <script src="admin.js?v=20261101a"></script>
+    <script src="admin.js?v=20261113a"></script>
     <script src="app-switcher.js?v=20261020a" data-app-id="admin" data-hide-when-param="code"></script>
 </body>
 </html>
