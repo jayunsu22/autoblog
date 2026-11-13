@@ -3282,3 +3282,14 @@ body {
 .llb-share b { min-width: 34px; text-align: center; font-size: 14px; } .llb-share-s { color: #334155; font-weight: 700; }
 .llb-share em { font-style: normal; color: var(--text-muted, #64748b); font-size: 11.5px; }
 .llb-share .llb-reset { width: auto; padding: 0 8px; font-size: 12px; }
+/* 📅 날짜별 일감 (11/13 A안) */
+.llb-days { display: flex; gap: 6px; margin: 2px 0 8px; overflow-x: auto; }
+.llb-days button { flex: 1 0 auto; min-width: 74px; border: 1.5px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 6px 8px; font-size: 13px; font-weight: 800; color: #1e293b; line-height: 1.25; }
+.llb-days button small { display: block; font-size: 11px; font-weight: 600; color: #64748b; }
+.llb-days button.on { background: #1e293b; border-color: #1e293b; color: #fff; } .llb-days button.on small { color: #cbd5e1; }
+.llb-und { font-size: 12px; font-weight: 700; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 4px 8px; margin-top: 5px; }
+.llb-it { align-items: center; gap: 6px; } .llb-it > span:first-child { flex: 1; min-width: 0; }
+.llb-it.und > span:first-child { color: #b45309; font-weight: 700; }
+.llb-dcs { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.llb-dc { border: 1.5px solid #1d4ed8; color: #1d4ed8; background: #fff; border-radius: 7px; padding: 1px 7px; font-size: 11.5px; font-weight: 800; }
+.llb-dc.on { background: #1d4ed8; color: #fff; }
