@@ -1379,10 +1379,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const rate = Number(plan.r) >= 0 ? Number(plan.r) : 50;
         const out = {};
-        // 👑 사장님(김정헌)이 직접 한 일은 페이 비용이 아니라 이득 — 기준·경고·추천에서 뺀다 (11/13 A안)
+        // 👑 사장님(김정헌) (11/13 B안): 가상 일당(설정 › 팀원 일당, 없으면 20만)으로 기준선·경고는 다른 기사와 같게.
+        // 이득 계산에는 비용으로 넣지 않는다 (💰 줄의 기사 페이에서 빠짐)
         const isOwner = (n) => window.Share && window.Share.isOwnerName ? window.Share.isOwnerName(n) : n === '김정헌';
         Object.keys(Object.assign({}, plan.p || {}, by)).forEach(n => {
-            const pd = (plan.p || {})[n] || [0, 1], owner = isOwner(n), pay = owner ? 0 : (pd[0] || 0);
+            const pd = (plan.p || {})[n] || [0, 1], owner = isOwner(n), pay = owner ? (pd[0] || 20) : (pd[0] || 0);
             out[n] = { value: by[n] || 0, pay, days: pd[1] || 1, goal: pay * 10000 * (pd[1] || 1) * (1 + rate / 100), owner };
         });
         return { rate, by: out, plan };
@@ -1396,7 +1397,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const r = 기사일감();
         if (!r) { bar.style.display = 'none'; return; }
         const k = (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
-        const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => (a.owner - b.owner) || (b.value - a.value));
+        const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => b.value - a.value);
         const bud = r.plan && r.plan.budget;
         let html = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>기준 = 페이 × 날수 × ' + k + ' (이득 ' + r.rate + '%) · 밑작업 ⅓ · 시공 ⅔</span></div>';
         if (bud) {
@@ -1424,18 +1425,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             else { put(who('밑작업'), '밑작업', won / 3); put(who('시공'), '시공', won * 2 / 3); }
         });
         html += list.map(w => {
-            if (w.owner) {
-                const its = (items[w.name] || []).map(x => '<div class="llb-it"><span>' + x[0] + ' ' + x[1] + '</span><em>' + 만(x[2]) + '</em></div>').join('');
-                return '<div class="llb-card owner"><div class="llb-top"><b>👑 ' + w.name + '</b><span class="llb-pay">사장님 몫</span><span class="llb-st owner">이득</span></div>' +
-                    '<div class="llb-num">직접 한 일 <b>' + 만(w.value) + '</b> → 이득에 더해짐 (페이 비용 없음)</div>' +
-                    (its ? '<details class="llb-its"><summary>맡은 품목 ' + (items[w.name] || []).length + '개</summary>' + its + '</details>' : '') + '</div>';
-            }
             const st = !w.pay ? 'nopay' : w.value > w.goal * 1.05 ? 'over' : w.value < w.goal * 0.85 ? 'low' : 'ok';
             const max = Math.max(w.goal * 1.35, w.value * 1.05, 1);
             const d = w.value - w.goal;
             const note = !w.pay ? '일정 앱 › 설정 › 팀원에서 일당을 넣어 주세요' : st === 'over' ? 만(d) + ' 넘음' : st === 'low' ? 만(-d) + ' 더 줄 수 있음' : '알맞음';
             const its = (items[w.name] || []).map(x => '<div class="llb-it"><span>' + x[0] + ' ' + x[1] + '</span><em>' + 만(x[2]) + '</em></div>').join('');
-            return '<div class="llb-card ' + st + '"><div class="llb-top"><b>' + w.name + '</b><span class="llb-pay">' + (w.pay ? '페이 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') : '') + '</span><span class="llb-st ' + st + '">' + LAB[st] + '</span></div>' +
+            return '<div class="llb-card ' + st + (w.owner ? ' owner' : '') + '"><div class="llb-top"><b>' + (w.owner ? '👑 ' : '') + w.name + '</b><span class="llb-pay">' + (w.owner ? '가상 일당 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') + ' · 비용 아님' : w.pay ? '페이 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') : '') + '</span><span class="llb-st ' + st + '">' + LAB[st] + '</span></div>' +
                 '<div class="llb-g"><i style="width:' + (w.value / max * 100) + '%"></i>' + (w.pay ? '<em style="left:' + (w.goal / max * 100) + '%"></em>' : '') + '</div>' +
                 '<div class="llb-num">맡은 일 <b>' + 만(w.value) + '</b>' + (w.pay ? ' / 기준 ' + 만(w.goal) : '') + ' · ' + note + '</div>' +
                 (its ? '<details class="llb-its"><summary>맡은 품목 ' + (items[w.name] || []).length + '개</summary>' + its + '</details>' : '') + '</div>';
@@ -1451,10 +1446,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const r = 기사일감([itemName, stage, who]);
         if (!r) return true;
         const w = r.by[who];
-        if (!w || w.owner || !w.pay || w.value <= w.goal * 1.05) return true;
+        if (!w || !w.pay || w.value <= w.goal * 1.05) return true;
         const before = (기사일감() || { by: {} }).by[who] || { value: 0 };
         if (before.value > w.goal * 1.05 && w.value <= before.value) return true;   // 이미 넘은 상태에서 줄이는 쪽은 묻지 않는다
-        const room = Object.keys(r.by).filter(n => n !== who && r.by[n].pay && !r.by[n].owner).map(n => ({ n, left: r.by[n].goal - r.by[n].value }))
+        const room = Object.keys(r.by).filter(n => n !== who && r.by[n].pay).map(n => ({ n, left: r.by[n].goal - r.by[n].value }))
             .filter(x => x.left > 0).sort((a, b) => b.left - a.left)[0];
         return confirm('⚠ ' + who + '님 일이 많아요\n\n' + itemName + ' ' + stage + '을(를) 더하면 ' + 만(w.value) + ' — 기준 ' + 만(w.goal) +
             '(페이 ' + w.pay + '만' + (w.days > 1 ? ' × ' + w.days + '일' : '') + ' × ' + (1 + r.rate / 100) + ')보다 ' + 만(w.value - w.goal) + ' 많아요.' +
