@@ -1339,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const q = c && c.q;
                 if (q) {
                     const masters = currentDetailData.masterItems || [];
-                    const pv = QL.품목값(q.라인들, masters.map(m => m && m.품목명), SN.quoteLaborOf(q).factor);
+                    const pv = QL.품목값(q.라인들, masters.map(m => m && m.품목명), SN.quoteLaborOf(q).factor, 견적짝선택(code));
                     const p = {}, people = settings.people || {};
                     (site.days || []).forEach(d => (d && d.staff || []).forEach(n => {
                         n = String(n || '').trim(); if (!n) return;
@@ -1353,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // 🔗 이 견적서에서 기억한 짝으로 맞춘 줄 (11/14 짝 지우기)
                     const used = {};
                     (q.라인들 || []).forEach(l => { const a = l && QL.짝기억찾기 && QL.짝기억찾기(l.구역, l.품목명); if (a) used[String(l.구역 || '').trim() + '|' + String(l.품목명 || '').split(' (')[0].trim()] = a; });
-                    return { r: SN.profitRateOf(site, settings), p, d, used, v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
+                    return { r: SN.profitRateOf(site, settings), p, d, used, pairs: pv.줄짝 || [], v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
                         miss: pv.짝없음, budget: lp, code, site: SN.titleLine(site) };
                 }
                 if (c && c.err) return null;   // 못 받았으면 '읽는 중' 대신 이유를 보인다 (1분 뒤 다시)
@@ -1442,6 +1442,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         return { rate, by: out, plan, entries, day };
     }
+    /* 📋 견적 품목 짝 고르기 (11/14 사장님: 견적은 현관문인데 현관방화문으로 감 — 애매할 땐 직접 고르게).
+       이 견적서에만 적용 (다른 현장은 그대로) — 이 폰에 견적코드별로 기억 (quoteItemPick) */
+    const PICK_KEY = 'quoteItemPick';
+    function 견적짝선택(code) { try { return (JSON.parse(localStorage.getItem(PICK_KEY) || '{}'))[code] || {}; } catch (e) { return {}; } }
+    function 견적짝선택저장(code, key, name) {
+        try {
+            const all = JSON.parse(localStorage.getItem(PICK_KEY) || '{}');
+            const m = all[code] = all[code] || {};
+            if (name) m[key] = name; else delete m[key];
+            if (!Object.keys(m).length) delete all[code];
+            localStorage.setItem(PICK_KEY, JSON.stringify(all));
+            return true;
+        } catch (e) { return false; }
+    }
+    let 견적짝줄 = [];
+    window.pickQuotePair = function (i, name) {
+        const x = 견적짝줄[i], plan = 일감계획(activeProjectCode);
+        if (!x || !plan || !plan.code) return;
+        if (!견적짝선택저장(plan.code, x.key, name)) { showToast('이 폰에 저장하지 못했어요', 'danger'); return; }
+        if (name && !getEffectiveActive(name)) {
+            setZonePending(name, 'active', true, (currentDetailData.activeItems || []).includes(name));
+            updateZoneSaveToolbar();
+            showToast('📋 ' + x.견적품목 + ' → ' + name + ' · 품목을 켰어요 — [저장]을 눌러 주세요');
+        } else showToast(name ? '📋 ' + x.견적품목 + ' → ' + name + ' (이 견적서만)' : '📋 ' + x.견적품목 + ' — 자동 짝으로 되돌렸어요');
+        renderZoneAssignBoard();
+    };
     let 기억짝 = [];   // 그린 기억한 짝 키 (지우기 버튼이 순번으로 가리킨다)
     window.dropQuoteMatch = function (i) {
         const k = 기억짝[i], QL = window.QuoteLink;
@@ -1582,6 +1608,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                 (its ? '<details class="llb-its"' + (w.undated ? ' open' : '') + '><summary>' + (day ? '이날 ' : '') + '맡은 품목 ' + mine.length + '개</summary>' + its + '</details>' : '') + '</div>';
         }).join('');
         if (day && !list.length) html += '<div class="llb-empty">이날 나오는 사람이 없어요</div>';
+        // 📋 견적 품목 → 현장업무 품목 (11/14) — 줄마다 고를 수 있다. 이름이 다르게 간 줄은 '확인' 표시
+        if (plan.pairs && plan.pairs.length) {
+            const escP = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const allM = [...new Set((currentDetailData.masterItems || []).map(m => m && m.품목명).filter(Boolean))];
+            const 붙임 = (t) => String(t || '').split(' (')[0].replace(/\s+/g, '');
+            견적짝줄 = plan.pairs;
+            // 규칙으로 정해진 이름 바꿈(방문 → 방1문+틀 등)은 확인 안 함. 그 밖에 품목 이름이 견적 이름을 품지 않으면 '확인'
+            const 아는규칙 = /^(방문|문짝|문틀|화장실문|화장실문짝|붙박이장.*|수납장.*|등박스|화장대|거실베란다통로문|베란다중문|아치|아트월|가벽|신발장(틀|문짝)|싱크대.*|냉장고장.*|세탁실문|실외기실문|중문.*|몰딩|크라운몰딩|걸레받이|샤시[12])$/;
+            const 다름 = (x) => x.방식 === 'rule' && x.현장품목들.length === 1 && !아는규칙.test(붙임(x.견적품목)) && x.현장품목들[0].indexOf(붙임(x.견적품목)) < 0;
+            const odd = plan.pairs.filter(다름).length;
+            const rows = plan.pairs.map((x, i) => {
+                const z = 견적_앞머리(x.구역), cur = x.현장품목들.join(', ');
+                const tag = x.방식 === 'pick' ? '<span class="llb-pt pick">고름</span>' : x.방식 === 'alias' ? '<span class="llb-pt">기억</span>' : 다름(x) ? '<span class="llb-pt odd">확인</span>' : '';
+                const sel = x.현장품목들.length > 1 ? '<div class="llb-pv">' + escP(cur) + ' <em>(나눠서)</em></div>'
+                    : '<select onchange="pickQuotePair(' + i + ', this.value)">' + (x.방식 === 'pick' ? '<option value="">↩ 자동 짝으로</option>' : '') +
+                      allM.slice().sort((a, b) => ((b.indexOf(z) === 0) - (a.indexOf(z) === 0)) || a.localeCompare(b, 'ko'))
+                        .map(n => '<option value="' + escP(n) + '"' + (n === cur ? ' selected' : '') + '>' + escP(n) + '</option>').join('') + '</select>';
+                return '<div class="llb-pr' + (다름(x) ? ' odd' : '') + '"><div class="llb-pn">' + escP(x.구역 + ' · ' + x.견적품목) + ' <b>' + 만(x.원) + '</b>' + tag + '</div>' + sel + '</div>';
+            }).join('');
+            html += '<details class="llb-pairs"' + (odd ? ' open' : '') + '><summary>📋 견적 품목 짝 ' + plan.pairs.length + '개' + (odd ? ' — <b>이름이 다른 짝 ' + odd + '개 확인</b>' : ' — 맞는지 보기') + '</summary>' +
+                '<div class="llb-pairs-d">견적서 품목이 어느 현장업무 품목으로 갔는지예요. 바꾸면 이 견적서에만 적용돼요.</div>' + rows + '</details>';
+        }
         // 🔗 기억한 짝 (11/14 사장님: 잘못 고른 짝 지우기) — 이 견적서에 쓰인 것 먼저, 나머지는 접어서
         const QLa = window.QuoteLink;
         const allA = QLa && QLa.짝기억목록 ? QLa.짝기억목록() : {};
