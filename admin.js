@@ -1438,6 +1438,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         return { rate, by: out, plan, entries, day };
     }
+    let 일감짝 = [];   // 그린 짝 없는 견적 품목 (고르기 상자가 순번으로 가리킨다)
+    window.pickQuoteMatch = function (i, name) {
+        const x = 일감짝[i], QL = window.QuoteLink;
+        if (!x || !name || !QL || !QL.짝기억저장) return;
+        if (!QL.짝기억저장(x.구역, x.견적품목, name)) { showToast('이 폰에 저장하지 못했어요', 'danger'); return; }
+        // 이 현장에서 꺼져 있는 품목이면 켠다 (저장을 눌러야 서버에) — 켜져야 기사 배정·일감에 들어간다
+        if (!getEffectiveActive(name)) {
+            setZonePending(name, 'active', true, (currentDetailData.activeItems || []).includes(name));
+            updateZoneSaveToolbar();
+            showToast('🔗 ' + x.견적품목 + ' → ' + name + ' 짝 기억 · 품목을 켰어요 — [저장]을 눌러 주세요');
+        } else showToast('🔗 ' + x.견적품목 + ' → ' + name + ' 짝을 기억했어요');
+        renderZoneAssignBoard();
+    };
     window.setLaborDay = function (i) {
         const days = 날목록(일감계획(activeProjectCode));
         일감날 = i === '' || i == null ? '' : ((days[i] || {}).k || '');
@@ -1530,7 +1543,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 (its ? '<details class="llb-its"' + (w.undated ? ' open' : '') + '><summary>' + (day ? '이날 ' : '') + '맡은 품목 ' + mine.length + '개</summary>' + its + '</details>' : '') + '</div>';
         }).join('');
         if (day && !list.length) html += '<div class="llb-empty">이날 나오는 사람이 없어요</div>';
-        if (plan.miss && plan.miss.length) html += '<div class="llb-empty">현장업무 품목과 짝이 없는 견적 품목은 빠졌어요: ' + plan.miss.map(x => x.구역 + ' ' + x.견적품목).join(', ') + '</div>';
+        // 🔗 짝 없는 견적 품목 (11/13 사장님: 금액이 견적서와 맞아야 배정할 때 참고) — 현장업무 품목을 고르면 기억하고 그 품목을 켠다
+        if (plan.miss && plan.miss.length) {
+            const escA = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const masters = [...new Set((currentDetailData.masterItems || []).map(m => m && m.품목명).filter(Boolean))];
+            일감짝 = plan.miss;
+            const missWon = plan.miss.reduce((a, x) => a + (x.원 || 0), 0);
+            html += '<div class="llb-miss"><div class="llb-miss-h">🔗 견적서에 있는데 현장업무 품목과 짝이 없어 빠진 일 <b>' + 만(missWon) + '</b><br><span>현장업무 품목을 골라 주면 기억해요 (다음 현장부터 자동)</span></div>' +
+                plan.miss.map((x, i) => {
+                    const z = 견적_앞머리(x.구역);
+                    const opts = masters.slice().sort((a, b) => ((b.indexOf(z) === 0) - (a.indexOf(z) === 0)) || a.localeCompare(b, 'ko'));
+                    return '<div class="llb-mr"><div class="llb-mr-n">' + escA(x.구역 + ' · ' + x.견적품목) + ' <em>' + 만(x.원 || 0) + '</em></div>' +
+                        '<select onchange="pickQuoteMatch(' + i + ', this.value)"><option value="">현장업무 품목 고르기…</option>' +
+                        opts.map(n => '<option value="' + escA(n) + '">' + escA(n) + (n.indexOf(z) === 0 ? '' : '') + '</option>').join('') + '</select></div>';
+                }).join('') + '</div>';
+        }
         bar.style.display = '';
         bar.className = 'labor-load-bar';
         bar.innerHTML = html;
@@ -1633,6 +1660,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function 견적_후보(구역, 품목명, 방수) {
         const 이름 = 견적_기본이름(품목명);
         const P = 견적_앞머리(구역);
+        // 🔗 짝 기억 (11/13) — 배정 화면에서 골라 둔 짝 (sitenote quote_link.js 와 같은 저장소)
+        const 기억 = window.QuoteLink && window.QuoteLink.짝기억찾기 ? window.QuoteLink.짝기억찾기(구역, 품목명) : '';
+        if (기억) return { 후보: [기억] };
         if (몰딩류.indexOf(이름) >= 0) {
             const 끝 = 이름 === '걸레받이' ? '걸레받이' : '몰딩';
             if (구역 === '전체공통') return { 묶음: 견적_몰딩구역(방수).map((z) => z + 끝) };
@@ -1655,7 +1685,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (이름 === '실외기실문') return { 후보: ['거실실외기실문'] };
         if (/^중문/.test(이름) && 구역 === '현관') return { 후보: ['현관중문'] };
         if (이름 === '신발장1' || 이름 === '신발장2' || 이름 === '현관문') return { 후보: [이름] };
-        return { 후보: [P + 이름.replace(/\s+/g, '')] };
+        // 정산 견적은 품목명이 이미 현장업무 이름(방1문+틀) — 구역을 또 붙이지 않는다 (11/13)
+        const 붙인 = 이름.replace(/\s+/g, '');
+        return { 후보: P && 붙인.indexOf(P) === 0 ? [붙인, P + 붙인] : [P + 붙인] };
     }
     function 견적_방수추정(라인들) {
         let n = 0;
