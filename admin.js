@@ -1350,7 +1350,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // 📅 날마다 나오는 사람 (11/13 A안) — k = 날짜(없으면 d순번)
                     const d = (site.days || []).map((x, i) => ({ k: (x && x.date) || ('d' + i), date: (x && x.date) || '',
                         s: ((x && x.staff) || []).map(n => String(n || '').trim()).filter(Boolean) })).filter(x => x.s.length);
-                    return { r: SN.profitRateOf(site, settings), p, d, v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
+                    // 🔗 이 견적서에서 기억한 짝으로 맞춘 줄 (11/14 짝 지우기)
+                    const used = {};
+                    (q.라인들 || []).forEach(l => { const a = l && QL.짝기억찾기 && QL.짝기억찾기(l.구역, l.품목명); if (a) used[String(l.구역 || '').trim() + '|' + String(l.품목명 || '').split(' (')[0].trim()] = a; });
+                    return { r: SN.profitRateOf(site, settings), p, d, used, v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
                         miss: pv.짝없음, budget: lp, code, site: SN.titleLine(site) };
                 }
                 return { loading: true };
@@ -1438,6 +1441,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         return { rate, by: out, plan, entries, day };
     }
+    let 기억짝 = [];   // 그린 기억한 짝 키 (지우기 버튼이 순번으로 가리킨다)
+    window.dropQuoteMatch = function (i) {
+        const k = 기억짝[i], QL = window.QuoteLink;
+        if (!k || !QL || !QL.짝기억저장) return;
+        const z = k.split('|'), to = (QL.짝기억목록() || {})[k] || '';
+        if (!confirm('🔗 ' + z[0] + ' · ' + z[1] + ' → ' + to + '\n\n이 짝을 지울까요? (켜 둔 품목은 그대로예요 — 필요 없으면 품목에서 꺼 주세요)')) return;
+        QL.짝기억저장(z[0], z[1], '');
+        showToast('짝을 지웠어요 — ' + z[1] + ' 은(는) 다시 짝 없는 품목으로 나와요');
+        renderZoneAssignBoard();
+    };
     let 일감짝 = [];   // 그린 짝 없는 견적 품목 (고르기 상자가 순번으로 가리킨다)
     window.pickQuoteMatch = function (i, name) {
         const x = 일감짝[i], QL = window.QuoteLink;
@@ -1543,6 +1556,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 (its ? '<details class="llb-its"' + (w.undated ? ' open' : '') + '><summary>' + (day ? '이날 ' : '') + '맡은 품목 ' + mine.length + '개</summary>' + its + '</details>' : '') + '</div>';
         }).join('');
         if (day && !list.length) html += '<div class="llb-empty">이날 나오는 사람이 없어요</div>';
+        // 🔗 기억한 짝 (11/14 사장님: 잘못 고른 짝 지우기) — 이 견적서에 쓰인 것 먼저, 나머지는 접어서
+        const QLa = window.QuoteLink;
+        const allA = QLa && QLa.짝기억목록 ? QLa.짝기억목록() : {};
+        const keysA = Object.keys(allA);
+        if (keysA.length) {
+            const escB = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const usedA = (plan && plan.used) || {};
+            기억짝 = keysA.slice().sort((a, b) => ((b in usedA) - (a in usedA)) || a.localeCompare(b, 'ko'));
+            const row = (k) => { const i = 기억짝.indexOf(k), z = k.split('|'); return '<div class="llb-ar"><span>' + escB(z[0] + ' · ' + z[1]) + ' → <b>' + escB(allA[k]) + '</b></span><button type="button" onclick="dropQuoteMatch(' + i + ')">지우기</button></div>'; };
+            const here = 기억짝.filter(k => k in usedA), other = 기억짝.filter(k => !(k in usedA));
+            html += '<div class="llb-alias"><div class="llb-alias-h">🔗 기억한 짝' + (here.length ? ' — 이 견적서에 ' + here.length + '개 씀' : '') + '</div>' + here.map(row).join('') +
+                (other.length ? '<details><summary>다른 현장 짝 ' + other.length + '개</summary>' + other.map(row).join('') + '</details>' : '') + '</div>';
+        }
         // 🔗 짝 없는 견적 품목 (11/13 사장님: 금액이 견적서와 맞아야 배정할 때 참고) — 현장업무 품목을 고르면 기억하고 그 품목을 켠다
         if (plan.miss && plan.miss.length) {
             const escA = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');

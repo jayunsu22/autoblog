@@ -3299,3 +3299,10 @@ body {
 .llb-mr { padding: 5px 0; border-top: 1px dashed #fed7aa; }
 .llb-mr-n { font-size: 12.5px; color: #1e293b; margin-bottom: 4px; } .llb-mr-n em { font-style: normal; color: #9a3412; font-weight: 700; }
 .llb-mr select { width: 100%; font-size: 14px; padding: 7px 8px; border: 1.5px solid #fdba74; border-radius: 8px; background: #fff; }
+/* 🔗 기억한 짝 지우기 (11/14) */
+.llb-alias { margin-top: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; }
+.llb-alias-h { font-size: 12.5px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+.llb-alias summary { font-size: 12px; color: #1d4ed8; cursor: pointer; margin-top: 4px; }
+.llb-ar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; border-top: 1px dashed #e2e8f0; }
+.llb-ar span { flex: 1; min-width: 0; color: #334155; } .llb-ar b { color: #1d4ed8; }
+.llb-ar button { flex-shrink: 0; border: 1.5px solid #fca5a5; color: #b91c1c; background: #fff; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 800; }
