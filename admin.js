@@ -3239,8 +3239,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             nm.textContent = value || '기사 선택';
             who.appendChild(nm);
             who.insertAdjacentHTML('beforeend', '<svg class="zone-fld-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>');
-            const sel = createZoneAssignSelect(itemName, stage, value, effectiveActive, fields, workers, isActive, 뒷정리 ? '담당' : '기사 선택');
-            sel.setAttribute('aria-label', itemName + ' ' + label + ' 기사');
+            // 📅 날 탭에서 다른 날 하는 일 (11/14 사장님: 서영호 2일차 일이 1일차 탭에도 보여 거기서 바꿨더니 안 됨)
+            // → 칸에 'N일차' 를 붙이고 흐리게, 누르면 그 날 탭으로 옮겨 그곳에서 바꾸게 한다
+            let otherDay = '', otherIdx = -1, otherTxt = '';
+            if (일감날 && value && !뒷정리) {
+                try {
+                    const pl = 일감계획(activeProjectCode);
+                    if (pl && !pl.loading) {
+                        const dk = 하는날(pl, itemName, stage, value);
+                        if (dk && dk !== 일감날) { otherDay = dk; otherIdx = 날목록(pl).findIndex(d => d.k === dk); otherTxt = 날글(pl, dk).split(' ')[0]; }
+                    }
+                } catch (e) { /* 날 모르면 그대로 */ }
+            }
+            let sel;
+            if (otherDay && otherIdx >= 0) {
+                fld.classList.add('other');
+                cap.insertAdjacentHTML('beforeend', ' <i class="zone-fld-day">' + otherTxt + '</i>');
+                sel = document.createElement('button');
+                sel.type = 'button';
+                sel.className = 'zone-assign-select zone-fld-go';
+                sel.addEventListener('click', () => {
+                    window.setLaborDay(otherIdx);
+                    showToast(itemName + ' ' + label + '은(는) ' + value + '님 ' + otherTxt + ' 일이에요 — ' + otherTxt + ' 화면으로 옮겼어요. 여기서 바꿔 주세요');
+                });
+            } else {
+                sel = createZoneAssignSelect(itemName, stage, value, effectiveActive, fields, workers, isActive, 뒷정리 ? '담당' : '기사 선택');
+            }
+            sel.setAttribute('aria-label', itemName + ' ' + label + ' 기사' + (otherTxt ? ' (' + otherTxt + ' 일)' : ''));
             if (sel.disabled) fld.classList.add('dis');
             main.appendChild(cap); main.appendChild(who); main.appendChild(sel);
             const g = createGuidelineStageBtn(itemName, stage, task, '지침');
@@ -3504,7 +3529,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!ok) { select.value = effectiveValue || ""; return; }
             setZonePending(itemName, stage, select.value, serverValue);
             // 📅 날 탭을 연 채로 여러 날 나오는 기사를 배정하면 그날 하는 일로 (11/13 A안)
-            try { if (일감날 && select.value) { const pl = 일감계획(activeProjectCode); if (pl && !pl.loading && 나오는날(pl, select.value).length > 1 && 나오는날(pl, select.value).indexOf(일감날) >= 0) 하는날저장(itemName, stage, 일감날); } } catch (e) { console.error('하는날', e); }
+            try { if (일감날 && select.value) { const pl = 일감계획(activeProjectCode); if (pl && !pl.loading) {
+                const mine = 나오는날(pl, select.value);
+                if (mine.length > 1 && mine.indexOf(일감날) >= 0) 하는날저장(itemName, stage, 일감날);
+                else if (mine.length && mine.indexOf(일감날) < 0) showToast(select.value + '님은 ' + mine.map(k => 날글(pl, k).split(' ')[0]).join('·') + '에 나와요 — 그날 일로 들어가요. [저장]을 눌러 주세요');
+            } } } catch (e) { console.error('하는날', e); }
             try { renderZoneAssignBoard(); } catch (e) { console.error('배정판', e); updateZoneSaveToolbar(); showToast(itemName + ' ' + stage + ' → ' + (select.value || '비움') + ' · [저장]을 눌러 주세요'); }
         });
 

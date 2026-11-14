@@ -3394,3 +3394,9 @@ body {
 .llb-br.bad { background: #fef2f2; border-color: #fecaca; } .llb-br.bad b { color: #b91c1c; }
 .llb-br.gain b { color: #15803d; } .llb-br.own { background: #fffbeb; border-color: #fde68a; } .llb-br.own b { color: #b45309; } .llb-br.none b { color: #94a3b8; }
 .llb-br.total { background: #0f172a; border-color: #0f172a; } .llb-br.total span, .llb-br.total small { color: #cbd5e1; } .llb-br.total b { color: #fff; font-size: 18px; }
+
+/* 📅 날 탭에서 다른 날 하는 일 칸 (11/14) — 흐리게 + 'N일차' 표, 누르면 그 날 탭으로 */
+.zone-fld.other .zone-fld-main { opacity: 0.5; background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(100,116,139,.07) 6px 12px); }
+.zone-fld.other .zone-fld-chev { display: none; }
+.zone-fld-day { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: #64748b; border-radius: 6px; padding: 1px 6px; margin-left: 2px; }
+.zone-fld-main .zone-fld-go { position: absolute; inset: 0; opacity: 0; border: 0; background: transparent; cursor: pointer; width: 100%; }
