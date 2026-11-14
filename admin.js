@@ -1383,7 +1383,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mine = 나오는날(plan, who);
         if (mine.length === 1) return mine[0];
         const v = (saved || 하는날모음())[item + '|' + stage];
-        return v && mine.indexOf(v) >= 0 ? v : '';   // '' = 날짜 미정
+        if (v && mine.indexOf(v) >= 0) return v;
+        // 이 폰에 없으면 서버 순서 번호에 담긴 날 (다른 폰에서 정한 것, 1001 → 1일차)
+        try {
+            const t = (currentDetailData && currentDetailData.tasks || []).find(x => x.fields.시공품목 === item);
+            const pr = t ? Number(stage === '밑작업' ? t.fields.작업우선순위 : t.fields.시공우선순위) : 0;
+            const d = pr >= 1000 ? 날목록(plan)[Math.floor(pr / 1000) - 1] : null;
+            if (d && mine.indexOf(d.k) >= 0) return d.k;
+        } catch (e) { /* 날짜 미정 */ }
+        return '';   // '' = 날짜 미정
     }
     function 날글(plan, k) {
         const days = 날목록(plan), i = days.findIndex(d => d.k === k);
@@ -4311,7 +4319,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { silent = false } = options;
         // 1. 배정표 내 카드 순서를 DOM 그대로 수집
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
-        const allEntries = cards.map((c, idx) => ({ id: c.dataset.recordId, stage: c.dataset.stage, priority: idx + 1 }));
+        // 📅 여러 날 나오는 기사의 카드는 순서에 날을 담는다 (11/14 사장님: 기사 앱도 1일차·2일차 탭) —
+        // 1일차 = 1001·1002…, 2일차 = 2001… (현장 일정의 몇째 날). 날을 안 정한 카드·하루만 나오는 기사는 예전처럼 1·2·3…
+        let dayPlan = null;
+        try { const pl0 = 일감계획(activeProjectCode); if (pl0 && !pl0.loading && 날목록(pl0).length > 1) dayPlan = pl0; } catch (e) { dayPlan = null; }
+        const daySaved = dayPlan ? 하는날모음() : null;
+        const allEntries = cards.map((c, idx) => {
+            let priority = idx + 1;
+            if (dayPlan) {
+                const t = (currentDetailData.tasks || []).find(x => x.id === c.dataset.recordId);
+                const who = t ? (c.dataset.stage === '밑작업' ? t.fields.밑작업기사 : t.fields.시공기사) : '';
+                if (who && 나오는날(dayPlan, who).length > 1) {
+                    const di = 날목록(dayPlan).findIndex(d => d.k === 하는날(dayPlan, t.fields.시공품목, c.dataset.stage, who, daySaved));
+                    if (di >= 0) priority = (di + 1) * 1000 + idx + 1;
+                }
+            }
+            return { id: c.dataset.recordId, stage: c.dataset.stage, priority };
+        });
         const projectCode = activeProjectCode;
 
         // 2. 서버 값과 다른 카드 + 지난번에 못 보낸 카드를 보낸다
