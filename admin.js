@@ -1333,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const c = 견적값캐시[code];
                 if (!c || (!c.busy && Date.now() - c.at > (c.err ? 60000 : 10 * 60000))) {
                     견적값캐시[code] = Object.assign({}, c || {}, { busy: true, at: Date.now() });
-                    QL.견적받기(code, { fetchFn: (u, o) => fetch(u, o) }).then(q => { 견적값캐시[code] = { at: Date.now(), q }; renderZoneAssignBoard(); })
+                    QL.견적받기(code, { fetchFn: (u, o) => fetch(u, o) }).then(q => { 견적값캐시[code] = { at: Date.now(), q }; renderZoneAssignBoard(); try { if (activeProjectCode === projectCode) renderBoardAssignments(); } catch (e) { /* 배정표는 다음에 */ } })
                         .catch(() => { 견적값캐시[code] = { at: Date.now(), err: true }; });
                 }
                 const q = c && c.q;
@@ -3994,11 +3994,64 @@ document.addEventListener('DOMContentLoaded', async () => {
         cardEntries.sort((a, b) => 정리자리(a) - 정리자리(b));
         cardEntries.sort((a, b) => (a.isCompleted === b.isCompleted) ? 0 : (a.isCompleted ? 1 : -1));
 
+        // 📅 여러 날 나오는 기사 (11/14 사장님: 서영호는 2일 — 그날그날 업무 배분) — 날짜별로 묶고, 카드마다 하는 날 고르기.
+        // 품목 배정 화면의 '하는 날'(filmAdminWorkDay)과 같은 값. 날 순서대로 놓여 기사 앱에도 1일차 일이 먼저 보인다
+        let pl = null;
+        try { pl = 일감계획(activeProjectCode); } catch (e) { pl = null; }
+        const myDays = filterWorkerName && pl && !pl.loading ? 나오는날(pl, filterWorkerName) : [];
         let count = 0;
-        cardEntries.forEach(({ task, stage, assignee }) => {
-            createAssignmentCard(task, stage, assignee);
-            count++;
-        });
+        if (myDays.length > 1) {
+            const saved = 하는날모음();
+            const items = 일감항목(pl);
+            const 값 = (e) => { const it = items.find(x => x.item === e.task.fields.시공품목 && x.stage === e.stage && x.who === filterWorkerName); return it ? it.won : 0; };
+            cardEntries.forEach(e => { e.day = 하는날(pl, e.task.fields.시공품목, e.stage, filterWorkerName, saved); e.won = 값(e); });
+            const groups = [''].concat(myDays);
+            groups.forEach(k => {
+                const list = cardEntries.filter(e => e.day === k);
+                if (!k && !list.length) return;
+                const h = document.createElement('div');
+                h.className = 'board-day-h' + (k ? '' : ' und');
+                const sum = list.reduce((a, e) => a + e.won, 0);
+                if (k) {
+                    const w = ((기사일감(null, k) || { by: {} }).by[filterWorkerName]) || null;
+                    const over = w && w.pay && w.value > w.goal * 1.05;
+                    h.innerHTML = '<b>📅 ' + 날글(pl, k) + '</b><span class="' + (over ? 'over' : '') + '">' + (w && w.pay ? '맡은 일 ' + 만(w.value) + ' / 기준 ' + 만(w.goal) + (over ? ' ⚠' : '') : list.length + '개') + '</span>';
+                } else {
+                    h.innerHTML = '<b>📅 날짜 안 정한 일 ' + list.length + '개</b><span>' + (sum ? 만(sum) + ' — ' : '') + '카드마다 하는 날을 골라 주세요</span>';
+                }
+                boardAssignmentList.appendChild(h);
+                if (k && !list.length) {
+                    const em = document.createElement('div');
+                    em.className = 'board-day-empty';
+                    em.textContent = '이날 맡은 일이 아직 없어요';
+                    boardAssignmentList.appendChild(em);
+                }
+                list.forEach(e => {
+                    createAssignmentCard(e.task, e.stage, e.assignee);
+                    count++;
+                    const card = boardAssignmentList.lastElementChild;
+                    const head = card && card.querySelector('.assignment-card-header');
+                    if (!head) return;
+                    const row = document.createElement('div');
+                    row.className = 'board-day-pick';
+                    row.innerHTML = '<span>하는 날</span>' + myDays.map((d2, i) => '<button type="button" class="' + (e.day === d2 ? 'on' : '') + '" data-k="' + i + '">' + 날글(pl, d2).split(' ')[0] + '</button>').join('') +
+                        (e.won ? '<em>' + 만(e.won) + '</em>' : '');
+                    row.addEventListener('click', ev => {
+                        const b = ev.target.closest('button'); if (!b) return;
+                        ev.stopPropagation();
+                        하는날저장(e.task.fields.시공품목, e.stage, myDays[+b.dataset.k]);
+                        renderBoardAssignments();
+                        try { 일감막대그리기(); } catch (er) { /* 일감 칸은 다음에 */ }
+                    });
+                    head.insertAdjacentElement('afterend', row);
+                });
+            });
+        } else {
+            cardEntries.forEach(({ task, stage, assignee }) => {
+                createAssignmentCard(task, stage, assignee);
+                count++;
+            });
+        }
 
         assignedCountBadge.textContent = `${count}개`;
         if (count > 0) scheduleOrderSync();
@@ -4441,6 +4494,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         closeOrderPickModal();
         await persistAssignmentOrder();
+        // 📅 날짜별로 묶어 보일 때는 카드를 다시 그 날 아래로 (11/14)
+        if (boardAssignmentList.querySelector('.board-day-h')) renderBoardAssignments();
     };
 
     // 드롭 정착 시 최종 순서 갱신 및 서버/로컬스토리지 저장

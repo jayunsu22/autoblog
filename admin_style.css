@@ -3352,3 +3352,14 @@ body {
 .llb-pr select { width: 100%; font-size: 14px; padding: 7px 8px; border: 1.5px solid #e1e6ef; border-radius: 8px; background: #fff; }
 .llb-pr.odd select { border-color: #f5b544; }
 .llb-pv { font-size: 12.5px; font-weight: 700; color: #1f2a44; } .llb-pv em { font-style: normal; color: #6b7690; font-weight: 600; }
+/* 📅 업무배정표 날짜별 (11/14) */
+.board-day-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 14px 2px 6px; padding-bottom: 5px; border-bottom: 2px solid #1f2a44; }
+.board-day-h:first-child { margin-top: 2px; }
+.board-day-h b { font-size: 14.5px; font-weight: 800; color: #1f2a44; }
+.board-day-h span { font-size: 12.5px; font-weight: 700; color: #6b7690; font-variant-numeric: tabular-nums; } .board-day-h span.over { color: #b91c1c; }
+.board-day-h.und { border-bottom-color: #f5b544; } .board-day-h.und b { color: #b45309; } .board-day-h.und span { color: #b45309; }
+.board-day-empty { font-size: 12.5px; color: #8a93a8; padding: 8px 4px 4px; }
+.board-day-pick { display: flex; align-items: center; gap: 6px; padding: 6px 2px 2px; font-size: 12px; font-weight: 700; color: #6b7690; }
+.board-day-pick button { border: 1.5px solid #1d4ed8; color: #1d4ed8; background: #fff; border-radius: 8px; padding: 3px 10px; font-size: 12.5px; font-weight: 800; min-height: 30px; }
+.board-day-pick button.on { background: #1d4ed8; color: #fff; }
+.board-day-pick em { margin-left: auto; font-style: normal; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; }
