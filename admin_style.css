@@ -3354,7 +3354,7 @@ body {
 .llb-pv { font-size: 12.5px; font-weight: 700; color: #1f2a44; } .llb-pv em { font-style: normal; color: #6b7690; font-weight: 600; }
 /* 📅 업무배정표 날짜별 (11/14) */
 .board-day-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 14px 2px 6px; padding-bottom: 5px; border-bottom: 2px solid #1f2a44; }
-.board-day-h:first-child { margin-top: 2px; }
+.board-day-tabs + .board-day-h { margin-top: 6px; }
 .board-day-h b { font-size: 14.5px; font-weight: 800; color: #1f2a44; }
 .board-day-h span { font-size: 12.5px; font-weight: 700; color: #6b7690; font-variant-numeric: tabular-nums; } .board-day-h span.over { color: #b91c1c; }
 .board-day-h.und { border-bottom-color: #f5b544; } .board-day-h.und b { color: #b45309; } .board-day-h.und span { color: #b45309; }
@@ -3363,3 +3363,13 @@ body {
 .board-day-pick button { border: 1.5px solid #1d4ed8; color: #1d4ed8; background: #fff; border-radius: 8px; padding: 3px 10px; font-size: 12.5px; font-weight: 800; min-height: 30px; }
 .board-day-pick button.on { background: #1d4ed8; color: #fff; }
 .board-day-pick em { margin-left: auto; font-style: normal; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; }
+.board-day-tabs { position: sticky; z-index: 80; display: flex; gap: 6px; overflow-x: auto; margin: 0 -2px 4px; padding: 8px 2px; background: #eef1f6; scrollbar-width: none; }
+.board-day-tabs::-webkit-scrollbar { display: none; }
+.board-day-tabs button { flex: 1 0 auto; min-width: 92px; display: flex; flex-direction: column; align-items: center; gap: 1px; border: 1.5px solid #cbd3e1; background: #fff; border-radius: 12px; padding: 6px 10px; font-size: 14px; font-weight: 800; color: #1f2a44; line-height: 1.2; cursor: pointer; }
+.board-day-tabs button small { font-size: 11.5px; font-weight: 700; color: #6b7690; }
+.board-day-tabs button span { font-size: 11.5px; font-weight: 700; color: #6b7690; font-variant-numeric: tabular-nums; }
+.board-day-tabs button.over span { color: #b91c1c; }
+.board-day-tabs button.und { border-color: #f5b544; background: #fffaf0; color: #b45309; justify-content: center; } .board-day-tabs button.und b { font-size: 15px; }
+.board-day-tabs button.on { background: #1f2a44; border-color: #1f2a44; color: #fff; } .board-day-tabs button.on small, .board-day-tabs button.on span { color: #cbd5e1; }
+.board-day-tabs button.on.over span { color: #fca5a5; }
+.board-day-tabs button:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }

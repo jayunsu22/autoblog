@@ -3949,6 +3949,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2열: 배정 완료 내역 그리기
     function renderBoardAssignments() {
         boardAssignmentList.innerHTML = "";
+        boardAssignmentList.style.paddingBottom = '';
         const tasks = currentDetailData.tasks || [];
         
         // 기사명이 선택되면 실시간 업무 배정표를 자동으로 펼침
@@ -4006,11 +4007,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             const 값 = (e) => { const it = items.find(x => x.item === e.task.fields.시공품목 && x.stage === e.stage && x.who === filterWorkerName); return it ? it.won : 0; };
             cardEntries.forEach(e => { e.day = 하는날(pl, e.task.fields.시공품목, e.stage, filterWorkerName, saved); e.won = 값(e); });
             const groups = [''].concat(myDays);
+            // 날 탭 (11/14 사장님: 1일차·2일차로 바로 이동) — 위에 붙어 있고, 누르면 그 날로 내려간다
+            const tabs = document.createElement('div');
+            tabs.className = 'board-day-tabs';
+            const undN = cardEntries.filter(e => !e.day).length;
+            tabs.innerHTML = (undN ? '<button type="button" class="und" data-k="">미정 <b>' + undN + '</b></button>' : '') +
+                myDays.map(k => {
+                    const w = ((기사일감(null, k) || { by: {} }).by[filterWorkerName]) || null;
+                    const over = w && w.pay && w.value > w.goal * 1.05;
+                    const t = 날글(pl, k).split(' ');
+                    return '<button type="button" class="' + (over ? 'over' : '') + '" data-k="' + k + '">' + t[0] + (t[1] ? ' <small>' + t[1] + '</small>' : '') +
+                        '<span>' + (w && w.pay ? 만(w.value) + ' / ' + 만(w.goal) : cardEntries.filter(e => e.day === k).length + '개') + '</span></button>';
+                }).join('');
+            const jt = document.querySelector('.board-jump-tabs');
+            const jtH = jt && getComputedStyle(jt).position === 'sticky' ? jt.offsetHeight : 0;
+            tabs.style.top = 'calc(var(--admin-header-h, 0px) + ' + jtH + 'px)';
+            tabs.addEventListener('click', ev => {
+                const b = ev.target.closest('button'); if (!b) return;
+                const h = boardAssignmentList.querySelector('.board-day-h[data-k="' + b.dataset.k + '"]');
+                if (!h) return;
+                const y = h.getBoundingClientRect().top + window.scrollY - (tabs.getBoundingClientRect().bottom - tabs.getBoundingClientRect().top) - parseFloat(getComputedStyle(tabs).top || '0') - 8;
+                // 마지막 날은 아래가 짧아 위까지 못 올라온다 — 모자란 만큼 아래 여백을 준다
+                const lack = y - (document.documentElement.scrollHeight - window.innerHeight);
+                if (lack > 0) boardAssignmentList.style.paddingBottom = Math.ceil(lack + (parseFloat(boardAssignmentList.style.paddingBottom) || 0)) + 'px';
+                window.scrollTo({ top: y, behavior: 'smooth' });
+                tabs.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+            });
+            boardAssignmentList.appendChild(tabs);
             groups.forEach(k => {
                 const list = cardEntries.filter(e => e.day === k);
                 if (!k && !list.length) return;
                 const h = document.createElement('div');
                 h.className = 'board-day-h' + (k ? '' : ' und');
+                h.dataset.k = k;
                 const sum = list.reduce((a, e) => a + e.won, 0);
                 if (k) {
                     const w = ((기사일감(null, k) || { by: {} }).by[filterWorkerName]) || null;
