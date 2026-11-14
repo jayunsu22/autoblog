@@ -3306,3 +3306,4 @@ body {
 .llb-ar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; border-top: 1px dashed #e2e8f0; }
 .llb-ar span { flex: 1; min-width: 0; color: #334155; } .llb-ar b { color: #1d4ed8; }
 .llb-ar button { flex-shrink: 0; border: 1.5px solid #fca5a5; color: #b91c1c; background: #fff; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 800; }
+.zone-item-cost { display: block; font-size: 11.5px; font-weight: 700; color: #1d4ed8; margin-top: 2px; }

@@ -1331,7 +1331,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const code = site.quoteCode || 견적코드읽기(projectCode);
             if (code) {
                 const c = 견적값캐시[code];
-                if (!c || (!c.busy && Date.now() - c.at > 10 * 60000)) {
+                if (!c || (!c.busy && Date.now() - c.at > (c.err ? 60000 : 10 * 60000))) {
                     견적값캐시[code] = Object.assign({}, c || {}, { busy: true, at: Date.now() });
                     QL.견적받기(code, { fetchFn: (u, o) => fetch(u, o) }).then(q => { 견적값캐시[code] = { at: Date.now(), q }; renderZoneAssignBoard(); })
                         .catch(() => { 견적값캐시[code] = { at: Date.now(), err: true }; });
@@ -1356,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return { r: SN.profitRateOf(site, settings), p, d, used, v: pv.값, o: masters.filter(m => m && m.작업방식 === '한번에').map(m => m.품목명),
                         miss: pv.짝없음, budget: lp, code, site: SN.titleLine(site) };
                 }
+                if (c && c.err) return null;   // 못 받았으면 '읽는 중' 대신 이유를 보인다 (1분 뒤 다시)
                 return { loading: true };
             }
         }
@@ -1496,15 +1497,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         밑작업비율저장(activeProjectCode, d === 0 ? BASE_DEFAULT : Math.max(5, Math.min(95, (cur === BASE_DEFAULT && d > 0 ? 35 : cur === BASE_DEFAULT ? 30 : cur + d))));
         renderZoneAssignBoard();
     };
+    // 일감이 안 나올 때 이유 (11/14 사장님: 말없이 사라져서 몰랐다)
+    function 일감없는이유(projectCode) {
+        if (!window.Share || !window.QuoteLink) return '일감 계산 파일을 못 읽었어요 — 🔄 새로고침해 주세요';
+        if (!currentDetailData) return '';
+        const link = 일정앱현장(projectCode);
+        if (!link) return '이 폰의 일정 앱에 이 현장과 이어진 현장이 없어요 — 일정 앱 현장에서 [현장업무 열기]로 한 번 들어와 주세요';
+        const code = link.site.quoteCode || 견적코드읽기(projectCode);
+        if (!code) return '일정 앱 현장에 견적서가 연결돼 있지 않아요 — 일정 앱에서 견적서를 이어 주세요';
+        const c = 견적값캐시[code];
+        if (c && c.err) return '견적서(' + code + ')를 받지 못했어요 — 잠시 뒤 🔄 새로고침해 주세요';
+        return '';
+    }
     function 일감막대그리기() {
         const bar = document.getElementById('laborLoadBar');
         if (!bar) return;
+        try { 일감막대그리기_(bar); } catch (e) {
+            console.error(e);
+            bar.style.display = ''; bar.className = 'labor-load-bar';
+            bar.innerHTML = '<div class="llb-h">🧑‍🔧 기사별 일감</div><div class="llb-empty">⚠ 일감 계산 중 오류: ' + String(e && e.message || e).replace(/</g, '&lt;') + ' — 이 화면을 캡처해 보내 주세요</div>';
+        }
+    }
+    function 일감막대그리기_(bar) {
         const raw = 일감계획(activeProjectCode);
         if (raw && raw.loading) { bar.style.display = ''; bar.className = 'labor-load-bar'; bar.innerHTML = '<div class="llb-h">🧑‍🔧 기사별 일감 <span>견적서 읽는 중…</span></div>'; return; }
         const days = 날목록(raw);
         if (일감날 && !days.some(d => d.k === 일감날)) 일감날 = '';
         const r = 기사일감(null, 일감날);
-        if (!r) { bar.style.display = 'none'; return; }
+        if (!r) {
+            const why = 일감없는이유(activeProjectCode);
+            if (!why) { bar.style.display = 'none'; return; }
+            bar.style.display = ''; bar.className = 'labor-load-bar';
+            bar.innerHTML = '<div class="llb-h">🧑‍🔧 기사별 일감</div><div class="llb-empty">' + why + '</div>';
+            return;
+        }
         const k = (1 + r.rate / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
         const day = r.day;
         const list = Object.keys(r.by).map(n => Object.assign({ name: n }, r.by[n])).filter(w => w.value > 0 || w.pay).sort((a, b) => b.value - a.value);
@@ -3105,6 +3131,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'zone-item-name';
         nameSpan.textContent = zoneLabel ? `${itemName} · ${zoneLabel}` : itemName;
+        // 💰 견적 인건비 (11/14 사장님: 품목마다 견적 비용을 보면서 배정) — 밑작업 ⅓ · 시공 ⅔
+        try {
+            const pl = 일감계획(activeProjectCode), won = pl && !pl.loading ? Number((pl.v || {})[itemName]) || 0 : 0;
+            if (won) {
+                const cost = document.createElement('span');
+                cost.className = 'zone-item-cost';
+                cost.textContent = 뒷정리 || (pl.o || []).includes(itemName) ? '💰 ' + 만(won)
+                    : '💰 ' + 만(won) + ' (밑 ' + 만(won * 밑몫()) + ' · 시공 ' + 만(won * (1 - 밑몫())) + ')';
+                nameSpan.appendChild(cost);
+            }
+        } catch (e) { /* 값 없이도 배정은 된다 */ }
         if (뒷정리) {
             const modeBadge = document.createElement('span');
             modeBadge.className = 'zone-item-mode-badge';
