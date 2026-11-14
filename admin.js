@@ -1346,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         p[n] = [parseInt(SN.personOf(people, n).pay, 10) || 0, ((p[n] || [0, 0])[1]) + 1];
                     }));
                     const qlo = SN.quoteLaborOf(q);
-                    const lp = SN.laborPlan(Object.assign({}, site, { quoteLabor: { code, labor: qlo.labor, adj: qlo.adj } }), settings);
+                    const lp = SN.laborPlan(Object.assign({}, site, { quoteLabor: { code, labor: qlo.labor, adj: qlo.adj, sum: qlo.sum } }), settings);
                     // 📅 날마다 나오는 사람 (11/13 A안) — k = 날짜(없으면 d순번)
                     const d = (site.days || []).map((x, i) => ({ k: (x && x.date) || ('d' + i), date: (x && x.date) || '',
                         s: ((x && x.staff) || []).map(n => String(n || '').trim()).filter(Boolean) })).filter(x => x.s.length);
@@ -1576,13 +1576,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             '<div class="llb-share"><span>밑작업 몫</span><button type="button" onclick="changeBaseShare(-5)">−</button><b>' + bTxt + '</b><button type="button" onclick="changeBaseShare(5)">＋</button>' +
             '<span class="llb-share-s">시공 ' + sTxt + '</span>' + (bv !== BASE_DEFAULT ? '<button type="button" class="llb-reset" onclick="changeBaseShare(0)">기본(⅓)</button>' : '<em>상태가 나쁘면 밑작업을 올리세요</em>') + '</div>';
         if (bud) {
-            const over = bud.left < 0;
-            const own = list.filter(w => w.owner).reduce((a, w) => a + w.value, 0);
-            const adj = bud.adj || 0;   // 업체 할인(음수) — 이득에서만 뺀다 (기사 기준은 그대로, 11/13)
-            const gain = Math.round((bud.labor - bud.paid + adj) * 10) / 10;   // 실제 이득 = 견적 인건비 − 기사 페이 + 할인 (사장님 몫 포함)
-            html += '<div class="llb-bud' + (over ? ' over' : '') + '">💰 견적 인건비 <b>' + bud.labor + '만</b> → 페이 예산 <b>' + bud.budget + '만</b> · 기사 페이 <b>' + bud.paid + '만</b> → 이득 <b>' +
-                gain + '만</b>' + (own ? ' (👑 사장님 직접 몫 ' + 만(own) + ' 포함)' : '') + (over ? ' ⚠ 예산 넘음' : '') +
-                (adj ? '<br>' + (adj < 0 ? '🎁 업체 할인 ' + (-adj) + '만 — 이득에서만 뺐어요 (기사 기준은 그대로)' : '➕ 견적 조정 +' + adj + '만 — 이득에 더했어요') : '') + '</div>';
+            // 💰 인건비 → 👷 기사 페이 → ✅ 실제 이득 → 🙋 내 근로소득 → 🏆 총이익 (11/14 사장님 2번 — 일정 앱 💰 카드와 같은 계산 Share.laborPlan)
+            const over = bud.left < 0, m = (v) => Math.round(v * 10) / 10 + '만', k2 = (1 + (bud.rate || 50) / 100).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
+            const row = (cls, label, val, sub) => '<div class="llb-br ' + cls + '"><span>' + label + '</span><b>' + val + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+            html += '<div class="llb-bud' + (over ? ' over' : '') + '">' +
+                row('', '💰 인건비', m(bud.labor), bud.quote > bud.labor ? '견적 ' + m(bud.quote) + ' − 자재 ' + m(bud.material) : '') +
+                row(over ? 'bad' : '', '👷 기사 페이', m(bud.paid), '예산 ' + m(bud.budget) + ' (인건비 ÷' + k2 + ') · ' + (over ? m(-bud.left) + ' 넘음' : m(bud.left) + ' 여유')) +
+                row(bud.net < 0 ? 'bad' : 'gain', '✅ 실제 이득', m(bud.net), '인건비 − 기사 페이' + (bud.own ? ' − 내 근로소득' : '') + (bud.adj < 0 ? ' − 할인 ' + m(-bud.adj) : bud.adj > 0 ? ' + 조정 ' + m(bud.adj) : '')) +
+                row(bud.own ? 'own' : 'none', '🙋 내 근로소득', bud.own ? m(bud.own) : '✗', bud.own ? '김정헌 ' + bud.ownDays + '일 × ' + m(bud.ownPay) : '사장님이 일하지 않음') +
+                row('total', '🏆 총이익', m(bud.total), bud.own ? '실제 이득 + 내 근로소득' : '') + '</div>';
         }
         if (!list.length) html += '<div class="llb-empty">일정 앱에서 이 현장 날마다 인원을 넣으면 기사마다 기준이 나와요</div>';
         const LAB = { over: '⚠ 많음', ok: '적당', low: '여유', nopay: '일당?' };

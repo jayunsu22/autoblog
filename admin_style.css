@@ -3386,3 +3386,11 @@ body {
 .order-pick-item .op-won { flex-shrink: 0; min-width: 38px; text-align: right; font-style: normal; font-size: 12.5px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; }
 .order-pick-item.other-day { opacity: 0.55; }
 .board-day-h.done { border-bottom-color: #a7e3c6; } .board-day-h.done b { color: #0f8a5f; }
+/* 💰 인건비·기사 페이·실제 이득·내 근로소득·총이익 (11/14) */
+.llb-bud { display: grid; gap: 5px; padding: 8px; }
+.llb-br { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 1px 8px; background: #fff; border: 1px solid #dbe3ee; border-radius: 9px; padding: 6px 9px; color: #334155; }
+.llb-br span { font-size: 13px; font-weight: 700; } .llb-br b { font-size: 16px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; text-align: right; }
+.llb-br small { grid-column: 1 / -1; font-size: 11.5px; color: #64748b; }
+.llb-br.bad { background: #fef2f2; border-color: #fecaca; } .llb-br.bad b { color: #b91c1c; }
+.llb-br.gain b { color: #15803d; } .llb-br.own { background: #fffbeb; border-color: #fde68a; } .llb-br.own b { color: #b45309; } .llb-br.none b { color: #94a3b8; }
+.llb-br.total { background: #0f172a; border-color: #0f172a; } .llb-br.total span, .llb-br.total small { color: #cbd5e1; } .llb-br.total b { color: #fff; font-size: 18px; }
