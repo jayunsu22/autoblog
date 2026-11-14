@@ -3163,20 +3163,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             : [['밑작업', '밑작업', effectivePrep, won * 밑몫()], ['시공', '시공', effectiveWrap, won * (1 - 밑몫())]];
         const assignWrap = document.createElement('div');
         assignWrap.className = 'zone-item-stages' + (stages.length === 1 ? ' one' : '');
+        // a2r (11/14 사장님 고름): 칸 안 위에 '밑작업 5만', 아래 기사 이름 + 화살표, 오른쪽 띠 = 지침.
+        // 진짜 <select> 를 칸 위에 투명하게 덮어 칸 어디를 눌러도 폰의 고르기 창이 열린다
         stages.forEach(([stage, label, value, part]) => {
-            const col = document.createElement('div');
-            col.className = 'zone-stage';
-            const lab = document.createElement('div');
-            lab.className = 'zone-stage-lab';
-            const t = document.createElement('span');
-            t.innerHTML = label + (part ? ' <b>' + 만(part) + '</b>' : '');
+            const fld = document.createElement('div');
+            fld.className = 'zone-fld' + (value ? '' : ' e');
+            const main = document.createElement('div');
+            main.className = 'zone-fld-main';
+            const cap = document.createElement('div');
+            cap.className = 'zone-fld-cap';
+            cap.innerHTML = label + (part ? ' <b>' + 만(part) + '</b>' : '');
+            const who = document.createElement('div');
+            who.className = 'zone-fld-who';
+            const nm = document.createElement('span');
+            nm.textContent = value || '기사 선택';
+            who.appendChild(nm);
+            who.insertAdjacentHTML('beforeend', '<svg class="zone-fld-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>');
+            const sel = createZoneAssignSelect(itemName, stage, value, effectiveActive, fields, workers, isActive, 뒷정리 ? '담당' : '기사 선택');
+            sel.setAttribute('aria-label', itemName + ' ' + label + ' 기사');
+            if (sel.disabled) fld.classList.add('dis');
+            main.appendChild(cap); main.appendChild(who); main.appendChild(sel);
             const g = createGuidelineStageBtn(itemName, stage, task, '지침');
-            g.classList.add('link');
-            g.innerHTML = BOOK + '지침';
-            lab.appendChild(t); lab.appendChild(g);
-            col.appendChild(lab);
-            col.appendChild(createZoneAssignSelect(itemName, stage, value, effectiveActive, fields, workers, isActive, 뒷정리 ? '담당' : '기사 선택'));
-            assignWrap.appendChild(col);
+            g.className = 'zone-fld-g';
+            g.setAttribute('aria-label', itemName + ' ' + stage + ' 지침');
+            g.innerHTML = BOOK;
+            fld.appendChild(main); fld.appendChild(g);
+            assignWrap.appendChild(fld);
         });
 
         row.classList.add('v2');

@@ -3311,17 +3311,32 @@ body {
 .zone-item-row.v2 .zone-item-top { display: flex; align-items: center; gap: 10px; }
 .zone-item-row.v2 .zone-item-toggle input[type="checkbox"] { width: 22px; height: 22px; accent-color: #1d4ed8; }
 .zone-item-row.v2 .zone-item-name { flex: 1 1 auto; font-size: 16px; letter-spacing: -0.01em; line-height: 1.3; }
-.zone-item-amt { margin-left: auto; flex-shrink: 0; font-size: 17px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.zone-item-amt small { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-left: 1px; }
+.zone-item-amt { margin-left: auto; flex-shrink: 0; font-size: 18px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zone-item-amt small { font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-left: 1px; }
 .zone-item-tag { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 2px 6px; margin-left: 6px; vertical-align: 2px; letter-spacing: 0; }
 .zone-item-tag.pend { color: #b45309; background: #fff1d6; } .zone-item-tag.done { color: #0f8a5f; background: #d6f3e5; }
+/* a2r (11/14) — 기사 칸 안에 몫, 오른쪽 띠 = 지침 */
 .zone-item-stages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; padding-left: 32px; }
 .zone-item-stages.one { grid-template-columns: 1fr; }
-.zone-stage { min-width: 0; }
-.zone-stage-lab { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 12px; font-weight: 700; color: var(--text-muted); margin: 0 2px 4px; min-height: 22px; }
-.zone-stage-lab b { color: #1f2a44; font-weight: 800; font-variant-numeric: tabular-nums; }
-.zone-item-guideline-btn.link { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; padding: 2px 0 2px 4px; margin: 0; color: #1d4ed8; font-size: 12px; font-weight: 700; min-height: 0; box-shadow: none; }
-.zone-item-guideline-btn.link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.zone-item-guideline-btn.link:disabled { color: #9aa3b5; background: none; }
-.zone-item-stages .zone-assign-select { width: 100%; max-width: none; min-width: 0; padding: 0 10px; height: 42px; font-size: 15px; font-weight: 700; border-radius: 11px; }
-.zone-item-row.v2.completed .zone-item-stages .zone-assign-select { border-color: #a7e3c6; }
+.zone-fld { display: flex; align-items: stretch; min-width: 0; min-height: 58px; border: 1.5px solid #e1e6ef; border-radius: 12px; background: #fff; overflow: hidden; }
+.zone-fld:focus-within { border-color: #1d4ed8; box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.14); }
+.zone-fld-main { position: relative; flex: 1; min-width: 0; padding: 7px 8px 8px 11px; display: flex; flex-direction: column; justify-content: center; }
+.zone-fld-cap { font-size: 12.5px; font-weight: 700; color: #6b7690; line-height: 1.2; white-space: nowrap; }
+.zone-fld-cap b { color: #1f2a44; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; margin-left: 2px; }
+.zone-fld-who { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 3px; font-size: 16px; font-weight: 800; color: #1d2740; line-height: 1.2; }
+.zone-fld-who span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zone-fld-chev { width: 15px; height: 15px; flex-shrink: 0; fill: none; stroke: #7a849a; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.zone-fld-main .zone-assign-select { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; opacity: 0; cursor: pointer; font-size: 16px; border: 0; }
+.zone-fld-main .zone-assign-select:disabled { cursor: not-allowed; }
+.zone-fld-g { width: 38px; flex-shrink: 0; display: grid; place-items: center; border: 0; border-left: 1px solid #e1e6ef; border-radius: 0; background: #f4f7ff; color: #1d4ed8; padding: 0; margin: 0; cursor: pointer; }
+.zone-fld-g svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.zone-fld-g:disabled { color: #9aa3b5; background: #f7f8fb; cursor: not-allowed; }
+.zone-fld-g:focus-visible { outline: 2px solid #1d4ed8; outline-offset: -2px; }
+.zone-fld.e { border-style: dashed; border-color: #b9c2d3; background: #fbfcfe; }
+.zone-fld.e .zone-fld-who { color: #8a93a8; font-weight: 700; }
+.zone-fld.e .zone-fld-g { background: #f7f9fd; }
+.zone-fld.dis .zone-fld-main { opacity: 0.55; }
+.zone-item-row.v2.pending .zone-fld-g { background: #fff8eb; border-left-color: #f3dcae; }
+.zone-item-row.v2.completed .zone-fld { border-color: #a7e3c6; }
+.zone-item-row.v2.completed .zone-fld-g { background: #f1fbf6; border-left-color: #a7e3c6; color: #0f8a5f; }
+.zone-item-row.v2.completed .zone-fld.dis .zone-fld-main { opacity: 1; }
