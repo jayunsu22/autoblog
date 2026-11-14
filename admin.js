@@ -1675,6 +1675,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 배정하려는 기사가 기준을 넘으면 묻는다 — 여유 있는 사람을 같이 알려 준다. true = 그대로 배정
     function 일감경고통과(itemName, stage, who) {
         if (!who) return true;
+        // 👑 사장님은 본인 판단으로 일을 가져가므로 묻지 않는다 (11/14)
+        if (window.Share && window.Share.isOwnerName ? window.Share.isOwnerName(who) : who === '김정헌') return true;
         const plan = 일감계획(activeProjectCode);
         if (!plan || plan.loading) return true;
         // 이 일을 하는 날: 날 탭을 열었고 그 사람이 그날 나오면 그날, 아니면 정해진 날(하루만 나오면 그날), 미정이면 전체로 본다
@@ -3496,11 +3498,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         select.addEventListener('change', () => {
             const serverValue = isActive ? (fields[stage + '기사'] || "") : "";
             // 🧑‍🔧 기준을 넘으면 묻는다 (11/13) — [취소] 면 원래 사람으로
-            if (!일감경고통과(itemName, stage, select.value)) { select.value = effectiveValue || ""; return; }
+            // 일감 계산이 어긋나 오류가 나도 배정은 막지 않는다 (11/14 영남 김정헌 배정 안 됨)
+            let ok = true;
+            try { ok = 일감경고통과(itemName, stage, select.value); } catch (e) { console.error('일감경고', e); }
+            if (!ok) { select.value = effectiveValue || ""; return; }
             setZonePending(itemName, stage, select.value, serverValue);
             // 📅 날 탭을 연 채로 여러 날 나오는 기사를 배정하면 그날 하는 일로 (11/13 A안)
-            if (일감날 && select.value) { const pl = 일감계획(activeProjectCode); if (pl && !pl.loading && 나오는날(pl, select.value).length > 1 && 나오는날(pl, select.value).indexOf(일감날) >= 0) 하는날저장(itemName, stage, 일감날); }
-            renderZoneAssignBoard();
+            try { if (일감날 && select.value) { const pl = 일감계획(activeProjectCode); if (pl && !pl.loading && 나오는날(pl, select.value).length > 1 && 나오는날(pl, select.value).indexOf(일감날) >= 0) 하는날저장(itemName, stage, 일감날); } } catch (e) { console.error('하는날', e); }
+            try { renderZoneAssignBoard(); } catch (e) { console.error('배정판', e); updateZoneSaveToolbar(); showToast(itemName + ' ' + stage + ' → ' + (select.value || '비움') + ' · [저장]을 눌러 주세요'); }
         });
 
         return select;
