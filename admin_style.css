@@ -3373,3 +3373,16 @@ body {
 .board-day-tabs button.on { background: #1f2a44; border-color: #1f2a44; color: #fff; } .board-day-tabs button.on small, .board-day-tabs button.on span { color: #cbd5e1; }
 .board-day-tabs button.on.over span { color: #fca5a5; }
 .board-day-tabs button:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+/* 📅 순서 정하기 날 나누기 (11/14) */
+.op-days { position: sticky; top: -1px; z-index: 2; display: flex; gap: 6px; padding: 6px 0 8px; background: #fff; }
+.op-days button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; border: 1.5px solid #cbd3e1; background: #fff; border-radius: 12px; padding: 7px 6px; font-size: 14.5px; font-weight: 800; color: #1f2a44; line-height: 1.2; cursor: pointer; }
+.op-days button small { font-size: 11.5px; font-weight: 700; color: #6b7690; }
+.op-days button span { font-size: 11.5px; font-weight: 700; color: #6b7690; font-variant-numeric: tabular-nums; }
+.op-days button.on { background: #1f2a44; border-color: #1f2a44; color: #fff; } .op-days button.on small, .op-days button.on span { color: #cbd5e1; }
+.op-days button.over span { color: #b91c1c; } .op-days button.on.over span { color: #fca5a5; }
+.op-days-d { font-size: 12px; font-weight: 700; color: #1d4ed8; margin: 0 2px 8px; }
+.order-pick-item .op-day-tag { margin-left: auto; flex-shrink: 0; font-size: 11.5px; font-weight: 800; color: #475569; background: #eef1f6; border-radius: 6px; padding: 2px 7px; }
+.order-pick-item .op-day-tag.here { color: #1d4ed8; background: #e8efff; } .order-pick-item .op-day-tag.und { color: #b45309; background: #fff1d6; }
+.order-pick-item .op-won { flex-shrink: 0; min-width: 38px; text-align: right; font-style: normal; font-size: 12.5px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; }
+.order-pick-item.other-day { opacity: 0.55; }
+.board-day-h.done { border-bottom-color: #a7e3c6; } .board-day-h.done b { color: #0f8a5f; }

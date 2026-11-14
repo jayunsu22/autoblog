@@ -4005,8 +4005,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const saved = 하는날모음();
             const items = 일감항목(pl);
             const 값 = (e) => { const it = items.find(x => x.item === e.task.fields.시공품목 && x.stage === e.stage && x.who === filterWorkerName); return it ? it.won : 0; };
-            cardEntries.forEach(e => { e.day = 하는날(pl, e.task.fields.시공품목, e.stage, filterWorkerName, saved); e.won = 값(e); });
-            const groups = [''].concat(myDays);
+            cardEntries.forEach(e => { e.day = 하는날(pl, e.task.fields.시공품목, e.stage, filterWorkerName, saved); e.won = 값(e); if (!e.day && e.isCompleted) e.day = '_done'; });
+            const groups = [''].concat(myDays, ['_done']);
             // 날 탭 (11/14 사장님: 1일차·2일차로 바로 이동) — 위에 붙어 있고, 누르면 그 날로 내려간다
             const tabs = document.createElement('div');
             tabs.className = 'board-day-tabs';
@@ -4036,12 +4036,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             boardAssignmentList.appendChild(tabs);
             groups.forEach(k => {
                 const list = cardEntries.filter(e => e.day === k);
-                if (!k && !list.length) return;
+                if ((!k || k === '_done') && !list.length) return;
                 const h = document.createElement('div');
                 h.className = 'board-day-h' + (k ? '' : ' und');
                 h.dataset.k = k;
                 const sum = list.reduce((a, e) => a + e.won, 0);
-                if (k) {
+                if (k === '_done') {
+                    h.className = 'board-day-h done';
+                    h.innerHTML = '<b>✅ 끝난 일 ' + list.length + '개</b><span>날짜 없이 끝남</span>';
+                } else if (k) {
                     const w = ((기사일감(null, k) || { by: {} }).by[filterWorkerName]) || null;
                     const over = w && w.pay && w.value > w.goal * 1.05;
                     h.innerHTML = '<b>📅 ' + 날글(pl, k) + '</b><span class="' + (over ? 'over' : '') + '">' + (w && w.pay ? '맡은 일 ' + 만(w.value) + ' / 기준 ' + 만(w.goal) + (over ? ' ⚠' : '') : list.length + '개') + '</span>';
@@ -4049,7 +4052,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     h.innerHTML = '<b>📅 날짜 안 정한 일 ' + list.length + '개</b><span>' + (sum ? 만(sum) + ' — ' : '') + '카드마다 하는 날을 골라 주세요</span>';
                 }
                 boardAssignmentList.appendChild(h);
-                if (k && !list.length) {
+                if (k && k !== '_done' && !list.length) {
                     const em = document.createElement('div');
                     em.className = 'board-day-empty';
                     em.textContent = '이날 맡은 일이 아직 없어요';
@@ -4409,9 +4412,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // null 이면 업무배정표 카드, 아니면 { items: [{key, label}], onApply(keys) }
     let orderPickCustom = null;
 
+    // 📅 여러 날 나오는 기사 (11/14 사장님: 서영호 2일 — 순서 정하기에서 날도 나눈다).
+    // 위에서 '고르는 날'을 정하고 누르면 그 날 몇 번째로. 저장하면 하는 날(filmAdminWorkDay)도 같이 바뀐다
+    let orderPickDays = null, orderPickDay = '', orderPickDayOf = {};
+    function 순서카드정보(key) {
+        const [rid, stage] = key.split('__');
+        const task = (currentDetailData.tasks || []).find(t => t.id === rid);
+        return { item: task ? task.fields.시공품목 : '', stage };
+    }
     window.openOrderPickModal = function() {
         orderPickCustom = null;
         orderPickSequence = [];
+        orderPickDays = null; orderPickDayOf = {};
+        try {
+            const pl = 일감계획(activeProjectCode);
+            const myDays = activeWorkerName && pl && !pl.loading ? 나오는날(pl, activeWorkerName) : [];
+            if (myDays.length > 1) { orderPickDays = { pl, keys: myDays, items: 일감항목(pl), saved: 하는날모음() }; orderPickDay = myDays[0]; }
+        } catch (e) { orderPickDays = null; }
         renderOrderPickList();
         document.getElementById('orderPickModal').style.display = 'flex';
     };
@@ -4459,6 +4476,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        if (orderPickDays) { renderOrderPickDays(container, statusEl, cards); return; }
         container.innerHTML = cards.map(card => {
             const key = `${card.dataset.recordId}__${card.dataset.stage}`;
             const nameEl = card.querySelector('.assigned-item-name');
@@ -4477,7 +4495,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusEl.textContent = `${orderPickSequence.length} / ${cards.length}개 지정됨`;
     }
 
+    // 날 나누기 모드: 위에 [1일차][2일차] (고르는 날), 항목마다 그 날 안의 번호 + 날 표시
+    function 순서날(key) {
+        if (orderPickDayOf[key] !== undefined) return orderPickDayOf[key];
+        const c = 순서카드정보(key);
+        return 하는날(orderPickDays.pl, c.item, c.stage, activeWorkerName, orderPickDays.saved);
+    }
+    function renderOrderPickDays(container, statusEl, cards) {
+        const D = orderPickDays, pl = D.pl;
+        const won = (key) => { const c = 순서카드정보(key); const it = D.items.find(x => x.item === c.item && x.stage === c.stage && x.who === activeWorkerName); return it ? it.won : 0; };
+        const keys = cards.map(c => `${c.dataset.recordId}__${c.dataset.stage}`);
+        const pd = (pl.p || {})[activeWorkerName] || [0, 1], rate = Number(pl.r) >= 0 ? Number(pl.r) : 50;
+        const goal = (pd[0] || 0) * 10000 * (1 + rate / 100);
+        const tabs = '<div class="op-days">' + D.keys.map((k, i) => {
+            const mine = keys.filter(x => 순서날(x) === k), sum = mine.reduce((a, x) => a + won(x), 0);
+            const over = goal && sum > goal * 1.05;
+            const t = 날글(pl, k).split(' ');
+            return '<button type="button" class="' + (orderPickDay === k ? 'on' : '') + (over ? ' over' : '') + '" onclick="setOrderPickDay(' + i + ')">' + t[0] + ' <small>' + (t[1] || '') + '</small>' +
+                '<span>' + mine.length + '개 · ' + 만(sum) + (goal ? ' / ' + 만(goal) : '') + '</span></button>';
+        }).join('') + '</div><div class="op-days-d">' + 날글(pl, orderPickDay) + '에 할 일을 순서대로 누르세요. 다른 날은 위에서 바꿔요.</div>';
+        container.innerHTML = tabs + cards.map(card => {
+            const key = `${card.dataset.recordId}__${card.dataset.stage}`;
+            const nameEl = card.querySelector('.assigned-item-name');
+            const name = nameEl ? nameEl.innerHTML : '(이름없음)';
+            const d = 순서날(key), picked = orderPickSequence.indexOf(key) !== -1;
+            const n = picked ? orderPickSequence.filter(x => 순서날(x) === d).indexOf(key) + 1 : '';
+            const here = d === orderPickDay;
+            const dl = d ? 날글(pl, d).split(' ')[0] : '날짜 미정';
+            return `
+                <div class="order-pick-item${picked && here ? ' picked' : ''}${d && !here ? ' other-day' : ''} ${card.dataset.stage === '밑작업' ? 'stage-prep' : (card.classList.contains('stage-cleanup') ? 'stage-cleanup' : 'stage-construction')}" onclick="toggleOrderPick('${key}')">
+                    <span class="order-pick-badge">${picked && here ? n : ''}</span>
+                    <span class="order-pick-name">${name}</span>
+                    <span class="op-day-tag${d ? '' : ' und'}${here ? ' here' : ''}">${picked && !here ? dl + ' ' + n + '번' : dl}</span>
+                    <em class="op-won">${won(key) ? 만(won(key)) : ''}</em>
+                </div>`;
+        }).join('');
+        statusEl.textContent = `${orderPickSequence.length} / ${cards.length}개 지정됨`;
+    }
+    window.setOrderPickDay = function (i) {
+        if (!orderPickDays || !orderPickDays.keys[i]) return;
+        orderPickDay = orderPickDays.keys[i];
+        renderOrderPickList();
+    };
     window.toggleOrderPick = function(key) {
+        if (orderPickDays) {
+            const i0 = orderPickSequence.indexOf(key);
+            if (i0 !== -1 && 순서날(key) === orderPickDay) {   // 같은 날에서 다시 누르면 취소
+                orderPickSequence.splice(i0, 1); delete orderPickDayOf[key];
+            } else {                                             // 처음이거나 다른 날 것 → 이 날 맨 뒤로
+                if (i0 !== -1) orderPickSequence.splice(i0, 1);
+                orderPickSequence.push(key); orderPickDayOf[key] = orderPickDay;
+            }
+            renderOrderPickList();
+            return;
+        }
         const idx = orderPickSequence.indexOf(key);
         if (idx !== -1) {
             // 이미 찍은 항목을 다시 탭하면 그 항목만 순서 지정 취소 (뒷 번호들이 자동으로 하나씩 당겨짐)
@@ -4489,7 +4560,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     window.resetOrderPick = function() {
-        orderPickSequence = [];
+        orderPickSequence = []; orderPickDayOf = {};
         renderOrderPickList();
     };
 
@@ -4503,6 +4574,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             orderPickCustom = null;
             await onApply(keys);
             return;
+        }
+        // 📅 날 나누기: 고른 날을 하는 날로 저장하고, 순서는 날 순서 → 그 날 안에서 누른 순서
+        if (orderPickDays) {
+            const D = orderPickDays;
+            Object.keys(orderPickDayOf).forEach(key => { const c = 순서카드정보(key); if (c.item && orderPickDayOf[key]) 하는날저장(c.item, c.stage, orderPickDayOf[key]); });
+            const rank = (key) => { const d = 순서날(key); const i = D.keys.indexOf(d); return i < 0 ? -1 : i; };
+            orderPickSequence = orderPickSequence.map((k, i) => [k, i]).sort((a, b) => (rank(a[0]) - rank(b[0])) || (a[1] - b[1])).map(x => x[0]);
+            orderPickDays = null; orderPickDayOf = {};
+            try { 일감막대그리기(); } catch (e) { /* 일감 칸은 다음에 */ }
         }
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
         const cardsByKey = new Map(cards.map(c => [`${c.dataset.recordId}__${c.dataset.stage}`, c]));
