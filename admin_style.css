@@ -3306,4 +3306,22 @@ body {
 .llb-ar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; border-top: 1px dashed #e2e8f0; }
 .llb-ar span { flex: 1; min-width: 0; color: #334155; } .llb-ar b { color: #1d4ed8; }
 .llb-ar button { flex-shrink: 0; border: 1.5px solid #fca5a5; color: #b91c1c; background: #fff; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 800; }
-.zone-item-cost { display: block; font-size: 11.5px; font-weight: 700; color: #1d4ed8; margin-top: 2px; }
+/* 🧾 품목 줄 A안 (11/14) — 이름 줄 오른쪽 견적 인건비, 밑작업·시공 칸 위에 몫과 지침 */
+.zone-item-row.v2 { display: block; padding: 12px; border-radius: 14px; }
+.zone-item-row.v2 .zone-item-top { display: flex; align-items: center; gap: 10px; }
+.zone-item-row.v2 .zone-item-toggle input[type="checkbox"] { width: 22px; height: 22px; accent-color: #1d4ed8; }
+.zone-item-row.v2 .zone-item-name { flex: 1 1 auto; font-size: 16px; letter-spacing: -0.01em; line-height: 1.3; }
+.zone-item-amt { margin-left: auto; flex-shrink: 0; font-size: 17px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zone-item-amt small { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-left: 1px; }
+.zone-item-tag { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 2px 6px; margin-left: 6px; vertical-align: 2px; letter-spacing: 0; }
+.zone-item-tag.pend { color: #b45309; background: #fff1d6; } .zone-item-tag.done { color: #0f8a5f; background: #d6f3e5; }
+.zone-item-stages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; padding-left: 32px; }
+.zone-item-stages.one { grid-template-columns: 1fr; }
+.zone-stage { min-width: 0; }
+.zone-stage-lab { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 12px; font-weight: 700; color: var(--text-muted); margin: 0 2px 4px; min-height: 22px; }
+.zone-stage-lab b { color: #1f2a44; font-weight: 800; font-variant-numeric: tabular-nums; }
+.zone-item-guideline-btn.link { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; padding: 2px 0 2px 4px; margin: 0; color: #1d4ed8; font-size: 12px; font-weight: 700; min-height: 0; box-shadow: none; }
+.zone-item-guideline-btn.link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.zone-item-guideline-btn.link:disabled { color: #9aa3b5; background: none; }
+.zone-item-stages .zone-assign-select { width: 100%; max-width: none; min-width: 0; padding: 0 10px; height: 42px; font-size: 15px; font-weight: 700; border-radius: 11px; }
+.zone-item-row.v2.completed .zone-item-stages .zone-assign-select { border-color: #a7e3c6; }

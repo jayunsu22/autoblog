@@ -3131,17 +3131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'zone-item-name';
         nameSpan.textContent = zoneLabel ? `${itemName} · ${zoneLabel}` : itemName;
-        // 💰 견적 인건비 (11/14 사장님: 품목마다 견적 비용을 보면서 배정) — 밑작업 ⅓ · 시공 ⅔
-        try {
-            const pl = 일감계획(activeProjectCode), won = pl && !pl.loading ? Number((pl.v || {})[itemName]) || 0 : 0;
-            if (won) {
-                const cost = document.createElement('span');
-                cost.className = 'zone-item-cost';
-                cost.textContent = 뒷정리 || (pl.o || []).includes(itemName) ? '💰 ' + 만(won)
-                    : '💰 ' + 만(won) + ' (밑 ' + 만(won * 밑몫()) + ' · 시공 ' + 만(won * (1 - 밑몫())) + ')';
-                nameSpan.appendChild(cost);
-            }
-        } catch (e) { /* 값 없이도 배정은 된다 */ }
         if (뒷정리) {
             const modeBadge = document.createElement('span');
             modeBadge.className = 'zone-item-mode-badge';
@@ -3149,41 +3138,52 @@ document.addEventListener('DOMContentLoaded', async () => {
             nameSpan.appendChild(modeBadge);
         }
 
-        // 기사 배정 전이라도 밑작업/시공 지침을 미리 손볼 수 있는 버튼 - 품목이 켜져 있어야(작업 레코드가 있어야) 누를 수 있음
-        // 뒷정리는 밑작업/시공 구분이 없어(담당 한 명) 지침 버튼도 하나만 노출
-        const guidelineBtnWrap = document.createElement('div');
-        guidelineBtnWrap.className = 'zone-item-guideline-wrap';
-        if (뒷정리) {
-            guidelineBtnWrap.appendChild(createGuidelineStageBtn(itemName, '시공', task, '📋 지침'));
-        } else {
-            guidelineBtnWrap.appendChild(createGuidelineStageBtn(itemName, '밑작업', task, '🔧 밑작업'));
-            guidelineBtnWrap.appendChild(createGuidelineStageBtn(itemName, '시공', task, '🛠 시공'));
+        // 🧾 품목 줄 A안 (11/14 사장님) — 이름 줄 오른쪽에 견적 인건비, 밑작업·시공 칸 위에 그 몫과 지침
+        let won = 0, onceItem = 뒷정리;
+        try {
+            const pl = 일감계획(activeProjectCode);
+            if (pl && !pl.loading) { won = Number((pl.v || {})[itemName]) || 0; onceItem = 뒷정리 || (pl.o || []).includes(itemName); }
+        } catch (e) { /* 값 없이도 배정은 된다 */ }
+        if (zonePendingChanges.has(itemName)) { const t = document.createElement('span'); t.className = 'zone-item-tag pend'; t.textContent = '저장 전'; nameSpan.appendChild(t); }
+        else if (isFullyCompleted) { const t = document.createElement('span'); t.className = 'zone-item-tag done'; t.textContent = 뒷정리 && item.반복 === '매일' ? '오늘 완료' : '완료'; nameSpan.appendChild(t); }
+        const top = document.createElement('div');
+        top.className = 'zone-item-top';
+        top.appendChild(toggleLabel);
+        top.appendChild(nameSpan);
+        if (won) {
+            const amt = document.createElement('span');
+            amt.className = 'zone-item-amt';
+            amt.title = '견적 인건비';
+            amt.innerHTML = String(Math.round(won / 1000) / 10) + '<small>만</small>';
+            top.appendChild(amt);
         }
-
+        const BOOK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20"/></svg>';
+        const stages = 뒷정리 ? [['시공', '담당', effectiveWrap, won]]
+            : onceItem ? [['밑작업', '밑작업', effectivePrep, 0], ['시공', '시공', effectiveWrap, won]]
+            : [['밑작업', '밑작업', effectivePrep, won * 밑몫()], ['시공', '시공', effectiveWrap, won * (1 - 밑몫())]];
         const assignWrap = document.createElement('div');
-        assignWrap.className = 'zone-item-assign';
-        if (뒷정리) {
-            // 뒷정리는 밑작업/시공으로 안 나뉜다 - 담당 한 명(시공기사 칸에 저장)
-            assignWrap.appendChild(createZoneAssignSelect(itemName, '시공', effectiveWrap, effectiveActive, fields, workers, isActive, '담당'));
-        } else {
-            assignWrap.appendChild(createZoneAssignSelect(itemName, '밑작업', effectivePrep, effectiveActive, fields, workers, isActive));
-            assignWrap.appendChild(createZoneAssignSelect(itemName, '시공', effectiveWrap, effectiveActive, fields, workers, isActive));
-        }
+        assignWrap.className = 'zone-item-stages' + (stages.length === 1 ? ' one' : '');
+        stages.forEach(([stage, label, value, part]) => {
+            const col = document.createElement('div');
+            col.className = 'zone-stage';
+            const lab = document.createElement('div');
+            lab.className = 'zone-stage-lab';
+            const t = document.createElement('span');
+            t.innerHTML = label + (part ? ' <b>' + 만(part) + '</b>' : '');
+            const g = createGuidelineStageBtn(itemName, stage, task, '지침');
+            g.classList.add('link');
+            g.innerHTML = BOOK + '지침';
+            lab.appendChild(t); lab.appendChild(g);
+            col.appendChild(lab);
+            col.appendChild(createZoneAssignSelect(itemName, stage, value, effectiveActive, fields, workers, isActive, 뒷정리 ? '담당' : '기사 선택'));
+            assignWrap.appendChild(col);
+        });
 
-        row.appendChild(toggleLabel);
-        row.appendChild(nameSpan);
-        row.appendChild(guidelineBtnWrap);
+        row.classList.add('v2');
+        row.appendChild(top);
         row.appendChild(assignWrap);
         // 측정 대상 기사(⏱)에게 밑작업이 배정된 품목에만 (2026-10-24 사장님: 윤인재 작업에만)
         if (!뒷정리 && 시간기록품목인가(itemName) && isActive && task && 측정대상인가(effectivePrep)) row.appendChild(createTimeMetaBox(task));
-
-        if (isFullyCompleted) {
-            const badge = document.createElement('span');
-            badge.className = 'zone-item-done-badge';
-            badge.textContent = '✅';
-            if (뒷정리 && item.반복 === '매일') badge.title = '오늘 완료';
-            row.appendChild(badge);
-        }
 
         return row;
     }
