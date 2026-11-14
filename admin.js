@@ -3627,8 +3627,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // 매트릭스에 쌓인 활성화/비활성화 + 기사 배정 변경사항을 한 번에 서버에 반영
+    // 🧱 저장 중에 [저장]을 또 누르면 같은 품목이 두 번 만들어졌다 (11/14 영남 11개) — 하나 끝날 때까지 다시 안 받는다
+    let zoneSaving = false;
     window.saveZonePendingChanges = async function() {
+        if (zoneSaving) { showToast('저장 중이에요 — 잠깐만 기다려 주세요'); return; }
         if (zonePendingChanges.size === 0) return;
+        zoneSaving = true;
+        try { return await saveZonePendingChangesNow(); } finally { zoneSaving = false; }
+    };
+    async function saveZonePendingChangesNow() {
         const entries = [...zonePendingChanges.entries()];
         const activeItems = currentDetailData.activeItems || [];
         const tasks = currentDetailData.tasks || [];
@@ -3712,7 +3719,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             hideLoading();
         }
-    };
+    }
 
     // ===== 품목 일괄설정 모달 =====
     // 구역 탭을 하나씩 넘기며 품목을 찾아 켜는 게 번거로워서, 전체 구역을 한 화면에 펼쳐놓고
