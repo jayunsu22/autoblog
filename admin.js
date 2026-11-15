@@ -4599,7 +4599,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearTimeout(orderSyncTimer);
         orderSyncTimer = setTimeout(() => {
             if (activeProjectCode !== projectCode) return;
-            persistAssignmentOrder({ silent: true }).then(ok => { if (!ok) orderSyncFailedAt = Date.now(); });
+            persistAssignmentOrder({ silent: true }).then(ok => {
+                if (!ok) orderSyncFailedAt = Date.now();
+                else if (dayNeeds) showToast('📅 기사 앱에 1일차·2일차 날짜를 보냈어요');
+            });
         }, 800);
     }
 
