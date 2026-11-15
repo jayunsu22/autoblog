@@ -1724,7 +1724,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return fetchWithTimeout(`${SETTLE_HISTORY_URL}?site=${encodeURIComponent(projectCode)}`)
             .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
             .then((j) => {
-                const list = ((j && j.정산) || []).filter((p) => p && p.코드).map((p) => Object.assign({}, p, { 견적코드: 's:' + p.코드 }))
+                // 현장명은 목록 머리에 한 번 온다 — 줄마다 붙여 '현장명 정산견적서' 로 보인다 (2026-11-16)
+                const 현장명 = String((j && j.현장명) || '').trim();
+                const list = ((j && j.정산) || []).filter((p) => p && p.코드).map((p) => Object.assign({}, p, { 견적코드: 's:' + p.코드, 현장명: 현장명 }))
                     .sort((a, b) => String(b.발행일시 || '').localeCompare(String(a.발행일시 || '')));
                 정산목록캐시[projectCode] = { 시각: Date.now(), list: list };
                 return list;
@@ -1998,10 +2000,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (정산줄.length) {
                 html += `<div class="qp-group settle">🧮 이 현장 정산 견적서 ${정산줄.length}건</div>`;
                 정산줄.forEach((p, k) => {
-                    const 방식 = p.방식 === '품목' ? ' · 품목 견적' : p.방식 === '품수' ? ' · 품수 견적' : '';
                     html += `
                 <button type="button" class="qp-row settle${p.견적코드 === cur ? ' on' : ''}" data-s="${k}">
-                  <span class="qp-t">정산 견적서${방식}${p.견적코드 === 최신코드 && p.견적코드 !== cur ? '<em class="new">최신</em>' : ''}${p.견적코드 === cur ? '<em class="now">지금 연결됨</em>' : ''}</span>
+                  <span class="qp-t">${(p.현장명 ? p.현장명 + ' ' : '').replace(/</g, '&lt;')}정산견적서${p.견적코드 === 최신코드 && p.견적코드 !== cur ? '<em class="new">최신</em>' : ''}${p.견적코드 === cur ? '<em class="now">지금 연결됨</em>' : ''}</span>
                   <span class="qp-m">${[시각(p.발행일시), p.총액 ? 원(p.총액) : '', 견적짧은주소(p.견적코드)].filter(Boolean).join(' · ')}</span>
                 </button>`;
                 });

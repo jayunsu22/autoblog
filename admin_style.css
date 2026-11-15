@@ -537,7 +537,8 @@ body {
         grid-column: span 2;
     }
 
-    .detail-action-wrap .action-btn:nth-child(7) {
+    /* 블로그 원고 발행은 순번이 아니라 이름으로 — 견적서 ❗ 안내 줄이 사이에 끼면 순번이 밀려 좁아졌다 (2026-11-16) */
+    .detail-action-wrap .action-btn.publish {
         grid-column: span 6;
         padding: 14px 16px;
         font-size: 14.5px;
@@ -3203,6 +3204,7 @@ body {
 #quotePickOverlay .qp-row.settle { background: #f0fdf4; border-color: #86efac; }
 #quotePickOverlay .qp-group.settle { color: #065f46; }
 #quotePickOverlay .qp-t em.new { background: #fee2e2; color: #b91c1c; }
+#quotePickOverlay .qp-t em { display: inline-block; white-space: nowrap; }   /* 긴 현장명 뒤에서 '최신' 이 두 줄로 갈리지 않게 */
 /* 더 최근 견적서가 있을 때 견적서 버튼 ❗ */
 #quoteViewBtn.newer { position: relative; border-color: #f59e0b; background: #fffbeb; color: #92400e; }
 #quoteViewBtn .q-bang { position: absolute; top: -8px; right: -6px; min-width: 20px; height: 20px; border-radius: 10px; background: #dc2626;
