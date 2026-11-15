@@ -1509,6 +1509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!e || !days[di]) return;
         하는날저장(e.item, e.stage, days[di].k);
         renderZoneAssignBoard();
+        try { renderBoardAssignments(); } catch (er) { /* 배정표는 다음에 — 그리면서 기사 앱에 날을 보낸다 */ }
     };
     const 만 = (won) => Math.round(won / 1000) / 10 + '만';
     /* 밑작업 몫 (2026-11-13 사장님: 현장 상태에 따라 밑작업이 더 걸린다) — 현장마다, 품목 배정 화면에서 −＋ 5% 씩. 기본 ⅓ (33%).
@@ -4362,6 +4363,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { silent = false } = options;
         // 1. 배정표 내 카드 순서를 DOM 그대로 수집
         const cards = [...boardAssignmentList.querySelectorAll('.assignment-card')];
+        const allEntries = 카드순서들(cards);
+        const projectCode = activeProjectCode;
+        return persistAssignmentOrderEntries(allEntries, projectCode, silent);
+    }
+    function 카드순서들(cards) {
         // 📅 여러 날 나오는 기사의 카드는 순서에 날을 담는다 (11/14 사장님: 기사 앱도 1일차·2일차 탭) —
         // 1일차 = 1001·1002…, 2일차 = 2001… (현장 일정의 몇째 날). 날을 안 정한 카드·하루만 나오는 기사는 예전처럼 1·2·3…
         let dayPlan = null;
@@ -4379,7 +4385,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             return { id: c.dataset.recordId, stage: c.dataset.stage, priority };
         });
-        const projectCode = activeProjectCode;
+        return allEntries;
+    }
+    async function persistAssignmentOrderEntries(allEntries, projectCode, silent) {
 
         // 2. 서버 값과 다른 카드 + 지난번에 못 보낸 카드를 보낸다
         const unsent = readUnsentOrder(projectCode);
@@ -4464,7 +4472,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const val = stage === '밑작업' ? task.fields.작업우선순위 : task.fields.시공우선순위;
             return (val === undefined || val === null) && savedOrder.indexOf(id) !== -1;
         });
-        if (!needs) return;
+        // 📅 하는 날을 정했는데 서버 순서 번호에 그 날이 안 담겨 있으면 보낸다 (11/15 사장님: 기사 앱에 1일차·2일차 탭이 안 나옴 —
+        // 품목 배정·하는 날 고르기는 이 폰에만 적히고 서버엔 카드 순서를 옮길 때만 갔다)
+        let dayNeeds = false;
+        if (!needs) {
+            try {
+                dayNeeds = 카드순서들(cards).some(({ id, stage, priority }) => {
+                    const task = (currentDetailData.tasks || []).find(t => t.id === id);
+                    if (!task) return false;
+                    const val = Number(stage === '밑작업' ? task.fields.작업우선순위 : task.fields.시공우선순위) || 0;
+                    return Math.floor(val / 1000) !== Math.floor(priority / 1000);
+                });
+            } catch (e) { dayNeeds = false; }
+        }
+        if (!needs && !dayNeeds) return;
         clearTimeout(orderSyncTimer);
         orderSyncTimer = setTimeout(() => {
             if (activeProjectCode !== projectCode) return;
