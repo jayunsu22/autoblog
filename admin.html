@@ -12,7 +12,7 @@
     <meta name="theme-color" content="#1e293b">
     <link rel="icon" href="admin-icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="admin-icon-192.png">
-    <link rel="stylesheet" href="admin_style.css?v=20261115a">
+    <link rel="stylesheet" href="admin_style.css?v=20261116c">
 </head>
 <body>
     <!-- 로딩 오버레이 -->
@@ -91,7 +91,8 @@
                     <button class="action-btn copy" onclick="openWorkerLink()">🔗 링크 열기</button>
                     <button class="action-btn copy" onclick="openRawPhotoGalleryForActiveProject()">📷 원본사진 보기</button>
                     <button class="action-btn copy" onclick="openRawPhotoCaptureForActiveProject()">📸 원본사진 찍기</button>
-                    <!-- 이 현장에 이어 둔 방문견적서 (일정 앱에서 연결한 것). 품목 체크할 때 보고 고른다 -->
+                    <!-- 이 현장에 이어 둔 견적서 (방문견적 /q/ 또는 정산견적 /s/). 품목 체크할 때 보고 고른다.
+                         더 최근에 발행한 견적서가 있으면 ❗ (2026-11-16) -->
                     <button class="action-btn copy" id="quoteViewBtn" onclick="openQuoteForActiveProject()" title="길게 누르면 다른 견적서로 바꿉니다">📄 방문견적 보기</button>
                     <button class="action-btn publish" onclick="requestBlogPublish()">✍️ 블로그 원고 발행</button>
                 </div>
@@ -661,12 +662,12 @@
         </div>
     </div>
 
-    <script src="owner-key.js?v=20261101a"></script>
+    <script src="owner-key.js?v=20261116a"></script>
     <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('admin-sw.js').catch(function () {});</script>
     <!-- 🧑‍🔧 기사별 일감 (2026-11-13): 일정 앱(현장관리)과 같은 계산 코드 -->
     <script src="../sitenote/share.js?v=20261114h"></script>
     <script src="../sitenote/quote_link.js?v=20261114c"></script>
-    <script src="admin.js?v=20261115a"></script>
+    <script src="admin.js?v=20261116c"></script>
     <script src="app-switcher.js?v=20261020a" data-app-id="admin" data-hide-when-param="code"></script>
 </body>
 </html>

@@ -1274,9 +1274,17 @@ document.addEventListener('DOMContentLoaded', async () => {
        코드가 없으면 버튼을 누를 때 물어본다 (길게 누르면 다른 견적서로 바꾼다). */
     const QUOTE_MAP_KEY = 'filmAdminQuoteByProject';
     const QUOTE_VIEW_BASE = 'https://songil.netlify.app/q/';
+    // 정산 견적서(songil.netlify.app/s/…, 2026-11-16) 는 's:코드' 로 남긴다 — 일정 앱(sitenote quote_link.js)과 같은 꼴
+    const SETTLE_VIEW_BASE = 'https://songil.netlify.app/s/';
+    const SETTLE_HISTORY_URL = `${n8nBase}/webhook/settle-history`;
+    function 정산코드인가(code) { return /^s:/.test(String(code || '')); }
+    function 견적보기주소(code) { return 정산코드인가(code) ? SETTLE_VIEW_BASE + String(code).slice(2) : QUOTE_VIEW_BASE + code; }
+    function 견적짧은주소(code) { return 정산코드인가(code) ? '/s/' + String(code).slice(2) : '/q/' + code; }
     function 견적코드뽑기(값) {
         const v = String(값 == null ? '' : 값).trim();
         if (!v) return '';
+        const s = /\/s\/([A-Za-z0-9_-]+)/.exec(v) || /^s:([A-Za-z0-9_-]+)$/.exec(v);
+        if (s) return 's:' + s[1];
         const m = /\/q\/([A-Za-z0-9_-]+)/.exec(v);
         if (m) return m[1];
         return /^[A-Za-z0-9_-]+$/.test(v) ? v : '';
@@ -1699,8 +1707,76 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('quoteViewBtn');
         if (!btn) return;
         const code = 견적코드읽기(activeProjectCode);
-        btn.textContent = code ? '📄 방문견적 보기' : '📄 방문견적 연결';
-        btn.title = code ? '/q/' + code + ' · 길게 누르면 다른 견적서로 바꿉니다' : '견적코드나 /q/… 주소를 넣어 이 현장과 잇습니다';
+        btn.textContent = code ? (정산코드인가(code) ? '📄 정산견적 보기' : '📄 방문견적 보기') : '📄 방문견적 연결';
+        btn.title = code ? 견적짧은주소(code) + ' · 길게 누르면 다른 견적서로 바꿉니다' : '견적코드나 /q/·/s/ 주소를 넣어 이 현장과 잇습니다';
+        btn.classList.remove('newer');
+        const tip = document.getElementById('quoteNewerTip');
+        if (tip) tip.hidden = true;
+        // 다음 차례에 (초기화 중에 불려도 아래쪽 목록·캐시가 준비된 뒤에 돈다)
+        const 지금현장 = activeProjectCode;
+        setTimeout(() => 최신견적확인(지금현장), 0);
+    }
+    /* ❗ 더 최근 견적서 (2026-11-16 사장님) — 이 현장의 정산 견적서 + 이 현장(일정 앱)으로 발행한 방문견적 중
+       이어 둔 것보다 늦게 발행한 게 있으면 버튼에 ❗. 아직 안 이었는데 이 현장 견적서가 있어도 ❗ */
+    var 정산목록캐시 = {};   // 현장 → { 시각, list } — var: 버튼 갱신이 초기화 중에도 불린다
+    function 정산목록받기(projectCode) {
+        const c = 정산목록캐시[projectCode];
+        if (c && Date.now() - c.시각 < 2 * 60 * 1000) return Promise.resolve(c.list);
+        return fetchWithTimeout(`${SETTLE_HISTORY_URL}?site=${encodeURIComponent(projectCode)}`)
+            .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+            .then((j) => {
+                // 현장명은 목록 머리에 한 번 온다 — 줄마다 붙여 '현장명 정산견적서' 로 보인다 (2026-11-16)
+                const 현장명 = String((j && j.현장명) || '').trim();
+                const list = ((j && j.정산) || []).filter((p) => p && p.코드).map((p) => Object.assign({}, p, { 견적코드: 's:' + p.코드, 현장명: 현장명 }))
+                    .sort((a, b) => String(b.발행일시 || '').localeCompare(String(a.발행일시 || '')));
+                정산목록캐시[projectCode] = { 시각: Date.now(), list: list };
+                return list;
+            });
+    }
+    // 이 현장 견적서 후보: 정산 견적서 전부 + 방문견적 중 이 현장(일정 앱 현장)으로 발행한 것. 못 받은 쪽은 빈 목록
+    function 이현장견적들(projectCode) {
+        const info = 이어진현장();
+        const 정산 = 정산목록받기(projectCode).catch(() => []);
+        const 방문 = (info && info.key ? 발행목록받기() : Promise.resolve([])).catch(() => []);
+        return Promise.all([정산, 방문]).then(([s, q]) => ({
+            정산: s,
+            방문: q,
+            이현장방문: info ? q.filter((p) => p.현장관리_현장ID && info.site && p.현장관리_현장ID === info.site.id) : [],
+        }));
+    }
+    function 최신견적확인(projectCode) {
+        if (!projectCode) return;
+        이현장견적들(projectCode).then((r) => {
+            if (projectCode !== activeProjectCode) return;   // 그사이 다른 현장으로 갔다
+            const btn = document.getElementById('quoteViewBtn');
+            if (!btn) return;
+            const 후보 = r.정산.concat(r.이현장방문).filter((p) => p.발행일시)
+                .sort((a, b) => String(b.발행일시).localeCompare(String(a.발행일시)));
+            const 최신 = 후보[0];
+            const code = 견적코드읽기(projectCode);
+            let 말 = '';
+            if (최신 && 최신.견적코드 !== code) {
+                if (!code) 말 = '이 현장에 발행한 견적서가 있어요 — 눌러서 이으세요';
+                else {
+                    const 이은 = r.정산.concat(r.방문).find((p) => p.견적코드 === code);
+                    if (이은 && 이은.발행일시 && String(최신.발행일시) > String(이은.발행일시)) {
+                        const d = new Date(최신.발행일시);
+                        말 = (isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} 에 `) + '발행한 새 ' + (정산코드인가(최신.견적코드) ? '정산 견적서' : '방문견적서') + '가 있어요 — 눌러서 바꾸세요';
+                    }
+                }
+            }
+            btn.classList.toggle('newer', !!말);
+            let bang = btn.querySelector('.q-bang');
+            if (말 && !bang) { bang = document.createElement('span'); bang.className = 'q-bang'; bang.textContent = '!'; btn.appendChild(bang); }
+            if (!말 && bang) bang.remove();
+            let tip = document.getElementById('quoteNewerTip');
+            if (!tip) {
+                tip = document.createElement('div'); tip.id = 'quoteNewerTip'; tip.className = 'quote-newer-tip'; tip.hidden = true;
+                btn.parentNode.insertBefore(tip, btn.nextSibling);
+            }
+            tip.textContent = 말 ? '❗ ' + 말 : '';
+            tip.hidden = !말;
+        }).catch(() => { /* ❗ 는 못 띄워도 버튼은 그대로 */ });
     }
     function 견적물어보기(바꾸기) {
         const 이전 = 견적코드읽기(activeProjectCode);
@@ -1835,6 +1911,8 @@ document.addEventListener('DOMContentLoaded', async () => {
        끝나면 현장 상세를 다시 받아 화면을 맞춘다. */
     async function 견적대로품목켜기(code) {
         if (!activeProjectCode || !code) return null;
+        // 정산 견적서는 이 현장 시공품목으로 만든 견적이라 다시 켤 품목이 없다
+        if (정산코드인가(code)) return null;
         showToast('견적서를 보고 시공품목을 켜는 중…');
         let 견적;
         try {
@@ -1880,7 +1958,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // 가벼운 고르기 창 (관리자 앱에는 공용 모달이 없어 여기서 만든다)
-    function 견적고르기창(list, info) {
+    function 견적고르기창(list, info, 정산들) {
+        정산들 = 정산들 || [];
         const old = document.getElementById('quotePickOverlay');
         if (old) old.remove();
         const cur = 견적코드읽기(activeProjectCode);
@@ -1895,7 +1974,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ov.innerHTML = `
             <div class="qp-box">
               <div class="qp-head">
-                <b>📄 방문견적 고르기</b>
+                <b>📄 견적서 고르기</b>
                 <button type="button" class="qp-x" aria-label="닫기">✕</button>
               </div>
               <p class="qp-sub">${info && info.clientName ? `이 현장의 거래처: <b>${info.clientName}</b> (위에 먼저 나옵니다)` : '일정 앱과 이어진 현장이 아니라 최신순으로 보여줍니다'}</p>
@@ -1908,30 +1987,55 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>`;
         document.body.appendChild(ov);
         const listEl = ov.querySelector('.qp-list');
+        const 시각 = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; const h = d.getHours();
+            return `${d.getMonth() + 1}/${d.getDate()} ${h < 12 ? '오전' : '오후'} ${(h % 12) || 12}:${String(d.getMinutes()).padStart(2, '0')}`; };
+        // 가장 최근 발행 (정산 + 이 현장 방문견적) 에 '최신'
+        const 최신코드 = 정산들.concat(sorted.filter((p) => info && info.site && p.현장관리_현장ID === info.site.id))
+            .filter((p) => p.발행일시).sort((a, b) => String(b.발행일시).localeCompare(String(a.발행일시))).map((p) => p.견적코드)[0] || '';
         const 그리기 = (찾는말) => {
             const q = String(찾는말 || '').trim();
             const rows = sorted.filter((p) => !q || String(p.현장명 || '').indexOf(q) >= 0).slice(0, 60);
-            // 이 거래처 것은 색이 다른 칸으로 위에 모으고, 다른 거래처 것과 줄로 가른다
+            // 맨 위: 이 현장 정산 견적서 (찾는 말이 있으면 숨김 — 정산은 이 현장 것뿐이라 이름으로 찾을 일이 없다)
             let html = '', 머리냄 = { mine: false, other: false };
+            const 정산줄 = q ? [] : 정산들;
+            if (정산줄.length) {
+                html += `<div class="qp-group settle">🧮 이 현장 정산 견적서 ${정산줄.length}건</div>`;
+                정산줄.forEach((p, k) => {
+                    html += `
+                <button type="button" class="qp-row settle${p.견적코드 === cur ? ' on' : ''}" data-s="${k}">
+                  <span class="qp-t">${(p.현장명 ? p.현장명 + ' ' : '').replace(/</g, '&lt;')}정산견적서${p.견적코드 === 최신코드 && p.견적코드 !== cur ? '<em class="new">최신</em>' : ''}${p.견적코드 === cur ? '<em class="now">지금 연결됨</em>' : ''}</span>
+                  <span class="qp-m">${[시각(p.발행일시), p.총액 ? 원(p.총액) : '', 견적짧은주소(p.견적코드)].filter(Boolean).join(' · ')}</span>
+                </button>`;
+                });
+            }
             rows.forEach((p, i) => {
                 const mine = 내거래처(p);
                 if (mine && !머리냄.mine) { 머리냄.mine = true; html += `<div class="qp-group mine">${(info && info.clientName) ? String(info.clientName).replace(/</g, '&lt;') : '이 거래처'} 견적 ${이거래처수}건</div>`; }
                 if (!mine && !머리냄.other && 이거래처수) { 머리냄.other = true; html += '<div class="qp-group">다른 거래처 · 거래처 없음</div>'; }
                 html += `
                 <button type="button" class="qp-row${mine ? ' mine' : ''}${p.견적코드 === cur ? ' on' : ''}" data-i="${i}">
-                  <span class="qp-t">${(p.현장명 || '(이름 없음)').replace(/</g, '&lt;')}${p.견적코드 === cur ? '<em class="now">지금 연결됨</em>' : ''}</span>
+                  <span class="qp-t">${(p.현장명 || '(이름 없음)').replace(/</g, '&lt;')}${p.견적코드 === 최신코드 && p.견적코드 !== cur ? '<em class="new">최신</em>' : ''}${p.견적코드 === cur ? '<em class="now">지금 연결됨</em>' : ''}</span>
                   <span class="qp-m">${[날(p.발행일시), p.총액 ? 원(p.총액) : '', '/q/' + p.견적코드,
                       p.현장관리_거래처명 && !mine ? String(p.현장관리_거래처명).replace(/</g, '&lt;') : ''].filter(Boolean).join(' · ')}</span>
                 </button>`;
             });
-            listEl.innerHTML = rows.length ? html : '<p class="qp-none">찾는 견적서가 없습니다.</p>';
-            listEl.querySelectorAll('.qp-row').forEach((b) => {
+            listEl.innerHTML = (rows.length || 정산줄.length) ? html : '<p class="qp-none">찾는 견적서가 없습니다.</p>';
+            listEl.querySelectorAll('.qp-row[data-s]').forEach((b) => {
+                b.onclick = () => {
+                    const p = 정산줄[+b.dataset.s];
+                    견적코드저장(activeProjectCode, p.견적코드);
+                    ov.remove();
+                    showToast('정산 견적서를 이 현장에 이었습니다.');
+                    window.open(견적보기주소(p.견적코드), '_blank');
+                };
+            });
+            listEl.querySelectorAll('.qp-row[data-i]').forEach((b) => {
                 b.onclick = async () => {
                     const p = rows[+b.dataset.i];
                     견적코드저장(activeProjectCode, p.견적코드);
                     ov.remove();
                     showToast('방문견적서를 이 현장에 이었습니다.');
-                    window.open(QUOTE_VIEW_BASE + p.견적코드, '_blank');
+                    window.open(견적보기주소(p.견적코드), '_blank');
                     await 견적대로품목켜기(p.견적코드);   // 고른 견적서대로 시공품목까지 켠다
                 };
             });
@@ -1940,7 +2044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ov.querySelector('.qp-find').addEventListener('input', (e) => 그리기(e.target.value));
         ov.querySelector('.qp-x').onclick = () => ov.remove();
         ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
-        ov.querySelector('.qp-manual').onclick = () => { ov.remove(); const c = 견적물어보기(!!cur); if (c) window.open(QUOTE_VIEW_BASE + c, '_blank'); };
+        ov.querySelector('.qp-manual').onclick = () => { ov.remove(); const c = 견적물어보기(!!cur); if (c) window.open(견적보기주소(c), '_blank'); };
         const clearBtn = ov.querySelector('.qp-clear');
         if (clearBtn) clearBtn.onclick = () => { 견적코드저장(activeProjectCode, ''); ov.remove(); showToast('방문견적 연결을 끊었습니다.'); };
     }
@@ -1948,12 +2052,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!activeProjectCode) { showToast('현장을 먼저 여세요.'); return; }
         const info = 이어진현장();
         showToast('견적 목록을 불러오는 중…');
-        발행목록받기().then((list) => {
-            if (!list.length) { showToast('발행된 방문견적서가 없습니다.'); 견적물어보기(false); return; }
-            견적고르기창(list, info);
-        }, (e) => {
-            showToast('견적 목록을 못 받았습니다 (' + e.message + ') — 코드를 직접 넣어 주세요.');
-            견적물어보기(false);
+        // 이 현장 정산 견적서와 방문견적 목록을 따로 받는다 — 한쪽을 못 받아도 다른 쪽으로 고른다 (2026-11-16)
+        const 방문 = 발행목록받기().then((l) => ({ list: l }), (e) => ({ err: e }));
+        const 정산 = 정산목록받기(activeProjectCode).catch(() => []);
+        Promise.all([방문, 정산]).then(([q, s]) => {
+            const list = q.list || [];
+            if (!list.length && !s.length) {
+                showToast(q.err ? '견적 목록을 못 받았습니다 (' + q.err.message + ') — 코드를 직접 넣어 주세요.' : '발행된 견적서가 없습니다.');
+                견적물어보기(false);
+                return;
+            }
+            if (q.err) showToast('방문견적 목록은 못 받았습니다 (' + q.err.message + ')');
+            견적고르기창(list, info, s);
         });
     }
     // 이미 이어진 현장에서 버튼을 누르면 뜨는 작은 메뉴 — 잘못 골랐을 때 바로 바꾸거나 끊는다
@@ -1964,11 +2074,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         ov.id = 'quotePickOverlay';
         ov.innerHTML = `
             <div class="qp-box qp-menu">
-              <div class="qp-head"><b>📄 방문견적</b><button type="button" class="qp-x" aria-label="닫기">✕</button></div>
-              <p class="qp-sub">이 현장에 이어 둔 견적서: <b>/q/${code}</b></p>
+              <div class="qp-head"><b>📄 ${정산코드인가(code) ? '정산 견적서' : '방문견적'}</b><button type="button" class="qp-x" aria-label="닫기">✕</button></div>
+              <p class="qp-sub">이 현장에 이어 둔 견적서: <b>${견적짧은주소(code)}</b></p>
               <div class="qp-foot qp-menu-list">
                 <button type="button" data-a="open">🔗 견적서 열기</button>
-                <button type="button" data-a="items">🛠 견적서대로 시공품목 켜기</button>
+                ${정산코드인가(code) ? '' : '<button type="button" data-a="items">🛠 견적서대로 시공품목 켜기</button>'}
                 <button type="button" data-a="pick">🔁 다른 견적서 고르기</button>
                 <button type="button" class="qp-clear" data-a="clear">✕ 연결 해제</button>
               </div>
@@ -1980,7 +2090,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             b.onclick = () => {
                 const a = b.dataset.a;
                 ov.remove();
-                if (a === 'open') window.open(QUOTE_VIEW_BASE + code, '_blank');
+                if (a === 'open') window.open(견적보기주소(code), '_blank');
                 else if (a === 'items') 견적대로품목켜기(code);
                 else if (a === 'pick') 견적고르기();
                 else if (a === 'clear') { 견적코드저장(activeProjectCode, ''); showToast('방문견적 연결을 끊었습니다.'); }
@@ -3453,7 +3563,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     var 견적시간채운현장 = new Set();   // var: 견적코드저장(앞쪽, 초기화 중에도 불림)에서 불러도 되게
     async function 견적으로시간정보채우기(projectCode) {
         const code = 견적코드읽기(projectCode);
-        if (!code || 견적시간채운현장.has(projectCode + '|' + code)) return;
+        if (!code || 정산코드인가(code) || 견적시간채운현장.has(projectCode + '|' + code)) return;
         const tasks = ((currentDetailData && currentDetailData.tasks) || []).filter(t => 시간기록샤시인가(t.fields.시공품목));
         const 빈 = tasks.filter(t => !t.fields.샤시종류 || !(t.fields.길이m > 0));
         견적시간채운현장.add(projectCode + '|' + code);
