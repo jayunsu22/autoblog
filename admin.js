@@ -619,6 +619,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const NOTICE_PARTS_GET_URL = `${n8nBase}/webhook/film-notice-parts`;
     const NOTICE_PARTS_SAVE_URL = `${n8nBase}/webhook/film-notice-parts-save`;
     const NOTICE_EDIT_URL = `${n8nBase}/webhook/film-notice-edit`;
+    const NOTICE_DELETE_URL = `${n8nBase}/webhook/film-notice-delete`;
     // 지금 보고 있는 파트 탭 (두 화면이 같이 쓴다). 파트 id, 또는 '미분류'
     let noticePartTab = (() => { try { return localStorage.getItem('noticePartTab') || ''; } catch (e) { return ''; } })();
     const NOTICE_PARTS_CACHE_KEY = 'noticePartConfig';
@@ -810,12 +811,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 edit.title = '글 고치기';
                 edit.textContent = '✏️';
                 edit.onclick = () => editNoticeTemplate(text);
+                // 🗑 템플릿 지우기 (11/16 사장님: 비슷한 공지가 겹쳐서 정리)
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'notice-text-edit-btn notice-text-del-btn';
+                del.title = '템플릿 지우기';
+                del.textContent = '🗑';
+                del.onclick = () => deleteNoticeTemplate(text);
                 const sel = document.createElement('select');
                 sel.innerHTML = parts.map((p, i) => `<option value="${escNotice(p.id)}">${i + 1}. ${escNotice(p.name)}</option>`).join('') + `<option value="">미분류</option>`;
                 sel.value = cur.part ? cur.part.id : '';
                 sel.onchange = () => moveNoticeToPart(text, sel.value);
                 row.appendChild(label);
                 row.appendChild(edit);
+                row.appendChild(del);
                 row.appendChild(sel);
                 list.appendChild(row);
             });
@@ -870,6 +879,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) {
             console.error(e);
             showToast('템플릿을 고치지 못했습니다. 다시 시도해 주세요.', 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // 템플릿 지우기 — 서버(자주쓰는공지 표)에서 그 글 한 줄을 지운다. 이미 현장에 넣어 둔 공지는 그 현장의 글이라 그대로 둔다
+    async function deleteNoticeTemplate(text) {
+        const t = String(text || '').trim();
+        if (!t) return;
+        if (!confirm('이 공지 템플릿을 지울까요?\n\n「' + t + '」\n\n이미 현장에 넣어 둔 공지는 그대로 남습니다.')) return;
+        showLoading('템플릿 지우는 중...');
+        try {
+            const res = await fetchWithTimeout(NOTICE_DELETE_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: t })
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const i = globalQuickNotices.indexOf(text);
+            if (i !== -1) globalQuickNotices.splice(i, 1);
+            const key = 공지키(text);
+            if (!globalQuickNotices.some(x => 공지키(x) === key) && noticePartConfig.assign[key]) {
+                delete noticePartConfig.assign[key];
+                saveNoticeParts();
+            }
+            refreshListCacheFromMemory();
+            renderNoticeQuickTags();
+            showToast('템플릿을 지웠습니다.');
+        } catch (e) {
+            console.error(e);
+            showToast('템플릿을 지우지 못했습니다. 다시 시도해 주세요.', 'danger');
         } finally {
             hideLoading();
         }

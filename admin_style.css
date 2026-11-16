@@ -3412,3 +3412,6 @@ body {
 .zone-fld.other .zone-fld-chev { display: none; }
 .zone-fld-day { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: #64748b; border-radius: 6px; padding: 1px 6px; margin-left: 2px; }
 .zone-fld-main .zone-fld-go { position: absolute; inset: 0; opacity: 0; border: 0; background: transparent; cursor: pointer; width: 100%; }
+/* 🗑 공지 템플릿 지우기 (11/16) */
+.notice-text-del-btn { border-color: #fecaca; background: #fff5f5; }
+.notice-text-del-btn:active { background: #fee2e2; }
