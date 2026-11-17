@@ -454,9 +454,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 암호 확인이 끝난 뒤에만 이 함수가 불리므로 암호 화면을 건너뛰지 않는다.
         // 일정 앱이 '#site=<현장 id>&quote=<견적코드>' 로도 들어온다 (2026-10-18) — 그 현장에 이어 둔 방문견적서
         // &plan= (2026-11-13) — 일정 앱이 계산한 품목 값·기사 페이·이득 비율 (기사별 일감·배정 경고)
-        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)(?:&quote=([A-Za-z0-9_-]*))?(?:&plan=([A-Za-z0-9_-]*))?$/.exec(location.hash);
+        const hashMatch = !isScopedManagerView && /^#site=(rec[A-Za-z0-9]+)(?:&quote=((?:s:)?[A-Za-z0-9_-]*))?(?:&plan=([A-Za-z0-9_-]*))?$/.exec(location.hash);
         const hashCode = hashMatch ? hashMatch[1] : '';
         if (hashMatch && hashMatch[2] !== undefined) 견적코드저장(hashCode, hashMatch[2]);
+        // 📄 정산견적 발행 창의 [현장관리자 앱에 적용] (11/17) — 정산 견적서(s:…)가 오면 이었다고 알린다
+        if (hashMatch && /^s:/.test(hashMatch[2] || '')) setTimeout(() => showToast('📄 정산 견적서를 이 현장에 이었습니다'), 800);
         if (hashMatch && hashMatch[3]) 일감계획저장(hashCode, hashMatch[3]);
         if (hashMatch) history.replaceState(null, '', location.pathname + location.search);
         loadProjectList().then(() => {
