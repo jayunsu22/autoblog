@@ -1794,7 +1794,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const 후보 = r.정산.concat(r.이현장방문).filter((p) => p.발행일시)
                 .sort((a, b) => String(b.발행일시).localeCompare(String(a.발행일시)));
             const 최신 = 후보[0];
-            const code = 견적코드읽기(projectCode);
+            let code = 견적코드읽기(projectCode);
+            // 📄 정산 견적서 자동 잇기 (11/17 사장님: 발행하면 기본으로 걸리게) — 가장 최근 것이 정산 견적서이고
+            // 아직 한 번도 자동으로 잇지 않은 코드면 바로 잇는다. 사장님이 다른 견적서로 바꾼 뒤엔 같은 코드를 다시 끌어오지 않는다
+            if (최신 && 정산코드인가(최신.견적코드) && 최신.견적코드 !== code) {
+                let auto = {};
+                try { auto = JSON.parse(localStorage.getItem('filmAdminAutoSettle') || '{}') || {}; } catch (e) { auto = {}; }
+                if (auto[projectCode] !== 최신.견적코드) {
+                    auto[projectCode] = 최신.견적코드;
+                    try { localStorage.setItem('filmAdminAutoSettle', JSON.stringify(auto)); } catch (e) { /* 이번만 */ }
+                    견적코드저장(projectCode, 최신.견적코드);
+                    code = 최신.견적코드;
+                    showToast('📄 새 정산 견적서를 이 현장에 이었습니다');
+                }
+            }
             let 말 = '';
             if (최신 && 최신.견적코드 !== code) {
                 if (!code) 말 = '이 현장에 발행한 견적서가 있어요 — 눌러서 이으세요';
